@@ -1,0 +1,16 @@
+{
+  "extends": "./node_modules/@microsoft/sp-tslint-rules/base-tslint.json",
+  "rules": {
+    "typedef": [
+      true,
+      "call-signature",
+      "property-declaration",
+      "member-variable-declaration"
+    ],
+    "no-unused-expression": true,
+    "no-use-before-declare": true,
+    "no-empty": false,
+    "typedef-whitespace": false,
+    "insecure-random": false
+  }
+}
