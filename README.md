@@ -27,15 +27,15 @@ Detta projekt innehåller en SharePoint Framework-webbdel som låter medarbetare
    - Kör `npm install` (projektet levereras med `.npmrc` som aktiverar `legacy-peer-deps`).
 
 2. **Utvecklingsläge**
-   - Kör `gulp serve` för att öppna lokal Workbench eller använd SharePoint Workbench (`/_layouts/workbench.aspx`).
+   - Kör `npm run watch` för att bygga om projektet kontinuerligt medan du utvecklar.
+   - Vill du snabbt inspektera det byggda paketet kan du använda `npm run serve`, vilket startar en enkel statisk server för innehållet i `dist/`.
 
-3. **Bygg och paketera för produktion**
+3. **Bygg för distribution**
    ```bash
-   gulp bundle --ship
-   gulp package-solution --ship
+   npm run clean
+   npm run build
    ```
-   - Ladda upp den genererade `.sppkg`-filen under `sharepoint/solution/` till er appkatalog.
-   - Distribuera webbdelens app till den SharePoint-webbplats där den ska användas.
+   - Resultatet hamnar i mappen `dist/`. Paketera den tillsammans med övriga SharePoint-artefakter enligt er befintliga releaseprocess.
 
 4. **Lägg till på en sida**
    - Redigera valfri modern sida i SharePoint.
@@ -52,7 +52,7 @@ Detta projekt innehåller en SharePoint Framework-webbdel som låter medarbetare
 
 - Lägg till egna vyer eller kolumner i listorna om ytterligare metadata behövs.
 - Komplettera med notifieringar, exempelvis via Power Automate, när nya förslag skapas eller status ändras.
-- Anpassa UI:t i `ImprovementPortal.module.scss` för att matcha organisationens grafiska profil.
+- Anpassa UI:t i `ImprovementPortal.styles.ts` för att matcha organisationens grafiska profil.
 
 ## Support
 
