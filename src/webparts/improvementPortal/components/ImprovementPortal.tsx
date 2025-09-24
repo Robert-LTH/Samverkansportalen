@@ -71,8 +71,12 @@ const ImprovementPortal: React.FunctionComponent<IImprovementPortalProps> = (pro
     try {
       await service.ensureSetup();
       const user = await service.getCurrentUser();
-      setCurrentUserId(user.id);
-      const loadedSuggestions = await service.getSuggestions('', user.id);
+      const userId = user.id;
+      if (userId === undefined) {
+        throw new Error('Kunde inte läsa in användarinformation.');
+      }
+      setCurrentUserId(userId);
+      const loadedSuggestions = await service.getSuggestions('', userId);
       setSuggestions(loadedSuggestions);
       setSearchValue('');
     } catch (err) {
@@ -124,7 +128,8 @@ const ImprovementPortal: React.FunctionComponent<IImprovementPortalProps> = (pro
 
   const handleVote = useCallback(
     async (suggestion: ISuggestionWithVotes) => {
-      if (currentUserId === undefined) {
+      const userId = currentUserId;
+      if (userId === undefined) {
         return;
       }
       if (availableVotes <= 0) {
@@ -133,7 +138,7 @@ const ImprovementPortal: React.FunctionComponent<IImprovementPortalProps> = (pro
       }
       try {
         setWorking(true);
-        await service.addVote(suggestion.id, currentUserId);
+        await service.addVote(suggestion.id, userId);
         await refreshSuggestions();
         setFeedback({ text: `Du har röstat på "${suggestion.title}".`, type: MessageBarType.success });
       } catch (err) {
