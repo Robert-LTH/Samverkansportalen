@@ -22,7 +22,7 @@ Detta projekt innehåller en SharePoint Framework-webbdel som låter medarbetare
 ## Kom igång
 
 1. **Förberedelser**
-   - Installera Node.js 16 (>=16.13.0 och <17).
+   - Installera Node.js 16 (>=16.13.0 och <17). Ett `.nvmrc`-file ingår i repot så att `nvm use` / `nvm install` automatiskt växlar till en kompatibel version.
    - Klona detta repo och öppna projektmappen.
    - Kör `npm install` (projektet levereras med `.npmrc` som aktiverar `legacy-peer-deps`).
 
