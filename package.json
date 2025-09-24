@@ -7,12 +7,13 @@
     "node": ">=16.13.0 <17.0.0 || >=20.0.0 <21.0.0"
   },
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp bundle",
-    "bundle": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp bundle",
-    "clean": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp clean",
-    "package": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp package-solution",
-    "serve": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp serve",
-    "test": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp test"
+    "build": "node ./scripts/build.mjs",
+    "bundle": "npm run build",
+    "clean": "node ./scripts/clean.mjs",
+    "package": "npm run build",
+    "serve": "node ./scripts/build.mjs --serve",
+    "test": "tsc --noEmit",
+    "watch": "node ./scripts/build.mjs --watch"
   },
   "dependencies": {
     "@microsoft/sp-core-library": "1.17.4",
@@ -27,16 +28,13 @@
   },
   "devDependencies": {
     "@microsoft/rush-stack-compiler-4.5": "0.5.1",
-    "@microsoft/sp-build-web": "1.17.4",
     "@microsoft/sp-module-interfaces": "1.17.4",
     "@microsoft/sp-tslint-rules": "1.17.4",
     "@types/react": "17.0.52",
     "@types/react-dom": "17.0.19",
     "@types/webpack-env": "1.18.5",
-    "cross-env": "7.0.3",
     "eslint": "8.57.1",
-    "gulp": "~4.0.2",
-    "semver": "7.6.3",
+    "esbuild": "0.23.0",
     "tslint": "~6.1.3",
     "typescript": "4.5.5"
   }

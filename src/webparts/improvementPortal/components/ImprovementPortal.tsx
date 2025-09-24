@@ -22,7 +22,7 @@ import {
   activeStatuses,
   suggestionStatusOptions
 } from '../models/ImprovementModels';
-import styles from './ImprovementPortal.module.scss';
+import styles from './ImprovementPortal.styles';
 
 const MAX_VOTES = 5;
 
