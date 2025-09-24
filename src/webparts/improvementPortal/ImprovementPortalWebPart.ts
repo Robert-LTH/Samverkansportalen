@@ -9,8 +9,7 @@ import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 
 import * as strings from 'ImprovementPortalWebPartStrings';
 import ImprovementPortal, { IImprovementPortalProps } from './components/ImprovementPortal';
-import { spfi, SPFI } from '@pnp/sp';
-import { SPFx } from '@pnp/spfx';
+import { spfi, SPFI, SPFx } from '@pnp/sp';
 
 export interface IImprovementPortalWebPartProps {
   description: string;
