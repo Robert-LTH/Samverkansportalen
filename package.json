@@ -4,16 +4,15 @@
   "private": true,
   "main": "lib/index.js",
   "engines": {
-    "node": ">=16.13.0 <17.0.0"
+    "node": ">=16.13.0 <17.0.0 || >=20.0.0 <21.0.0"
   },
   "scripts": {
-    "build": "gulp bundle",
-    "bundle": "gulp bundle",
-    "clean": "gulp clean",
-    "package": "gulp package-solution",
-    "serve": "gulp serve",
-    "test": "gulp test",
-    "postinstall": "patch-package"
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp bundle",
+    "bundle": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp bundle",
+    "clean": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp clean",
+    "package": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp package-solution",
+    "serve": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp serve",
+    "test": "cross-env NODE_OPTIONS=--openssl-legacy-provider SPFX_ALLOW_NODEJS_VERSION_OVERRIDE=true gulp test"
   },
   "dependencies": {
     "@microsoft/sp-core-library": "1.17.4",
@@ -33,8 +32,11 @@
     "@microsoft/sp-tslint-rules": "1.17.4",
     "@types/react": "17.0.52",
     "@types/react-dom": "17.0.19",
+    "@types/webpack-env": "1.18.5",
+    "cross-env": "7.0.3",
+    "eslint": "8.57.1",
     "gulp": "~4.0.2",
-    "patch-package": "6.5.1",
+    "semver": "7.6.3",
     "tslint": "~6.1.3",
     "typescript": "4.5.5"
   }
