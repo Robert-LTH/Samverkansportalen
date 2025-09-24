@@ -20,18 +20,15 @@
     "@microsoft/sp-office-ui-fabric-core": "1.17.4",
     "@microsoft/sp-property-pane": "1.17.4",
     "@microsoft/sp-webpart-base": "1.17.4",
-    "@pnp/sp": "2.15.0",
-    "@pnp/core": "2.15.0",
+    "@pnp/sp": "3.26.0",
     "office-ui-fabric-react": "7.185.0",
     "react": "17.0.2",
-    "react-dom": "17.0.2",
-    "@pnp/spfx": "2.15.0"
+    "react-dom": "17.0.2"
   },
   "devDependencies": {
     "@microsoft/sp-build-web": "1.17.4",
     "@microsoft/sp-module-interfaces": "1.17.4",
     "@microsoft/sp-tslint-rules": "1.17.4",
-    "@microsoft/sp-webpart-workbench": "1.17.4",
     "@microsoft/rush-stack-compiler-4.5": "0.5.1",
     "@types/react": "17.0.52",
     "@types/react-dom": "17.0.19",
