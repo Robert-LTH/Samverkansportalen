@@ -1,21 +1,31 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { Version } from '@microsoft/sp-core-library';
-import { IPropertyPaneConfiguration, PropertyPaneTextField } from '@microsoft/sp-property-pane';
+import { IPropertyPaneConfiguration } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
+import { spfi, SPFI } from '@pnp/sp';
+import { SPFx } from '@pnp/sp/presets/all';
 
 import HelloWorld from './components/HelloWorld';
 import { IHelloWorldProps } from './components/IHelloWorldProps';
-import * as strings from 'HelloWorldWebPartStrings';
 
-export interface IHelloWorldWebPartProps {
-  description: string;
-}
+export interface IHelloWorldWebPartProps {}
 
 export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorldWebPartProps> {
+  private _sp: SPFI;
+
+  protected async onInit(): Promise<void> {
+    await super.onInit();
+    this._sp = spfi().using(SPFx(this.context));
+  }
+
   public render(): void {
     const element: React.ReactElement<IHelloWorldProps> = React.createElement(HelloWorld, {
-      description: this.properties.description || strings.DefaultDescription
+      sp: this._sp,
+      currentUser: {
+        loginName: this.context.pageContext.user.loginName || '',
+        displayName: this.context.pageContext.user.displayName || 'Okänd användare'
+      }
     });
 
     ReactDom.render(element, this.domElement);
@@ -31,23 +41,7 @@ export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorld
 
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {
     return {
-      pages: [
-        {
-          header: {
-            description: strings.PropertyPaneDescription
-          },
-          groups: [
-            {
-              groupName: strings.BasicGroupName,
-              groupFields: [
-                PropertyPaneTextField('description', {
-                  label: strings.DescriptionFieldLabel
-                })
-              ]
-            }
-          ]
-        }
-      ]
+      pages: []
     };
   }
 }
