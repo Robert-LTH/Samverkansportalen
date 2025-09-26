@@ -1,1 +1,1 @@
-export * from './webparts/improvementPortal/ImprovementPortalWebPart';
+export * from './webparts/helloWorld/HelloWorldWebPart';

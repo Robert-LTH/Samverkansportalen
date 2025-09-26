@@ -1,0 +1,22 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "c96775bc-64dc-4124-8a6b-55a4658d36c8",
+  "alias": "HelloWorldWebPart",
+  "componentType": "WebPart",
+  "version": "1.0.0",
+  "manifestVersion": 2,
+  "supportsThemeVariants": true,
+  "requiresCustomScript": false,
+  "preconfiguredEntries": [
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": { "default": "Other" },
+      "title": { "default": "Hello World" },
+      "description": { "default": "A simple hello world web part." },
+      "officeFabricIconFontName": "Page",
+      "properties": {
+        "description": "Hello World"
+      }
+    }
+  ]
+}

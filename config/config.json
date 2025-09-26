@@ -2,17 +2,17 @@
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
   "version": "2.0",
   "bundles": {
-    "improvement-portal-web-part": {
+    "hello-world-web-part": {
       "components": [
         {
-          "entrypoint": "./lib/webparts/improvementPortal/ImprovementPortalWebPart.js",
-          "manifest": "./src/webparts/improvementPortal/ImprovementPortalWebPart.manifest.json"
+          "entrypoint": "./lib/webparts/helloWorld/HelloWorldWebPart.js",
+          "manifest": "./src/webparts/helloWorld/HelloWorldWebPart.manifest.json"
         }
       ]
     }
   },
   "externals": {},
   "localizedResources": {
-    "ImprovementPortalWebPartStrings": "lib/webparts/improvementPortal/loc/{locale}.js"
+    "HelloWorldWebPartStrings": "lib/webparts/helloWorld/loc/{locale}.js"
   }
 }
