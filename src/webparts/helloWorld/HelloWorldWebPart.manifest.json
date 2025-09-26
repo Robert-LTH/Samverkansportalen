@@ -11,12 +11,12 @@
     {
       "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
       "group": { "default": "Other" },
-      "title": { "default": "Hello World" },
-      "description": { "default": "A simple hello world web part." },
+      "title": { "default": "Förbättringsportalen" },
+      "description": {
+        "default": "Samla förbättringsförslag, rösta och följ upp status direkt på sidan."
+      },
       "officeFabricIconFontName": "Page",
-      "properties": {
-        "description": "Hello World"
-      }
+      "properties": {}
     }
   ]
 }

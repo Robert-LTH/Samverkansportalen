@@ -1,3 +1,11 @@
+import { SPFI } from '@pnp/sp';
+
+export interface ICurrentUserInfo {
+  loginName: string;
+  displayName: string;
+}
+
 export interface IHelloWorldProps {
-  description: string;
+  sp: SPFI;
+  currentUser: ICurrentUserInfo;
 }
