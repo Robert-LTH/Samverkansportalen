@@ -1,37 +1,22 @@
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import { Version } from '@microsoft/sp-core-library';
-import {
-  IPropertyPaneConfiguration,
-  PropertyPaneTextField
-} from '@microsoft/sp-property-pane';
+import { IPropertyPaneConfiguration, PropertyPaneTextField } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 
-import * as strings from 'ImprovementPortalWebPartStrings';
-import ImprovementPortal, { IImprovementPortalProps } from './components/ImprovementPortal';
-import { spfi, SPFI, SPFx } from '@pnp/sp';
+import HelloWorld from './components/HelloWorld';
+import { IHelloWorldProps } from './components/IHelloWorldProps';
+import * as strings from 'HelloWorldWebPartStrings';
 
-export interface IImprovementPortalWebPartProps {
+export interface IHelloWorldWebPartProps {
   description: string;
 }
 
-export default class ImprovementPortalWebPart extends BaseClientSideWebPart<IImprovementPortalWebPartProps> {
-
-  private _sp: SPFI;
-
-  protected async onInit(): Promise<void> {
-    await super.onInit();
-    this._sp = spfi().using(SPFx(this.context));
-  }
-
+export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorldWebPartProps> {
   public render(): void {
-    const element: React.ReactElement<IImprovementPortalProps> = React.createElement(
-      ImprovementPortal,
-      {
-        description: this.properties.description,
-        sp: this._sp
-      }
-    );
+    const element: React.ReactElement<IHelloWorldProps> = React.createElement(HelloWorld, {
+      description: this.properties.description || strings.DefaultDescription
+    });
 
     ReactDom.render(element, this.domElement);
   }

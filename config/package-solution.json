@@ -1,14 +1,14 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-package-solution.schema.json",
   "solution": {
-    "name": "samverkansportalen-improvements-client-side-solution",
-    "id": "478c64a0-e370-41fb-bcd7-aed42b3f7230",
+    "name": "hello-world-client-side-solution",
+    "id": "c96775bc-64dc-4124-8a6b-55a4658d36c8",
     "version": "1.0.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false
   },
   "paths": {
-    "zippedPackage": "solution/samverkansportalen-improvements.sppkg"
+    "zippedPackage": "solution/hello-world.sppkg"
   }
 }
