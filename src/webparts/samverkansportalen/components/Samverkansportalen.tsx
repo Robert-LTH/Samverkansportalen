@@ -16,7 +16,7 @@ import {
 } from '@microsoft/sp-http';
 
 import styles from './Samverkansportalen.module.scss';
-import type { ISamverkansportalenProps } from './ISamverkansportalenProps';
+import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
 
 interface ISuggestionItem {
   id: number;
@@ -46,7 +46,6 @@ interface ISamverkansportalenState {
   success?: string;
 }
 
-const LIST_TITLE: string = 'SamverkansportalenSuggestions';
 const MAX_VOTES_PER_USER: number = 5;
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
@@ -72,6 +71,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   public componentWillUnmount(): void {
     this._isMounted = false;
+  }
+
+  public componentDidUpdate(prevProps: ISamverkansportalenProps): void {
+    if (this._normalizeListTitle(prevProps.listTitle) !== this._listTitle) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      this._initialize();
+    }
   }
 
   public render(): React.ReactElement<ISamverkansportalenProps> {
@@ -239,10 +245,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _ensureList(): Promise<void> {
-    const listUrl: string = `${this.props.siteUrl}/_api/web/lists/GetByTitle('${LIST_TITLE}')`;
+    const listTitle: string = this._listTitle;
 
     const response: SPHttpClientResponse = await this.props.spHttpClient.get(
-      listUrl,
+      this._listEndpoint,
       SPHttpClient.configurations.v1,
       this._createOptions()
     );
@@ -252,18 +258,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     if (response.status !== 404) {
-      throw new Error(`Unexpected response (${response.status}) while checking for the ${LIST_TITLE} list.`);
+      throw new Error(`Unexpected response (${response.status}) while checking for the ${listTitle} list.`);
     }
 
-    await this._createListWithFields();
+    await this._createListWithFields(listTitle);
   }
 
-  private async _createListWithFields(): Promise<void> {
+  private async _createListWithFields(listTitle: string): Promise<void> {
     const createListResponse: SPHttpClientResponse = await this.props.spHttpClient.post(
       `${this.props.siteUrl}/_api/web/lists`,
       SPHttpClient.configurations.v1,
       this._createOptions({
-        Title: LIST_TITLE,
+        Title: listTitle,
         Description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
         BaseTemplate: 100,
         AllowContentTypes: true
@@ -570,7 +576,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private get _listEndpoint(): string {
-    return `${this.props.siteUrl}/_api/web/lists/GetByTitle('${LIST_TITLE}')`;
+    const escapedTitle: string = this._listTitle.replace(/'/g, "''");
+    return `${this.props.siteUrl}/_api/web/lists/GetByTitle('${escapedTitle}')`;
+  }
+
+  private _normalizeListTitle(value?: string): string {
+    const trimmed: string = (value ?? '').trim();
+    return trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE;
+  }
+
+  private get _listTitle(): string {
+    return this._normalizeListTitle(this.props.listTitle);
   }
 
   private _handleError(message: string, error?: unknown): void {
