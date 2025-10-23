@@ -21,7 +21,8 @@
     "@microsoft/sp-property-pane": "1.21.1",
     "@microsoft/sp-webpart-base": "1.21.1",
     "@microsoft/sp-lodash-subset": "1.21.1",
-    "@microsoft/sp-office-ui-fabric-core": "1.21.1"
+    "@microsoft/sp-office-ui-fabric-core": "1.21.1",
+    "@microsoft/sp-http": "1.21.1"
   },
   "devDependencies": {
     "@microsoft/rush-stack-compiler-5.3": "0.1.0",

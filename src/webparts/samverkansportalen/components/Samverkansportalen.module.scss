@@ -1,34 +1,155 @@
 @import '~@fluentui/react/dist/sass/References.scss';
 
 .samverkansportalen {
-  overflow: hidden;
-  padding: 1em;
+  padding: 1.5rem;
+  background: "[theme:white, default: #ffffff]";
+  background: var(--bodyBackground, #ffffff);
   color: "[theme:bodyText, default: #323130]";
   color: var(--bodyText);
+
   &.teams {
     font-family: $ms-font-family-fallbacks;
   }
 }
 
-.welcome {
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.voteSummary {
+  min-width: 12rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: "[theme:themeLighter, default: #d0e7f5]";
+  text-align: right;
+}
+
+.voteLabel {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.voteValue {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.sectionTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.addSuggestion {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.75rem;
+  background: "[theme:white, default: #ffffff]";
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.addForm {
+  display: grid;
+  gap: 1rem;
+}
+
+.suggestionSection {
+  margin-top: 2rem;
+}
+
+.suggestionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.suggestionCard {
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: "[theme:white, default: #ffffff]";
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cardText {
+  flex: 1 1 18rem;
+}
+
+.suggestionTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.suggestionDescription {
+  margin: 0.5rem 0 0;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.voteBadge {
+  align-self: flex-start;
+  min-width: 5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: "[theme:themeLighterAlt, default: #eff6fc]";
   text-align: center;
 }
 
-.welcomeImage {
-  width: 100%;
-  max-width: 420px;
+.voteNumber {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.links {
-  a {
-    text-decoration: none;
-    color: "[theme:link, default:#03787c]";
-    color: var(--link); // note: CSS Custom Properties support is limited to modern browsers only
+.voteText {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
 
-    &:hover {
-      text-decoration: underline;
-      color: "[theme:linkHovered, default: #014446]";
-      color: var(--linkHovered); // note: CSS Custom Properties support is limited to modern browsers only
-    }
-  }
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.emptyState {
+  margin: 0;
+  font-style: italic;
+  color: "[theme:neutralSecondary, default: #605e5c]";
 }
