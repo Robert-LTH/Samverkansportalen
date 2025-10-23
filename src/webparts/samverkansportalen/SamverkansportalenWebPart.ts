@@ -22,6 +22,12 @@ export interface ISamverkansportalenWebPartProps {
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
 
+  private static readonly LIST_REQUEST_ACCEPT_HEADERS: readonly string[] = [
+    'application/json;odata=nometadata',
+    'application/json;odata=minimalmetadata',
+    'application/json;odata=verbose'
+  ];
+
   private _isDarkTheme: boolean = false;
   private _environmentMessage: string = '';
   private _listOptions: IPropertyPaneDropdownOption[] = [
@@ -120,23 +126,44 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._isLoadingLists = true;
 
     try {
-      const response: SPHttpClientResponse = await this.context.spHttpClient.get(
-        `${this.context.pageContext.web.absoluteUrl}/_api/web/lists?$filter=Hidden eq false and BaseTemplate eq 100&$select=Title&$orderby=Title`,
-        SPHttpClient.configurations.v1,
-        {
-          headers: {
-            'Accept': 'application/json;odata=nometadata'
-          }
-        }
-      );
+      const listUrl: string = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists?$filter=Hidden eq false and BaseTemplate eq 100&$select=Title&$orderby=Title`;
 
-      if (!response.ok) {
-        throw new Error(`Unexpected response (${response.status}) while loading SharePoint lists.`);
+      let lists: Array<{ Title?: string }> | undefined;
+
+      for (const accept of SamverkansportalenWebPart.LIST_REQUEST_ACCEPT_HEADERS) {
+        const response: SPHttpClientResponse = await this.context.spHttpClient.get(
+          listUrl,
+          SPHttpClient.configurations.v1,
+          {
+            headers: {
+              'Accept': accept
+            }
+          }
+        );
+
+        if (response.status === 406) {
+          // Try the next Accept header variant for servers that do not understand this format.
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Unexpected response (${response.status}) while loading SharePoint lists.`);
+        }
+
+        const payload: unknown = await response.json();
+        const parsedLists: Array<{ Title?: string }> | undefined = this._extractListItems(payload);
+
+        if (parsedLists !== undefined) {
+          lists = parsedLists;
+          break;
+        }
       }
 
-      const payload: { value: Array<{ Title?: string }> } = await response.json() as { value: Array<{ Title?: string }> };
+      if (!lists) {
+        throw new Error('Failed to load SharePoint lists because the response format was not recognized.');
+      }
 
-      const options: IPropertyPaneDropdownOption[] = payload.value
+      const options: IPropertyPaneDropdownOption[] = lists
         .map((item) => item.Title)
         .filter((title): title is string => typeof title === 'string' && title.trim().length > 0)
         .map((title) => ({ key: title, text: title }))
@@ -167,6 +194,24 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _normalizeListTitle(value?: string): string {
     const trimmed: string = (value ?? '').trim();
     return trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE;
+  }
+
+  private _extractListItems(payload: unknown): Array<{ Title?: string }> | undefined {
+    if (!payload || typeof payload !== 'object') {
+      return undefined;
+    }
+
+    const withValue = payload as { value?: unknown };
+    if (Array.isArray(withValue.value)) {
+      return withValue.value as Array<{ Title?: string }>;
+    }
+
+    const withVerbose = payload as { d?: { results?: unknown } };
+    if (withVerbose.d && Array.isArray(withVerbose.d.results)) {
+      return withVerbose.d.results as Array<{ Title?: string }>;
+    }
+
+    return undefined;
   }
 
   private get _selectedListTitle(): string {
