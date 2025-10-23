@@ -1,5 +1,7 @@
 import { SPHttpClient } from '@microsoft/sp-http';
 
+export const DEFAULT_SUGGESTIONS_LIST_TITLE: string = 'SamverkansportalenSuggestions';
+
 export interface ISamverkansportalenProps {
   description: string;
   isDarkTheme: boolean;
@@ -9,4 +11,5 @@ export interface ISamverkansportalenProps {
   userLoginName: string;
   siteUrl: string;
   spHttpClient: SPHttpClient;
+  listTitle?: string;
 }
