@@ -1,0 +1,19 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "environment": "spo",
+    "componentType": "webpart",
+    "template": "react",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.21.0",
+    "sdksVersions": {},
+    "version": "1.21.1",
+    "libraryName": "samverkansportalen",
+    "libraryId": "d54adfb9-a82b-41cb-bf9e-a996b048436c",
+    "packageManager": "npm",
+    "solutionName": "samverkansportalen",
+    "solutionShortDescription": "samverkansportalen description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false
+  }
+}

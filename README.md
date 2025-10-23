@@ -1,59 +1,73 @@
-# Förbättringsportalen för SharePoint Online
+# samverkansportalen
 
-Detta projekt innehåller en SharePoint Framework-webbdel som låter medarbetare föreslå förbättringar och rösta fram vilka förslag som ska prioriteras. Varje användare får fem samtidiga röster som automatiskt återförs när ett förslag markeras som genomfört eller borttaget. Borttagna förslag behålls i historiken och kan sökas fram på samma sätt som aktiva förslag.
+## Summary
 
-## Funktioner
+Short summary on functionality and used technologies.
 
-- Lägg till nya förbättringsförslag direkt från webbdelens gränssnitt.
-- Se hur många aktiva röster ett förslag har samt hur många röster du själv har kvar.
-- Rösta på eller återta din röst från aktiva förslag (status "Föreslagen" eller "Pågående").
-- Uppdatera status på förslag till "Genomförd" eller "Avslutad" (borttagen) utan att förlust av historik.
-- Sök bland samtliga förslag, inklusive avslutade eller borttagna.
-- Listor i SharePoint för förslag och röster provisioneras automatiskt vid första körning.
+[picture of the solution in action, if possible]
 
-## Teknisk översikt
+## Used SharePoint Framework Version
 
-- **Plattform:** SharePoint Framework (SPFx) 1.17.4 med React.
-- **SharePoint-listor:**
-  - `ImprovementSuggestions` för själva förslagen.
-  - `SuggestionVotes` för röster kopplade till varje förslag.
-- **Bibliotek:** PnPjs används för att kommunicera med SharePoint och hantera listor och data.
+![version](https://img.shields.io/badge/version-1.21.1-green.svg)
 
-## Kom igång
+## Applies to
 
-1. **Förberedelser**
-   - Installera Node.js 16 (>=16.13.0 och <17). Ett `.nvmrc`-file ingår i repot så att `nvm use` / `nvm install` automatiskt växlar till en kompatibel version.
-   - Klona detta repo och öppna projektmappen.
-   - Kör `npm install` (projektet levereras med `.npmrc` som aktiverar `legacy-peer-deps`).
+- [SharePoint Framework](https://aka.ms/spfx)
+- [Microsoft 365 tenant](https://docs.microsoft.com/en-us/sharepoint/dev/spfx/set-up-your-developer-tenant)
 
-2. **Utvecklingsläge**
-   - Kör `npm run watch` för att bygga om projektet kontinuerligt medan du utvecklar.
-   - Vill du snabbt inspektera det byggda paketet kan du använda `npm run serve`, vilket startar en enkel statisk server för innehållet i `dist/`.
+> Get your own free development tenant by subscribing to [Microsoft 365 developer program](http://aka.ms/o365devprogram)
 
-3. **Bygg för distribution**
-   ```bash
-   npm run clean
-   npm run build
-   ```
-   - Resultatet hamnar i mappen `dist/`. Paketera den tillsammans med övriga SharePoint-artefakter enligt er befintliga releaseprocess.
+## Prerequisites
 
-4. **Lägg till på en sida**
-   - Redigera valfri modern sida i SharePoint.
-   - Lägg till webbdelens "Förbättringsportalen" och spara sidan.
+> Any special pre-requisites?
 
-## Användning
+## Solution
 
-1. **Skapa förslag** – Fyll i titel och beskrivning och klicka på *Spara förslag*.
-2. **Rösta** – Klicka på *Rösta* på ett aktivt förslag för att använda en av dina fem röster.
-3. **Återta röst** – Klicka på *Återta röst* för att frigöra rösten innan förslaget är klart.
-4. **Ändra status** – Använd statuslistan på kortet för att markera förslag som pågående, genomfört eller avslutat. När status är "Genomförd" eller "Avslutad" återlämnas röster automatiskt och förslaget finns kvar i sökningen.
+| Solution    | Author(s)                                               |
+| ----------- | ------------------------------------------------------- |
+| folder name | Author details (name, company, twitter alias with link) |
 
-## Vidareutveckling
+## Version history
 
-- Lägg till egna vyer eller kolumner i listorna om ytterligare metadata behövs.
-- Komplettera med notifieringar, exempelvis via Power Automate, när nya förslag skapas eller status ändras.
-- Anpassa UI:t i `ImprovementPortal.styles.ts` för att matcha organisationens grafiska profil.
+| Version | Date             | Comments        |
+| ------- | ---------------- | --------------- |
+| 1.1     | March 10, 2021   | Update comment  |
+| 1.0     | January 29, 2021 | Initial release |
 
-## Support
+## Disclaimer
 
-Om något inte fungerar, se till att kontot som kör webbdelens kod har rättigheter att skapa och uppdatera listor på webbplatsen. Kontrollera också att appen har distribuerats korrekt via appkatalogen.
+**THIS CODE IS PROVIDED _AS IS_ WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.**
+
+---
+
+## Minimal Path to Awesome
+
+- Clone this repository
+- Ensure that you are at the solution folder
+- in the command-line run:
+  - **npm install**
+  - **gulp serve**
+
+> Include any additional steps as needed.
+
+## Features
+
+Description of the extension that expands upon high-level summary above.
+
+This extension illustrates the following concepts:
+
+- topic 1
+- topic 2
+- topic 3
+
+> Notice that better pictures and documentation will increase the sample usage and the value you are providing for others. Thanks for your submissions advance.
+
+> Share your web part with others through Microsoft 365 Patterns and Practices program to get visibility and exposure. More details on the community, open-source projects and other activities from http://aka.ms/m365pnp.
+
+## References
+
+- [Getting started with SharePoint Framework](https://docs.microsoft.com/en-us/sharepoint/dev/spfx/set-up-your-developer-tenant)
+- [Building for Microsoft teams](https://docs.microsoft.com/en-us/sharepoint/dev/spfx/build-for-teams-overview)
+- [Use Microsoft Graph in your solution](https://docs.microsoft.com/en-us/sharepoint/dev/spfx/web-parts/get-started/using-microsoft-graph-apis)
+- [Publish SharePoint Framework applications to the Marketplace](https://docs.microsoft.com/en-us/sharepoint/dev/spfx/publish-to-marketplace-overview)
+- [Microsoft 365 Patterns and Practices](https://aka.ms/m365pnp) - Guidance, tooling, samples and open-source controls for your Microsoft 365 development

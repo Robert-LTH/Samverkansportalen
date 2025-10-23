@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/serve.schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json",
   "port": 4321,
   "https": true,
-  "initialPage": "https://contoso.sharepoint.com/sites/dev/_layouts/workbench.aspx"
+  "initialPage": "https://nektar.sharepoint.com/_layouts/workbench.aspx"
 }

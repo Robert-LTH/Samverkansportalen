@@ -1,14 +1,40 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-package-solution.schema.json",
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
   "solution": {
-    "name": "hello-world-client-side-solution",
-    "id": "c96775bc-64dc-4124-8a6b-55a4658d36c8",
+    "name": "samverkansportalen-client-side-solution",
+    "id": "d54adfb9-a82b-41cb-bf9e-a996b048436c",
     "version": "1.0.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
-    "isDomainIsolated": false
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.21.1"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "samverkansportalen description"
+      },
+      "longDescription": {
+        "default": "samverkansportalen description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "samverkansportalen Feature",
+        "description": "The feature that activates elements of the samverkansportalen solution.",
+        "id": "ab386ecd-38ba-43d5-9f4a-0c61c21320e8",
+        "version": "1.0.0.0"
+      }
+    ]
   },
   "paths": {
-    "zippedPackage": "solution/hello-world.sppkg"
+    "zippedPackage": "solution/samverkansportalen.sppkg"
   }
 }
