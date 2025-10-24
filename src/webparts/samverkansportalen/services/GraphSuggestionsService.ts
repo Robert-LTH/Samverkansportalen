@@ -1,0 +1,292 @@
+import { MSGraphClientFactory, type MSGraphClientV3 } from '@microsoft/sp-http';
+
+export interface IGraphListInfo {
+  id: string;
+  displayName: string;
+}
+
+export interface IGraphSuggestionItemFields {
+  Title?: string;
+  Details?: string;
+  Votes?: number;
+  Status?: string;
+  Voters?: string;
+}
+
+export interface IGraphSuggestionItem {
+  id: number;
+  fields: IGraphSuggestionItemFields;
+}
+
+interface IGraphListApiModel {
+  id?: unknown;
+  displayName?: unknown;
+  list?: {
+    hidden?: unknown;
+    template?: unknown;
+  };
+}
+
+interface IGraphListItemApiModel {
+  id?: unknown;
+  fields?: unknown;
+}
+
+export class GraphSuggestionsService {
+  private readonly _hostname: string;
+  private readonly _sitePath?: string;
+  private _clientPromise?: Promise<MSGraphClientV3>;
+  private _siteIdPromise?: Promise<string>;
+
+  public constructor(
+    private readonly _graphClientFactory: MSGraphClientFactory,
+    siteUrl: string
+  ) {
+    const parsedUrl: URL = new URL(siteUrl);
+    this._hostname = parsedUrl.hostname;
+
+    const trimmedPath: string = parsedUrl.pathname.replace(/\/$/, '');
+    if (trimmedPath && trimmedPath !== '/') {
+      this._sitePath = trimmedPath;
+    }
+  }
+
+  public async getVisibleLists(): Promise<IGraphListInfo[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListApiModel[] } = await client
+      .api(`/sites/${siteId}/lists`)
+      .version('v1.0')
+      .select('id,displayName,list')
+      .filter("list/hidden eq false and list/template eq 'genericList'")
+      .top(999)
+      .get();
+
+    const lists: IGraphListApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return lists
+      .map((entry) => {
+        const id: unknown = entry.id;
+        const displayName: unknown = entry.displayName;
+        const template: unknown = entry.list?.template;
+        const hidden: unknown = entry.list?.hidden;
+
+        if (typeof id !== 'string' || typeof displayName !== 'string') {
+          return undefined;
+        }
+
+        if (hidden === true) {
+          return undefined;
+        }
+
+        if (template && template !== 'genericList') {
+          return undefined;
+        }
+
+        return { id, displayName } as IGraphListInfo;
+      })
+      .filter((item): item is IGraphListInfo => !!item);
+  }
+
+  public async ensureList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(listTitle);
+
+    if (existing) {
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createListWithColumns(listTitle);
+    return { id: created.id, created: true };
+  }
+
+  public async getSuggestionItems(listId: string): Promise<IGraphSuggestionItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListItemApiModel[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .expand('fields($select=Title,Details,Votes,Status,Voters)')
+      .orderby('createdDateTime desc')
+      .top(999)
+      .get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => {
+        const rawId: unknown = entry.id;
+        const fields: unknown = entry.fields;
+
+        if (typeof rawId !== 'string') {
+          return undefined;
+        }
+
+        const id: number = parseInt(rawId, 10);
+        if (!Number.isFinite(id)) {
+          return undefined;
+        }
+
+        if (!fields || typeof fields !== 'object') {
+          return undefined;
+        }
+
+        return {
+          id,
+          fields: fields as IGraphSuggestionItemFields
+        } as IGraphSuggestionItem;
+      })
+      .filter((item): item is IGraphSuggestionItem => !!item);
+  }
+
+  public async addSuggestion(listId: string, fields: IGraphSuggestionItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .post({ fields });
+  }
+
+  public async updateSuggestion(listId: string, itemId: number, fields: Partial<IGraphSuggestionItemFields>): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
+      .version('v1.0')
+      .patch(fields);
+  }
+
+  public async deleteSuggestion(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
+  }
+
+  private async _getListByTitle(listTitle: string): Promise<IGraphListInfo | undefined> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+    const escapedTitle: string = listTitle.replace(/'/g, "''");
+
+    const response: { value?: IGraphListApiModel[] } = await client
+      .api(`/sites/${siteId}/lists`)
+      .version('v1.0')
+      .select('id,displayName')
+      .filter(`displayName eq '${escapedTitle}'`)
+      .top(1)
+      .get();
+
+    const lists: IGraphListApiModel[] = Array.isArray(response.value) ? response.value : [];
+    const match: IGraphListApiModel | undefined = lists.find((entry) => typeof entry.displayName === 'string');
+
+    if (!match || typeof match.id !== 'string' || typeof match.displayName !== 'string') {
+      return undefined;
+    }
+
+    return {
+      id: match.id,
+      displayName: match.displayName
+    };
+  }
+
+  private async _createListWithColumns(listTitle: string): Promise<IGraphListInfo> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: IGraphListApiModel = await client
+      .api(`/sites/${siteId}/lists`)
+      .version('v1.0')
+      .post({
+        displayName: listTitle,
+        description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
+        list: {
+          template: 'genericList'
+        },
+        columns: [
+          {
+            name: 'Details',
+            displayName: 'Details',
+            text: {
+              allowMultipleLines: true
+            }
+          },
+          {
+            name: 'Votes',
+            displayName: 'Votes',
+            number: {
+              decimalPlaces: 0
+            }
+          },
+          {
+            name: 'Status',
+            displayName: 'Status',
+            choice: {
+              allowTextEntry: false,
+              choices: ['Active', 'Done']
+            }
+          },
+          {
+            name: 'Voters',
+            displayName: 'Voters',
+            text: {
+              allowMultipleLines: true
+            }
+          }
+        ]
+      });
+
+    if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
+      throw new Error('Failed to create the suggestions list.');
+    }
+
+    return {
+      id: response.id,
+      displayName: response.displayName
+    };
+  }
+
+  private _getClient(): Promise<MSGraphClientV3> {
+    if (!this._clientPromise) {
+      this._clientPromise = this._graphClientFactory.getClient('3');
+    }
+
+    return this._clientPromise;
+  }
+
+  private async _getSiteId(): Promise<string> {
+    if (!this._siteIdPromise) {
+      this._siteIdPromise = this._resolveSiteId();
+    }
+
+    return this._siteIdPromise;
+  }
+
+  private async _resolveSiteId(): Promise<string> {
+    const client: MSGraphClientV3 = await this._getClient();
+
+    const requestPath: string = this._sitePath
+      ? `/sites/${this._hostname}:${encodeURI(this._sitePath)}`
+      : `/sites/${this._hostname}`;
+
+    const response: { id?: unknown } = await client
+      .api(requestPath)
+      .version('v1.0')
+      .select('id')
+      .get();
+
+    if (!response || typeof response.id !== 'string') {
+      throw new Error('Failed to resolve the site identifier from Microsoft Graph.');
+    }
+
+    return response.id;
+  }
+}
+
+export default GraphSuggestionsService;

@@ -12,11 +12,11 @@ import {
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
-import { ISPHttpClientOptions, SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 
 import * as strings from 'SamverkansportalenWebPartStrings';
 import Samverkansportalen from './components/Samverkansportalen';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, ISamverkansportalenProps } from './components/ISamverkansportalenProps';
+import GraphSuggestionsService from './services/GraphSuggestionsService';
 
 export interface ISamverkansportalenWebPartProps {
   description: string;
@@ -26,12 +26,6 @@ export interface ISamverkansportalenWebPartProps {
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
 
-  private static readonly LIST_REQUEST_ACCEPT_HEADERS: readonly string[] = [
-    'application/json;odata=nometadata',
-    'application/json;odata=minimalmetadata',
-    'application/json;odata=verbose'
-  ];
-
   private _isDarkTheme: boolean = false;
   private _environmentMessage: string = '';
   private _listOptions: IPropertyPaneDropdownOption[] = [
@@ -40,6 +34,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _isLoadingLists: boolean = false;
   private _isCreatingList: boolean = false;
   private _listCreationMessage?: string;
+  private _graphService?: GraphSuggestionsService;
 
   public render(): void {
     const element: React.ReactElement<ISamverkansportalenProps> = React.createElement(
@@ -51,8 +46,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
         userDisplayName: this.context.pageContext.user.displayName,
         userLoginName: this.context.pageContext.user.loginName,
-        siteUrl: this.context.pageContext.web.absoluteUrl,
-        spHttpClient: this.context.spHttpClient,
+        graphService: this._getGraphService(),
         listTitle: this._selectedListTitle
       }
     );
@@ -133,47 +127,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._isLoadingLists = true;
 
     try {
-      const listUrl: string = `${this.context.pageContext.web.absoluteUrl}/_api/web/lists?$filter=Hidden eq false and BaseTemplate eq 100&$select=Title&$orderby=Title`;
-
-      let lists: Array<{ Title?: string }> | undefined;
-
-      for (const accept of SamverkansportalenWebPart.LIST_REQUEST_ACCEPT_HEADERS) {
-        const response: SPHttpClientResponse = await this.context.spHttpClient.get(
-          listUrl,
-          SPHttpClient.configurations.v1,
-          {
-            headers: {
-              'Accept': accept
-            }
-          }
-        );
-
-        if (response.status === 406) {
-          // Try the next Accept header variant for servers that do not understand this format.
-          continue;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Unexpected response (${response.status}) while loading SharePoint lists.`);
-        }
-
-        const payload: unknown = await response.json();
-        const parsedLists: Array<{ Title?: string }> | undefined = this._extractListItems(payload);
-
-        if (parsedLists !== undefined) {
-          lists = parsedLists;
-          break;
-        }
-      }
-
-      if (!lists) {
-        throw new Error('Failed to load SharePoint lists because the response format was not recognized.');
-      }
+      const lists: string[] = (await this._getGraphService().getVisibleLists())
+        .map((list) => list.displayName);
 
       const options: IPropertyPaneDropdownOption[] = lists
-        .map((item) => item.Title)
-        .filter((title): title is string => typeof title === 'string' && title.trim().length > 0)
-        .map((title) => ({ key: title, text: title }))
+        .filter((title) => typeof title === 'string' && title.trim().length > 0)
+        .map((title) => ({ key: title, text: title.trim() }))
         .sort((a, b) => a.text.localeCompare(b.text));
 
       const knownTitles: Set<string> = new Set(options.map((option) => option.key.toString()));
@@ -191,7 +150,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       this._listOptions = options;
     } catch (error) {
-      console.error('Failed to load available SharePoint lists for the property pane.', error);
+      console.error('Failed to load available lists for the property pane.', error);
     } finally {
       this._isLoadingLists = false;
       this.context.propertyPane.refresh();
@@ -231,14 +190,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     let message: string | undefined;
 
     try {
-      const result: 'created' | 'exists' = await this._ensureListExists(rawTitle);
+      const result: { created: boolean } = await this._getGraphService().ensureList(rawTitle);
 
       this.properties.listTitle = rawTitle;
       this.properties.newListTitle = '';
       this._addListOption(rawTitle);
       this.render();
 
-      message = result === 'created'
+      message = result.created
         ? strings.CreateListSuccessMessage.replace('{0}', rawTitle)
         : strings.CreateListAlreadyExistsMessage;
     } catch (error) {
@@ -255,147 +214,24 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this.context.propertyPane.refresh();
   }
 
-  private async _ensureListExists(listTitle: string): Promise<'created' | 'exists'> {
-    const listEndpoint: string = this._getListEndpoint(listTitle);
-
-    const response: SPHttpClientResponse = await this.context.spHttpClient.get(
-      listEndpoint,
-      SPHttpClient.configurations.v1,
-      this._createOptions()
-    );
-
-    if (response.ok) {
-      return 'exists';
-    }
-
-    if (response.status !== 404) {
-      throw new Error(`Unexpected response (${response.status}) while checking for the ${listTitle} list.`);
-    }
-
-    await this._createListWithFields(listTitle);
-    return 'created';
-  }
-
-  private async _createListWithFields(listTitle: string): Promise<void> {
-    const siteUrl: string = this.context.pageContext.web.absoluteUrl;
-
-    const createListResponse: SPHttpClientResponse = await this.context.spHttpClient.post(
-      `${siteUrl}/_api/web/lists`,
-      SPHttpClient.configurations.v1,
-      this._createOptions({
-        Title: listTitle,
-        Description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
-        BaseTemplate: 100,
-        AllowContentTypes: true
-      })
-    );
-
-    if (!createListResponse.ok) {
-      throw new Error('Failed to create the suggestions list.');
-    }
-
-    const listEndpoint: string = this._getListEndpoint(listTitle);
-
-    await this._createField(listEndpoint, {
-      Title: 'Details',
-      FieldTypeKind: 3
-    });
-
-    await this._createField(listEndpoint, {
-      Title: 'Votes',
-      FieldTypeKind: 9,
-      DefaultValue: '0'
-    });
-
-    await this._createField(listEndpoint, {
-      Title: 'Status',
-      FieldTypeKind: 6,
-      Choices: {
-        results: ['Active', 'Done']
-      },
-      DefaultValue: 'Active'
-    });
-
-    await this._createField(listEndpoint, {
-      Title: 'Voters',
-      FieldTypeKind: 3
-    });
-  }
-
-  private async _createField(listEndpoint: string, definition: Record<string, unknown>): Promise<void> {
-    const response: SPHttpClientResponse = await this.context.spHttpClient.post(
-      `${listEndpoint}/fields`,
-      SPHttpClient.configurations.v1,
-      this._createOptions(definition)
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to create field ${(definition.Title as string) || 'unknown'}.`);
-    }
-  }
-
-  private _createOptions(body?: unknown, extraHeaders?: Record<string, string>): ISPHttpClientOptions {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json;odata=nometadata',
-      'odata-version': '3.0'
-    };
-
-    if (body !== undefined) {
-      headers['Content-type'] = 'application/json;odata=nometadata';
-    }
-
-    if (extraHeaders) {
-      for (const key in extraHeaders) {
-        if (Object.prototype.hasOwnProperty.call(extraHeaders, key)) {
-          const value: string | undefined = extraHeaders[key];
-          if (typeof value === 'string') {
-            headers[key] = value;
-          }
-        }
-      }
-    }
-
-    const options: ISPHttpClientOptions = {
-      headers
-    };
-
-    if (body !== undefined) {
-      options.body = JSON.stringify(body);
-    }
-
-    return options;
-  }
-
-  private _getListEndpoint(listTitle: string): string {
-    const escapedTitle: string = listTitle.replace(/'/g, "''");
-    return `${this.context.pageContext.web.absoluteUrl}/_api/web/lists/GetByTitle('${escapedTitle}')`;
-  }
-
   private _normalizeListTitle(value?: string): string {
     const trimmed: string = (value ?? '').trim();
     return trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE;
   }
 
-  private _extractListItems(payload: unknown): Array<{ Title?: string }> | undefined {
-    if (!payload || typeof payload !== 'object') {
-      return undefined;
-    }
-
-    const withValue = payload as { value?: unknown };
-    if (Array.isArray(withValue.value)) {
-      return withValue.value as Array<{ Title?: string }>;
-    }
-
-    const withVerbose = payload as { d?: { results?: unknown } };
-    if (withVerbose.d && Array.isArray(withVerbose.d.results)) {
-      return withVerbose.d.results as Array<{ Title?: string }>;
-    }
-
-    return undefined;
-  }
-
   private get _selectedListTitle(): string {
     return this._normalizeListTitle(this.properties.listTitle);
+  }
+
+  private _getGraphService(): GraphSuggestionsService {
+    if (!this._graphService) {
+      this._graphService = new GraphSuggestionsService(
+        this.context.msGraphClientFactory,
+        this.context.pageContext.web.absoluteUrl
+      );
+    }
+
+    return this._graphService;
   }
 
   protected get dataVersion(): Version {

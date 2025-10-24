@@ -1,4 +1,4 @@
-import { SPHttpClient } from '@microsoft/sp-http';
+import GraphSuggestionsService from '../services/GraphSuggestionsService';
 
 export const DEFAULT_SUGGESTIONS_LIST_TITLE: string = 'SamverkansportalenSuggestions';
 
@@ -9,7 +9,6 @@ export interface ISamverkansportalenProps {
   hasTeamsContext: boolean;
   userDisplayName: string;
   userLoginName: string;
-  siteUrl: string;
-  spHttpClient: SPHttpClient;
+  graphService: GraphSuggestionsService;
   listTitle?: string;
 }
