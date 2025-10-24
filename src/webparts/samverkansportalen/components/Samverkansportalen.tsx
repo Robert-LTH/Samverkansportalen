@@ -315,6 +315,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     await this._createField({
+      __metadata: { type: 'SP.FieldMultiLineText' },
       Title: 'Details',
       FieldTypeKind: 3,
       RichText: false,
@@ -338,6 +339,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
 
     await this._createField({
+      __metadata: { type: 'SP.FieldMultiLineText' },
       Title: 'Voters',
       FieldTypeKind: 3,
       RichText: false,
