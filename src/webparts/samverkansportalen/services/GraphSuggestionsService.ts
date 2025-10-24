@@ -59,7 +59,6 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists`)
       .version('v1.0')
       .select('id,displayName,list')
-      .filter("list/hidden eq false and list/template eq 'genericList'")
       .top(999)
       .get();
 
