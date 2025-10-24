@@ -24,6 +24,7 @@ export interface ISamverkansportalenWebPartProps {
   listTitle?: string;
   newListTitle?: string;
   useTableLayout?: boolean;
+  subcategoryListTitle?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -51,7 +52,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         isCurrentUserAdmin: this._isCurrentUserSiteAdmin,
         graphService: this._getGraphService(),
         listTitle: this._selectedListTitle,
-        useTableLayout: this.properties.useTableLayout
+        useTableLayout: this.properties.useTableLayout,
+        subcategoryListTitle: this._selectedSubcategoryListTitle
       }
     );
 
@@ -71,6 +73,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   protected onInit(): Promise<void> {
     this.properties.listTitle = this._normalizeListTitle(this.properties.listTitle);
+    this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
 
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
@@ -160,6 +163,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       ensureOption(this._selectedListTitle);
       ensureOption(DEFAULT_SUGGESTIONS_LIST_TITLE);
+      const selectedSubcategoryList: string | undefined = this._selectedSubcategoryListTitle;
+      if (selectedSubcategoryList) {
+        ensureOption(selectedSubcategoryList);
+      }
 
       options.sort((a, b) => a.text.localeCompare(b.text));
 
@@ -240,6 +247,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return this._normalizeListTitle(this.properties.listTitle);
   }
 
+  private _normalizeOptionalListTitle(value?: string): string | undefined {
+    const trimmed: string = (value ?? '').trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private get _selectedSubcategoryListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
+  }
+
   private _getGraphService(): GraphSuggestionsService {
     if (!this._graphService) {
       this._graphService = new GraphSuggestionsService(
@@ -270,6 +286,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   label: strings.ListFieldLabel,
                   options: this._listOptions,
                   selectedKey: this._selectedListTitle,
+                  disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneDropdown('subcategoryListTitle', {
+                  label: strings.SubcategoryListFieldLabel,
+                  options: [
+                    { key: '', text: strings.SubcategoryListNoneOptionLabel },
+                    ...this._listOptions
+                  ],
+                  selectedKey: this._selectedSubcategoryListTitle ?? '',
                   disabled: this._isLoadingLists && this._listOptions.length === 0
                 }),
                 PropertyPaneTextField('newListTitle', {

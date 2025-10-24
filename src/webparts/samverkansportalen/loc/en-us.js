@@ -13,6 +13,8 @@ define([], function() {
     "AppOutlookEnvironment": "The app is running in Outlook",
     "UnknownEnvironment": "The app is running in an unknown environment",
     "ListFieldLabel": "Suggestions list",
+    "SubcategoryListFieldLabel": "Subcategory list",
+    "SubcategoryListNoneOptionLabel": "Do not use subcategories",
     "NewListNameFieldLabel": "New list name",
     "CreateListButtonLabel": "Create list",
     "CreateListProgressMessage": "Creating the list...",

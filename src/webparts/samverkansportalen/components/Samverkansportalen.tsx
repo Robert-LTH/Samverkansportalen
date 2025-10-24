@@ -18,7 +18,8 @@ import {
   type SuggestionCategory,
   type IGraphSuggestionItem,
   type IGraphSuggestionItemFields,
-  type IGraphVoteItem
+  type IGraphVoteItem,
+  type IGraphSubcategoryItem
 } from '../services/GraphSuggestionsService';
 
 interface ISuggestionItem {
@@ -29,6 +30,7 @@ interface ISuggestionItem {
   status: 'Active' | 'Done';
   voters: string[];
   category: SuggestionCategory;
+  subcategory?: string;
   createdByLoginName?: string;
   voteEntries: IVoteEntry[];
 }
@@ -39,12 +41,20 @@ interface IVoteEntry {
   votes: number;
 }
 
+interface ISubcategoryDefinition {
+  key: string;
+  title: string;
+  category?: SuggestionCategory;
+}
+
 interface ISamverkansportalenState {
   suggestions: ISuggestionItem[];
   isLoading: boolean;
   newTitle: string;
   newDescription: string;
   newCategory: SuggestionCategory;
+  newSubcategoryKey?: string;
+  subcategories: ISubcategoryDefinition[];
   availableVotes: number;
   error?: string;
   success?: string;
@@ -61,6 +71,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _isMounted: boolean = false;
   private _currentListId?: string;
   private _currentVotesListId?: string;
+  private _currentSubcategoryListId?: string;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -71,6 +82,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newTitle: '',
       newDescription: '',
       newCategory: DEFAULT_SUGGESTION_CATEGORY,
+      newSubcategoryKey: undefined,
+      subcategories: [],
       availableVotes: MAX_VOTES_PER_USER
     };
   }
@@ -86,7 +99,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   public componentDidUpdate(prevProps: ISamverkansportalenProps): void {
-    if (this._normalizeListTitle(prevProps.listTitle) !== this._listTitle) {
+    const listChanged: boolean = this._normalizeListTitle(prevProps.listTitle) !== this._listTitle;
+    const subcategoryListChanged: boolean =
+      this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
+
+    if (listChanged || subcategoryListChanged) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
     }
@@ -100,9 +117,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newTitle,
       newDescription,
       newCategory,
+      newSubcategoryKey,
+      subcategories,
       error,
       success
     } = this.state;
+
+    const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
 
     const activeSuggestions: ISuggestionItem[] = suggestions.filter((item) => item.status !== 'Done');
     const completedSuggestions: ISuggestionItem[] = suggestions.filter((item) => item.status === 'Done');
@@ -164,6 +185,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               selectedKey={newCategory}
               onChange={this._onCategoryChange}
               disabled={isLoading}
+            />
+            <Dropdown
+              label="Subcategory"
+              options={subcategoryOptions}
+              selectedKey={newSubcategoryKey}
+              onChange={this._onSubcategoryChange}
+              disabled={isLoading || subcategoryOptions.length === 0}
+              placeholder={subcategoryOptions.length === 0 ? 'No subcategories available' : 'Select a subcategory'}
             />
             <PrimaryButton
               text="Submit suggestion"
@@ -230,6 +259,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                       #{item.id}
                     </span>
                     <span className={styles.categoryBadge}>{item.category}</span>
+                    {item.subcategory && (
+                      <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                    )}
                   </div>
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
                   {item.description && (
@@ -271,10 +303,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               <th scope="col" className={styles.tableHeaderId}>#</th>
               <th scope="col" className={styles.tableHeaderSuggestion}>Suggestion</th>
               <th scope="col" className={styles.tableHeaderCategory}>Category</th>
-            <th scope="col" className={styles.tableHeaderVotes}>Votes</th>
-            <th scope="col" className={styles.tableHeaderActions}>Actions</th>
-          </tr>
-        </thead>
+              <th scope="col" className={styles.tableHeaderSubcategory}>Subcategory</th>
+              <th scope="col" className={styles.tableHeaderVotes}>Votes</th>
+              <th scope="col" className={styles.tableHeaderActions}>Actions</th>
+            </tr>
+          </thead>
         <tbody>
           {items.map((item) => {
             const { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion } = this._getInteractionState(
@@ -299,6 +332,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 </td>
                 <td className={styles.tableCellCategory} data-label="Category">
                   <span className={styles.categoryBadge}>{item.category}</span>
+                </td>
+                <td className={styles.tableCellSubcategory} data-label="Subcategory">
+                  {item.subcategory ? (
+                    <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                  ) : (
+                    <span className={styles.subcategoryPlaceholder}>—</span>
+                  )}
                 </td>
                 <td className={styles.tableCellVotes} data-label="Votes">
                   <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
@@ -386,16 +426,63 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion };
   }
 
+  private _getSubcategoryOptions(
+    category: SuggestionCategory,
+    definitions: ISubcategoryDefinition[]
+  ): IDropdownOption[] {
+    return this._getSubcategoriesForCategory(category, definitions).map((definition) => ({
+      key: definition.key,
+      text: definition.title
+    }));
+  }
+
+  private _getSubcategoriesForCategory(
+    category: SuggestionCategory,
+    definitions: ISubcategoryDefinition[] = this.state.subcategories
+  ): ISubcategoryDefinition[] {
+    return definitions.filter((definition) => !definition.category || definition.category === category);
+  }
+
+  private _getValidSubcategoryKeyForCategory(
+    category: SuggestionCategory,
+    preferredKey: string | undefined,
+    definitions: ISubcategoryDefinition[] = this.state.subcategories
+  ): string | undefined {
+    const options: ISubcategoryDefinition[] = this._getSubcategoriesForCategory(category, definitions);
+
+    if (preferredKey && options.some((option) => option.key === preferredKey)) {
+      return preferredKey;
+    }
+
+    return options.length > 0 ? options[0].key : undefined;
+  }
+
+  private _getSelectedSubcategoryDefinition(): ISubcategoryDefinition | undefined {
+    const { newSubcategoryKey, subcategories } = this.state;
+
+    if (!newSubcategoryKey) {
+      return undefined;
+    }
+
+    return subcategories.find((definition) => definition.key === newSubcategoryKey);
+  }
+
   private async _initialize(): Promise<void> {
     this._currentListId = undefined;
     this._currentVotesListId = undefined;
+    this._currentSubcategoryListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
       await this._ensureLists();
+      await this._ensureSubcategoryList();
       await this._loadSuggestions();
     } catch (error) {
-      this._handleError('We could not load the suggestions list. Please refresh the page or contact your administrator.', error);
+      const message: string =
+        error instanceof Error && error.message.includes('subcategory list')
+          ? 'We could not load the configured subcategory list. Please verify the configuration or remove it.'
+          : 'We could not load the suggestions list. Please refresh the page or contact your administrator.';
+      this._handleError(message, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -408,6 +495,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const votesResult = await this.props.graphService.ensureVoteList(listTitle);
     this._currentVotesListId = votesResult.id;
+  }
+
+  private async _ensureSubcategoryList(): Promise<void> {
+    this._currentSubcategoryListId = undefined;
+    this._updateState({ subcategories: [], newSubcategoryKey: undefined });
+
+    const listTitle: string | undefined = this._subcategoryListTitle;
+
+    if (!listTitle) {
+      return;
+    }
+
+    const listInfo = await this.props.graphService.getListByTitle(listTitle);
+
+    if (!listInfo) {
+      throw new Error(`Failed to load the subcategory list "${listTitle}".`);
+    }
+
+    this._currentSubcategoryListId = listInfo.id;
+    await this._loadSubcategories();
   }
 
   private async _loadSuggestions(): Promise<void> {
@@ -455,6 +562,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         votes: voteEntries.reduce((total, vote) => total + vote.votes, 0),
         status: fields.Status === 'Done' ? 'Done' : 'Active',
         category: this._normalizeCategory(fields.Category),
+        subcategory:
+          typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
+            ? fields.Subcategory.trim()
+            : undefined,
         voters: voteEntries.map((vote) => vote.username),
         createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName),
         voteEntries
@@ -490,6 +601,49 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
   }
 
+  private async _loadSubcategories(): Promise<void> {
+    const listId: string = this._getResolvedSubcategoryListId();
+    const itemsFromGraph: IGraphSubcategoryItem[] = await this.props.graphService.getSubcategoryItems(listId);
+
+    const definitions: ISubcategoryDefinition[] = itemsFromGraph
+      .map((item) => {
+        const fields = item.fields ?? {};
+        const rawTitle: unknown = (fields as { Title?: unknown }).Title;
+
+        if (typeof rawTitle !== 'string') {
+          return undefined;
+        }
+
+        const trimmedTitle: string = rawTitle.trim();
+
+        if (!trimmedTitle) {
+          return undefined;
+        }
+
+        const rawCategory: unknown = (fields as { Category?: unknown }).Category;
+        const normalizedCategory: SuggestionCategory | undefined = this._tryNormalizeCategory(rawCategory);
+
+        return {
+          key: item.id.toString(),
+          title: trimmedTitle,
+          category: normalizedCategory
+        } as ISubcategoryDefinition;
+      })
+      .filter((definition): definition is ISubcategoryDefinition => !!definition)
+      .sort((a, b) => a.title.localeCompare(b.title));
+
+    const nextSubcategoryKey: string | undefined = this._getValidSubcategoryKeyForCategory(
+      this.state.newCategory,
+      this.state.newSubcategoryKey,
+      definitions
+    );
+
+    this._updateState({
+      subcategories: definitions,
+      newSubcategoryKey: nextSubcategoryKey
+    });
+  }
+
   private _onTitleChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string): void => {
     this._updateState({ newTitle: newValue ?? '' });
   };
@@ -515,7 +669,33 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       (category) => category.toLowerCase() === normalized.toLowerCase()
     );
 
-    this._updateState({ newCategory: match ?? DEFAULT_SUGGESTION_CATEGORY });
+    const nextCategory: SuggestionCategory = match ?? DEFAULT_SUGGESTION_CATEGORY;
+    const nextSubcategoryKey: string | undefined = this._getValidSubcategoryKeyForCategory(
+      nextCategory,
+      this.state.newSubcategoryKey
+    );
+
+    this._updateState({ newCategory: nextCategory, newSubcategoryKey: nextSubcategoryKey });
+  };
+
+  private _onSubcategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+    const definition: ISubcategoryDefinition | undefined = this.state.subcategories.find(
+      (item) => item.key === key
+    );
+
+    if (!definition) {
+      return;
+    }
+
+    this._updateState({ newSubcategoryKey: definition.key });
   };
 
   private _dismissError = (): void => {
@@ -530,6 +710,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const title: string = this.state.newTitle.trim();
     const description: string = this.state.newDescription.trim();
     const category: SuggestionCategory = this.state.newCategory;
+    const selectedSubcategory: ISubcategoryDefinition | undefined = this._getSelectedSubcategoryDefinition();
 
     if (!title) {
       this._handleError('Please add a title before submitting your suggestion.');
@@ -540,18 +721,27 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     try {
       const listId: string = this._getResolvedListId();
-
-      await this.props.graphService.addSuggestion(listId, {
+      const payload: IGraphSuggestionItemFields = {
         Title: title,
         Details: description,
         Status: 'Active',
         Category: category
-      });
+      };
+
+      if (selectedSubcategory) {
+        payload.Subcategory = selectedSubcategory.title;
+      }
+
+      await this.props.graphService.addSuggestion(listId, payload);
 
       this._updateState({
         newTitle: '',
         newDescription: '',
-        newCategory: DEFAULT_SUGGESTION_CATEGORY
+        newCategory: DEFAULT_SUGGESTION_CATEGORY,
+        newSubcategoryKey: this._getValidSubcategoryKeyForCategory(
+          DEFAULT_SUGGESTION_CATEGORY,
+          undefined
+        )
       });
 
       await this._loadSuggestions();
@@ -695,6 +885,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._normalizeListTitle(this.props.listTitle);
   }
 
+  private _normalizeOptionalListTitle(value?: string): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed: string = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private get _subcategoryListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.props.subcategoryListTitle);
+  }
+
   private _parseVotes(value: unknown): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
@@ -710,7 +913,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return 0;
   }
 
-  private _normalizeCategory(value: unknown): SuggestionCategory {
+  private _tryNormalizeCategory(value: unknown): SuggestionCategory | undefined {
     if (typeof value === 'string') {
       const normalized: string = value.trim();
 
@@ -725,7 +928,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
     }
 
-    return DEFAULT_SUGGESTION_CATEGORY;
+    return undefined;
+  }
+
+  private _normalizeCategory(value: unknown): SuggestionCategory {
+    return this._tryNormalizeCategory(value) ?? DEFAULT_SUGGESTION_CATEGORY;
   }
 
   private _getResolvedListId(): string {
@@ -742,6 +949,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return this._currentVotesListId;
+  }
+
+  private _getResolvedSubcategoryListId(): string {
+    if (!this._currentSubcategoryListId) {
+      throw new Error('The subcategory list has not been initialized yet.');
+    }
+
+    return this._currentSubcategoryListId;
   }
 
   private _handleError(message: string, error?: unknown): void {
