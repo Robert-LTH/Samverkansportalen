@@ -142,9 +142,8 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('Id,createdBy')
-      .expand(
-        'fields($select=Id,Title,Details,Status,Category),createdByUser($select=userPrincipalName,mail,email)'
-      )
+      .expand('fields($select=Id,Title,Details,Status,Category)')
+      .expand('createdByUser($select=userPrincipalName,mail,email)')
       .orderby('createdDateTime desc')
       .top(999)
       .get();
