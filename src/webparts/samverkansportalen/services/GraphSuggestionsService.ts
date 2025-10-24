@@ -45,6 +45,7 @@ interface IGraphListApiModel {
 }
 
 interface IGraphListItemApiModel {
+  id?: unknown;
   fields?: unknown;
   createdBy?: {
     user?: {
@@ -202,13 +203,27 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
+        const rawId: unknown = entry.id;
         const fields: unknown = entry.fields;
 
-        if (!fields || typeof fields !== 'object') {
+        let id: number | undefined;
+
+        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+          id = rawId;
+        } else if (typeof rawId === 'string') {
+          const parsed: number = parseInt(rawId, 10);
+
+          if (Number.isFinite(parsed)) {
+            id = parsed;
+          }
+        }
+
+        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
           return undefined;
         }
 
         return {
+          id,
           fields: fields as IGraphVoteItemFields
         } as IGraphVoteItem;
       })
