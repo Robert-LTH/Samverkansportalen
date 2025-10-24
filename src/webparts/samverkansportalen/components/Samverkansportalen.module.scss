@@ -73,6 +73,30 @@
   gap: 1rem;
 }
 
+.filters {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.75rem;
+  background: "[theme:white, default: #ffffff]";
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.filterControls {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  align-items: end;
+}
+
+.filterDropdown {
+  min-width: 12rem;
+}
+
+.filterSearch {
+  min-width: 16rem;
+}
+
 .suggestionSection {
   margin-top: 2rem;
 }
