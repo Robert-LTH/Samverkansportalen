@@ -227,9 +227,8 @@ export class GraphSuggestionsService {
           {
             name: 'Status',
             displayName: 'Status',
-            choice: {
-              allowTextEntry: false,
-              choices: ['Active', 'Done']
+            text: {
+              allowMultipleLines: false
             }
           },
           {
