@@ -300,7 +300,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ success: undefined });
   };
 
-  private async _addSuggestion(): Promise<void> {
+  private _addSuggestion = async (): Promise<void> => {
     const title: string = this.state.newTitle.trim();
     const description: string = this.state.newDescription.trim();
 
@@ -332,7 +332,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } finally {
       this._updateState({ isLoading: false });
     }
-  }
+  };
 
   private async _toggleVote(item: ISuggestionItem): Promise<void> {
     const hasVoted: boolean = item.voters.indexOf(this.props.userLoginName) !== -1;
