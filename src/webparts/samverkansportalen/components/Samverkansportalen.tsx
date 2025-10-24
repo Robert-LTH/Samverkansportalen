@@ -7,11 +7,15 @@ import {
   MessageBarType,
   Spinner,
   SpinnerSize,
-  TextField
+  TextField,
+  Dropdown,
+  type IDropdownOption
 } from '@fluentui/react';
 import styles from './Samverkansportalen.module.scss';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
 import {
+  SUGGESTION_CATEGORIES,
+  type SuggestionCategory,
   type IGraphSuggestionItem,
   type IGraphSuggestionItemFields
 } from '../services/GraphSuggestionsService';
@@ -23,6 +27,7 @@ interface ISuggestionItem {
   votes: number;
   status: 'Active' | 'Done';
   voters: string[];
+  category: SuggestionCategory;
   createdByLoginName?: string;
 }
 
@@ -31,12 +36,18 @@ interface ISamverkansportalenState {
   isLoading: boolean;
   newTitle: string;
   newDescription: string;
+  newCategory: SuggestionCategory;
   availableVotes: number;
   error?: string;
   success?: string;
 }
 
 const MAX_VOTES_PER_USER: number = 5;
+const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = 'Change request';
+const CATEGORY_OPTIONS: IDropdownOption[] = SUGGESTION_CATEGORIES.map((category) => ({
+  key: category,
+  text: category
+}));
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -50,6 +61,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isLoading: false,
       newTitle: '',
       newDescription: '',
+      newCategory: DEFAULT_SUGGESTION_CATEGORY,
       availableVotes: MAX_VOTES_PER_USER
     };
   }
@@ -78,6 +90,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       availableVotes,
       newTitle,
       newDescription,
+      newCategory,
       error,
       success
     } = this.state;
@@ -136,6 +149,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               onChange={this._onDescriptionChange}
               disabled={isLoading}
             />
+            <Dropdown
+              label="Category"
+              options={CATEGORY_OPTIONS}
+              selectedKey={newCategory}
+              onChange={this._onCategoryChange}
+              disabled={isLoading}
+            />
             <PrimaryButton
               text="Submit suggestion"
               onClick={this._addSuggestion}
@@ -182,6 +202,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             <li key={item.id} className={styles.suggestionCard}>
               <div className={styles.cardHeader}>
                 <div className={styles.cardText}>
+                  <div className={styles.cardMeta}>
+                    <span className={styles.categoryBadge}>{item.category}</span>
+                  </div>
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
@@ -269,6 +292,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         description: typeof fields.Details === 'string' ? fields.Details : '',
         votes: this._parseVotes(fields.Votes),
         status: fields.Status === 'Done' ? 'Done' : 'Active',
+        category: this._normalizeCategory(fields.Category),
         voters,
         createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName)
       };
@@ -294,8 +318,28 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ newTitle: newValue ?? '' });
   };
 
-  private _onDescriptionChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string): void => {
+  private _onDescriptionChange = (
+    _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue?: string
+  ): void => {
     this._updateState({ newDescription: newValue ?? '' });
+  };
+
+  private _onCategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+    const normalized: string = key.trim();
+    const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
+      (category) => category.toLowerCase() === normalized.toLowerCase()
+    );
+
+    this._updateState({ newCategory: match ?? DEFAULT_SUGGESTION_CATEGORY });
   };
 
   private _dismissError = (): void => {
@@ -309,6 +353,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _addSuggestion = async (): Promise<void> => {
     const title: string = this.state.newTitle.trim();
     const description: string = this.state.newDescription.trim();
+    const category: SuggestionCategory = this.state.newCategory;
 
     if (!title) {
       this._handleError('Please add a title before submitting your suggestion.');
@@ -325,10 +370,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         Details: description,
         Votes: 0,
         Status: 'Active',
-        Voters: JSON.stringify([])
+        Voters: JSON.stringify([]),
+        Category: category
       });
 
-      this._updateState({ newTitle: '', newDescription: '' });
+      this._updateState({
+        newTitle: '',
+        newDescription: '',
+        newCategory: DEFAULT_SUGGESTION_CATEGORY
+      });
 
       await this._loadSuggestions();
 
@@ -474,6 +524,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return 0;
+  }
+
+  private _normalizeCategory(value: unknown): SuggestionCategory {
+    if (typeof value === 'string') {
+      const normalized: string = value.trim();
+
+      if (normalized.length > 0) {
+        const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
+          (category) => category.toLowerCase() === normalized.toLowerCase()
+        );
+
+        if (match) {
+          return match;
+        }
+      }
+    }
+
+    return DEFAULT_SUGGESTION_CATEGORY;
   }
 
   private _getResolvedListId(): string {

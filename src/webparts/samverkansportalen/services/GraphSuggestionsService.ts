@@ -5,12 +5,17 @@ export interface IGraphListInfo {
   displayName: string;
 }
 
+export const SUGGESTION_CATEGORIES = ['Change request', 'Webbinar', 'Article'] as const;
+
+export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
+
 export interface IGraphSuggestionItemFields {
   Title?: string;
   Details?: string;
   Votes?: number | string;
   Status?: string;
   Voters?: string;
+  Category?: SuggestionCategory;
 }
 
 export interface IGraphSuggestionItem {
@@ -115,7 +120,9 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('id,createdBy')
-      .expand('fields($select=Title,Details,Votes,Status,Voters),createdByUser($select=userPrincipalName,mail,email)')
+      .expand(
+        'fields($select=Title,Details,Votes,Status,Voters,Category),createdByUser($select=userPrincipalName,mail,email)'
+      )
       .orderby('createdDateTime desc')
       .top(999)
       .get();
@@ -249,6 +256,15 @@ export class GraphSuggestionsService {
             displayName: 'Details',
             text: {
               allowMultipleLines: true
+            }
+          },
+          {
+            name: 'Category',
+            displayName: 'Category',
+            choice: {
+              allowTextEntry: false,
+              allowMultipleSelections: false,
+              choices: [...SUGGESTION_CATEGORIES]
             }
           },
           {
