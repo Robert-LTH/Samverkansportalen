@@ -10,6 +10,7 @@ export const SUGGESTION_CATEGORIES = ['Change request', 'Webbinar', 'Article'] a
 export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
 
 export interface IGraphSuggestionItemFields {
+  id?: number;
   Title?: string;
   Details?: string;
   Votes?: number | string;
@@ -19,7 +20,6 @@ export interface IGraphSuggestionItemFields {
 }
 
 export interface IGraphSuggestionItem {
-  id: number;
   fields: IGraphSuggestionItemFields;
   createdByUserPrincipalName?: string;
 }
@@ -45,7 +45,6 @@ interface IGraphListApiModel {
 }
 
 interface IGraphListItemApiModel {
-  id?: unknown;
   fields?: unknown;
   createdBy?: {
     user?: {
@@ -142,9 +141,9 @@ export class GraphSuggestionsService {
     const response: { value?: IGraphListItemApiModel[] } = await client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .select('id,createdBy')
+      .select('Id,createdBy')
       .expand(
-        'fields($select=Title,Details,Status,Category),createdByUser($select=userPrincipalName,mail,email)'
+        'fields($select=Id,Title,Details,Status,Category),createdByUser($select=userPrincipalName,mail,email)'
       )
       .orderby('createdDateTime desc')
       .top(999)
@@ -154,17 +153,7 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
         const fields: unknown = entry.fields;
-
-        if (typeof rawId !== 'string') {
-          return undefined;
-        }
-
-        const id: number = parseInt(rawId, 10);
-        if (!Number.isFinite(id)) {
-          return undefined;
-        }
 
         if (!fields || typeof fields !== 'object') {
           return undefined;
@@ -190,9 +179,7 @@ export class GraphSuggestionsService {
             }
           }
         }
-
         return {
-          id,
           fields: fields as IGraphSuggestionItemFields,
           createdByUserPrincipalName
         } as IGraphSuggestionItem;
@@ -215,18 +202,6 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
-
-        if (typeof rawId !== 'string') {
-          return undefined;
-        }
-
-        const id: number = parseInt(rawId, 10);
-
-        if (!Number.isFinite(id)) {
-          return undefined;
-        }
-
         const fields: unknown = entry.fields;
 
         if (!fields || typeof fields !== 'object') {
@@ -234,7 +209,6 @@ export class GraphSuggestionsService {
         }
 
         return {
-          id,
           fields: fields as IGraphVoteItemFields
         } as IGraphVoteItem;
       })

@@ -23,7 +23,6 @@ import {
 
 interface ISuggestionItem {
   id: number;
-  displayId: number;
   title: string;
   description: string;
   votes: number;
@@ -214,8 +213,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               <div className={styles.cardHeader}>
                 <div className={styles.cardText}>
                   <div className={styles.cardMeta}>
-                    <span className={styles.entryId} aria-label={`Entry number ${item.displayId}`}>
-                      #{item.displayId}
+                    <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+                      #{item.id}
                     </span>
                     <span className={styles.categoryBadge}>{item.category}</span>
                   </div>
@@ -318,13 +317,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       votesBySuggestion.set(suggestionId, entriesForSuggestion);
     });
 
-    const baseItems: Array<Omit<ISuggestionItem, 'displayId'>> = itemsFromGraph.map((entry: IGraphSuggestionItem) => {
+    const baseItems = itemsFromGraph.map((entry: IGraphSuggestionItem): ISuggestionItem => {
       const fields: IGraphSuggestionItemFields = entry.fields;
 
-      const voteEntries: IVoteEntry[] = votesBySuggestion.get(entry.id) ?? [];
+
+      const voteEntries: IVoteEntry[] = votesBySuggestion.get(fields.id ?? -1) ?? [];
 
       return {
-        id: entry.id,
+        id: fields.id ?? -1,
         title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
         description: typeof fields.Details === 'string' ? fields.Details : '',
         votes: voteEntries.reduce((total, vote) => total + vote.votes, 0),
@@ -360,7 +360,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
 
     this._updateState({
-      suggestions: items,
+      suggestions: baseItems,
       availableVotes
     });
   }
