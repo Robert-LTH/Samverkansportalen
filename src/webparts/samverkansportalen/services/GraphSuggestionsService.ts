@@ -141,7 +141,7 @@ export class GraphSuggestionsService {
     const response: { value?: IGraphListItemApiModel[] } = await client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .select('Id,createdBy')
+      .select('createdBy')
       .expand('fields($select=Id,Title,Details,Status,Category)')
       .expand('createdByUser($select=userPrincipalName,mail,email)')
       .orderby('createdDateTime desc')
@@ -193,7 +193,8 @@ export class GraphSuggestionsService {
     const response: { value?: IGraphListItemApiModel[] } = await client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .select('id,fields($select=SuggestionId,Username,Votes)')
+      .select('id')
+      .expand('fields($select=SuggestionId,Username,Votes)')
       .top(999)
       .get();
 
