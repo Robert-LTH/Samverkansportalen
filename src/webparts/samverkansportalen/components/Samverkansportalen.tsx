@@ -247,21 +247,55 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private async _ensureList(): Promise<void> {
     const listTitle: string = this._listTitle;
 
+    const escapedTitleForFilter: string = listTitle.replace(/'/g, "''");
+    const filterQuery: string = `Title eq '${escapedTitleForFilter}'`;
+    const requestUrl: string = `${this.props.siteUrl}/_api/web/lists?$select=Id&$top=1&$filter=${encodeURIComponent(filterQuery)}`;
+
     const response: SPHttpClientResponse = await this.props.spHttpClient.get(
-      this._listEndpoint,
+      requestUrl,
       SPHttpClient.configurations.v1,
       this._createOptions()
     );
 
-    if (response.ok) {
-      return;
-    }
-
-    if (response.status !== 404) {
+    if (!response.ok) {
       throw new Error(`Unexpected response (${response.status}) while checking for the ${listTitle} list.`);
     }
 
+    const payload: unknown = await response.json();
+
+    if (this._hasListMatch(payload)) {
+      return;
+    }
+
     await this._createListWithFields(listTitle);
+  }
+
+  private _hasListMatch(payload: unknown): boolean {
+    const entries: Array<{ Id?: unknown }> | undefined = this._extractListEntries(payload);
+
+    if (!entries) {
+      return false;
+    }
+
+    return entries.some((entry) => !!entry && typeof entry.Id === 'number');
+  }
+
+  private _extractListEntries(payload: unknown): Array<{ Id?: unknown }> | undefined {
+    if (!payload || typeof payload !== 'object') {
+      return undefined;
+    }
+
+    const withValue = payload as { value?: unknown };
+    if (Array.isArray(withValue.value)) {
+      return withValue.value as Array<{ Id?: unknown }>;
+    }
+
+    const withVerbose = payload as { d?: { results?: unknown } };
+    if (withVerbose.d && Array.isArray(withVerbose.d.results)) {
+      return withVerbose.d.results as Array<{ Id?: unknown }>;
+    }
+
+    return undefined;
   }
 
   private async _createListWithFields(listTitle: string): Promise<void> {
