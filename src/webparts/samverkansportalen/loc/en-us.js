@@ -19,6 +19,9 @@ define([], function() {
     "CreateListSuccessMessage": "Successfully created the list \"{0}\".",
     "CreateListAlreadyExistsMessage": "The list already exists and has been selected.",
     "CreateListNameMissingMessage": "Enter a name before creating the list.",
-    "CreateListErrorMessage": "We couldn't create the list. Please try again."
+    "CreateListErrorMessage": "We couldn't create the list. Please try again.",
+    "UseTableLayoutToggleLabel": "Suggestion layout",
+    "UseTableLayoutToggleOnText": "Table",
+    "UseTableLayoutToggleOffText": "Cards"
   }
 });

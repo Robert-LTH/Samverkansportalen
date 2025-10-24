@@ -12,4 +12,5 @@ export interface ISamverkansportalenProps {
   isCurrentUserAdmin: boolean;
   graphService: GraphSuggestionsService;
   listTitle?: string;
+  useTableLayout?: boolean;
 }

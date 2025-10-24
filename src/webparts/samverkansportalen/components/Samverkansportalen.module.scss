@@ -85,6 +85,83 @@
   gap: 1rem;
 }
 
+.tableWrapper {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.suggestionTable {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.75rem;
+  background: "[theme:white, default: #ffffff]";
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  th,
+  td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  thead th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: "[theme:neutralPrimary, default: #323130]";
+    background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+    border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
+  }
+
+  tbody tr + tr {
+    border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
+  }
+}
+
+.tableHeaderId,
+.tableCellId {
+  width: 6rem;
+  text-align: center;
+}
+
+.tableHeaderVotes,
+.tableCellVotes {
+  width: 8rem;
+  text-align: center;
+}
+
+.tableHeaderSuggestion {
+  width: 40%;
+}
+
+.tableHeaderCategory {
+  width: 10rem;
+}
+
+.tableHeaderActions,
+.tableCellActions {
+  width: 16rem;
+}
+
+.tableCellSuggestion {
+  width: 100%;
+}
+
+.tableCellCategory {
+  width: 10rem;
+}
+
+.tableActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
 .suggestionCard {
   border: 1px solid "[theme:neutralLight, default: #edebe9]";
   border-radius: 0.75rem;
@@ -179,6 +256,60 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+@media (max-width: 48rem) {
+  .suggestionTable {
+    min-width: 0;
+    border-radius: 0.75rem;
+
+    thead {
+      display: none;
+    }
+
+    tbody,
+    tr,
+    td {
+      display: block;
+      width: 100%;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
+      padding: 0.5rem 0;
+    }
+
+    tbody tr + tr {
+      border-top: none;
+      margin-top: 1rem;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border: none;
+      position: relative;
+      text-align: left !important;
+    }
+
+    td::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: "[theme:neutralSecondary, default: #605e5c]";
+      margin-bottom: 0.25rem;
+    }
+  }
+
+  .tableActions {
+    justify-content: flex-start;
+  }
+
+  .tableCellVotes .voteBadge {
+    margin-top: 0.25rem;
+  }
 }
 
 .emptyState {

@@ -200,13 +200,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const noVotesRemaining: boolean = this.state.availableVotes <= 0;
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
 
+    return this.props.useTableLayout
+      ? this._renderSuggestionTable(items, readOnly, normalizedUser, noVotesRemaining)
+      : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining);
+  }
+
+  private _renderSuggestionCards(
+    items: ISuggestionItem[],
+    readOnly: boolean,
+    normalizedUser: string | undefined,
+    noVotesRemaining: boolean
+  ): React.ReactNode {
     return (
       <ul className={styles.suggestionList}>
         {items.map((item) => {
-          const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
-          const disableVote: boolean = this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
-          const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
-          const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
+          const { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion } = this._getInteractionState(
+            item,
+            readOnly,
+            normalizedUser,
+            noVotesRemaining
+          );
 
           return (
             <li key={item.id} className={styles.suggestionCard}>
@@ -228,38 +241,149 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
                 </div>
               </div>
-              <div className={styles.cardActions}>
-                {readOnly ? (
-                  <DefaultButton text="Votes closed" disabled />
-                ) : (
-                  <PrimaryButton
-                    text={hasVoted ? 'Remove vote' : 'Vote'}
-                    onClick={() => this._toggleVote(item)}
-                    disabled={disableVote}
-                  />
-                )}
-                {canMarkSuggestionAsDone && (
-                  <DefaultButton
-                    text="Mark as done"
-                    onClick={() => this._markSuggestionAsDone(item)}
-                    disabled={this.state.isLoading}
-                  />
-                )}
-                {canDeleteSuggestion && (
-                  <IconButton
-                    iconProps={{ iconName: 'Delete' }}
-                    title="Remove suggestion"
-                    ariaLabel="Remove suggestion"
-                    onClick={() => this._deleteSuggestion(item)}
-                    disabled={this.state.isLoading}
-                  />
-                )}
-              </div>
+              {this._renderActionButtons(
+                item,
+                readOnly,
+                hasVoted,
+                disableVote,
+                canMarkSuggestionAsDone,
+                canDeleteSuggestion,
+                styles.cardActions
+              )}
             </li>
           );
         })}
       </ul>
     );
+  }
+
+  private _renderSuggestionTable(
+    items: ISuggestionItem[],
+    readOnly: boolean,
+    normalizedUser: string | undefined,
+    noVotesRemaining: boolean
+  ): React.ReactNode {
+    return (
+      <div className={styles.tableWrapper}>
+        <table className={styles.suggestionTable}>
+          <thead>
+            <tr>
+              <th scope="col" className={styles.tableHeaderId}>#</th>
+              <th scope="col" className={styles.tableHeaderSuggestion}>Suggestion</th>
+              <th scope="col" className={styles.tableHeaderCategory}>Category</th>
+            <th scope="col" className={styles.tableHeaderVotes}>Votes</th>
+            <th scope="col" className={styles.tableHeaderActions}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion } = this._getInteractionState(
+              item,
+              readOnly,
+              normalizedUser,
+              noVotesRemaining
+            );
+
+            return (
+              <tr key={item.id}>
+                <td className={styles.tableCellId} data-label="Entry">
+                  <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+                    #{item.id}
+                  </span>
+                </td>
+                <td className={styles.tableCellSuggestion} data-label="Suggestion">
+                  <h4 className={styles.suggestionTitle}>{item.title}</h4>
+                  {item.description && (
+                    <p className={styles.suggestionDescription}>{item.description}</p>
+                  )}
+                </td>
+                <td className={styles.tableCellCategory} data-label="Category">
+                  <span className={styles.categoryBadge}>{item.category}</span>
+                </td>
+                <td className={styles.tableCellVotes} data-label="Votes">
+                  <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+                    <span className={styles.voteNumber}>{item.votes}</span>
+                    <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+                  </div>
+                </td>
+                <td className={styles.tableCellActions} data-label="Actions">
+                  {this._renderActionButtons(
+                    item,
+                    readOnly,
+                    hasVoted,
+                    disableVote,
+                    canMarkSuggestionAsDone,
+                    canDeleteSuggestion,
+                    styles.tableActions
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    );
+  }
+
+  private _renderActionButtons(
+    item: ISuggestionItem,
+    readOnly: boolean,
+    hasVoted: boolean,
+    disableVote: boolean,
+    canMarkSuggestionAsDone: boolean,
+    canDeleteSuggestion: boolean,
+    containerClassName: string
+  ): React.ReactNode {
+    return (
+      <div className={containerClassName}>
+        {readOnly ? (
+          <DefaultButton text="Votes closed" disabled />
+        ) : (
+          <PrimaryButton
+            text={hasVoted ? 'Remove vote' : 'Vote'}
+            onClick={() => this._toggleVote(item)}
+            disabled={disableVote}
+          />
+        )}
+        {canMarkSuggestionAsDone && (
+          <DefaultButton
+            text="Mark as done"
+            onClick={() => this._markSuggestionAsDone(item)}
+            disabled={this.state.isLoading}
+          />
+        )}
+        {canDeleteSuggestion && (
+          <IconButton
+            iconProps={{ iconName: 'Delete' }}
+            title="Remove suggestion"
+            ariaLabel="Remove suggestion"
+            onClick={() => this._deleteSuggestion(item)}
+            disabled={this.state.isLoading}
+          />
+        )}
+      </div>
+    );
+  }
+
+  private _getInteractionState(
+    item: ISuggestionItem,
+    readOnly: boolean,
+    normalizedUser: string | undefined,
+    noVotesRemaining: boolean
+  ): {
+    hasVoted: boolean;
+    disableVote: boolean;
+    canMarkSuggestionAsDone: boolean;
+    canDeleteSuggestion: boolean;
+  } {
+    const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
+    const disableVote: boolean =
+      this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
+    const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
+    const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
+
+    return { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion };
   }
 
   private async _initialize(): Promise<void> {
