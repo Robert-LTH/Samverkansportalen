@@ -9,6 +9,7 @@ export interface ISamverkansportalenProps {
   hasTeamsContext: boolean;
   userDisplayName: string;
   userLoginName: string;
+  isCurrentUserAdmin: boolean;
   graphService: GraphSuggestionsService;
   listTitle?: string;
 }
