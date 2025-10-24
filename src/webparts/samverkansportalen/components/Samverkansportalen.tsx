@@ -9,14 +9,12 @@ import {
   SpinnerSize,
   TextField
 } from '@fluentui/react';
-import {
-  SPHttpClient,
-  SPHttpClientResponse,
-  ISPHttpClientOptions
-} from '@microsoft/sp-http';
-
 import styles from './Samverkansportalen.module.scss';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
+import {
+  type IGraphSuggestionItem,
+  type IGraphSuggestionItemFields
+} from '../services/GraphSuggestionsService';
 
 interface ISuggestionItem {
   id: number;
@@ -25,15 +23,6 @@ interface ISuggestionItem {
   votes: number;
   status: 'Active' | 'Done';
   voters: string[];
-}
-
-interface ISharePointSuggestionItem {
-  Id: number;
-  Title?: string;
-  Details?: string;
-  Votes?: number;
-  Status?: string;
-  Voters?: string;
 }
 
 interface ISamverkansportalenState {
@@ -50,6 +39,7 @@ const MAX_VOTES_PER_USER: number = 5;
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
+  private _currentListId?: string;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -232,6 +222,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _initialize(): Promise<void> {
+    this._currentListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
@@ -246,142 +237,33 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _ensureList(): Promise<void> {
     const listTitle: string = this._listTitle;
-
-    const escapedTitleForFilter: string = listTitle.replace(/'/g, "''");
-    const filterQuery: string = `Title eq '${escapedTitleForFilter}'`;
-    const requestUrl: string = `${this.props.siteUrl}/_api/web/lists?$select=Id&$top=1&$filter=${encodeURIComponent(filterQuery)}`;
-
-    const response: SPHttpClientResponse = await this.props.spHttpClient.get(
-      requestUrl,
-      SPHttpClient.configurations.v1,
-      this._createOptions()
-    );
-
-    if (!response.ok) {
-      throw new Error(`Unexpected response (${response.status}) while checking for the ${listTitle} list.`);
-    }
-
-    const payload: unknown = await response.json();
-
-    if (this._hasListMatch(payload)) {
-      return;
-    }
-
-    await this._createListWithFields(listTitle);
-  }
-
-  private _hasListMatch(payload: unknown): boolean {
-    const entries: Array<{ Id?: unknown }> | undefined = this._extractListEntries(payload);
-
-    if (!entries) {
-      return false;
-    }
-
-    return entries.some((entry) => !!entry && typeof entry.Id === 'number');
-  }
-
-  private _extractListEntries(payload: unknown): Array<{ Id?: unknown }> | undefined {
-    if (!payload || typeof payload !== 'object') {
-      return undefined;
-    }
-
-    const withValue = payload as { value?: unknown };
-    if (Array.isArray(withValue.value)) {
-      return withValue.value as Array<{ Id?: unknown }>;
-    }
-
-    const withVerbose = payload as { d?: { results?: unknown } };
-    if (withVerbose.d && Array.isArray(withVerbose.d.results)) {
-      return withVerbose.d.results as Array<{ Id?: unknown }>;
-    }
-
-    return undefined;
-  }
-
-  private async _createListWithFields(listTitle: string): Promise<void> {
-    const createListResponse: SPHttpClientResponse = await this.props.spHttpClient.post(
-      `${this.props.siteUrl}/_api/web/lists`,
-      SPHttpClient.configurations.v1,
-      this._createOptions({
-        Title: listTitle,
-        Description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
-        BaseTemplate: 100,
-        AllowContentTypes: true
-      })
-    );
-
-    if (!createListResponse.ok) {
-      throw new Error('Failed to create the suggestions list.');
-    }
-
-    await this._createField({
-      Title: 'Details',
-      FieldTypeKind: 3
-    });
-
-    await this._createField({
-      Title: 'Votes',
-      FieldTypeKind: 9,
-      DefaultValue: '0'
-    });
-
-    await this._createField({
-      Title: 'Status',
-      FieldTypeKind: 6,
-      Choices: {
-        results: ['Active', 'Done']
-      },
-      DefaultValue: 'Active'
-    });
-
-    await this._createField({
-      Title: 'Voters',
-      FieldTypeKind: 3
-    });
-  }
-
-  private async _createField(definition: Record<string, unknown>): Promise<void> {
-    const response: SPHttpClientResponse = await this.props.spHttpClient.post(
-      `${this._listEndpoint}/fields`,
-      SPHttpClient.configurations.v1,
-      this._createOptions(definition)
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to create field ${(definition.Title as string) || 'unknown'}.`);
-    }
+    const result = await this.props.graphService.ensureList(listTitle);
+    this._currentListId = result.id;
   }
 
   private async _loadSuggestions(): Promise<void> {
-    const response: SPHttpClientResponse = await this.props.spHttpClient.get(
-      `${this._listEndpoint}/items?$select=Id,Title,Details,Votes,Status,Voters&$orderby=Created desc`,
-      SPHttpClient.configurations.v1,
-      this._createOptions()
-    );
+    const listId: string = this._getResolvedListId();
+    const itemsFromGraph: IGraphSuggestionItem[] = await this.props.graphService.getSuggestionItems(listId);
 
-    if (!response.ok) {
-      throw new Error('Failed to read suggestions from the list.');
-    }
+    const items: ISuggestionItem[] = itemsFromGraph.map((entry: IGraphSuggestionItem) => {
+      const fields: IGraphSuggestionItemFields = entry.fields;
 
-    const payload: { value: ISharePointSuggestionItem[] } = await response.json() as { value: ISharePointSuggestionItem[] };
-
-    const items: ISuggestionItem[] = payload.value.map((entry: ISharePointSuggestionItem) => {
-      const rawVoters: string = entry.Voters || '[]';
+      const rawVoters: string = typeof fields.Voters === 'string' ? fields.Voters : '[]';
       let voters: string[] = [];
 
       try {
         const parsed: unknown = JSON.parse(rawVoters);
         voters = Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'string') : [];
       } catch (error) {
-        console.warn('Failed to parse voters field for suggestion', entry.Id, error);
+        console.warn('Failed to parse voters field for suggestion', entry.id, error);
       }
 
       return {
-        id: entry.Id,
-        title: entry.Title || 'Untitled suggestion',
-        description: entry.Details || '',
-        votes: typeof entry.Votes === 'number' ? entry.Votes : 0,
-        status: entry.Status === 'Done' ? 'Done' : 'Active',
+        id: entry.id,
+        title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
+        description: typeof fields.Details === 'string' ? fields.Details : '',
+        votes: this._parseVotes(fields.Votes),
+        status: fields.Status === 'Done' ? 'Done' : 'Active',
         voters
       };
     });
@@ -430,21 +312,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
-      const response: SPHttpClientResponse = await this.props.spHttpClient.post(
-        `${this._listEndpoint}/items`,
-        SPHttpClient.configurations.v1,
-        this._createOptions({
-          Title: title,
-          Details: description,
-          Votes: 0,
-          Status: 'Active',
-          Voters: JSON.stringify([])
-        })
-      );
+      const listId: string = this._getResolvedListId();
 
-      if (!response.ok) {
-        throw new Error('Failed to create the suggestion.');
-      }
+      await this.props.graphService.addSuggestion(listId, {
+        Title: title,
+        Details: description,
+        Votes: 0,
+        Status: 'Active',
+        Voters: JSON.stringify([])
+      });
 
       this._updateState({ newTitle: '', newDescription: '' });
 
@@ -473,24 +349,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       : [...item.voters, this.props.userLoginName];
 
     try {
-      const response: SPHttpClientResponse = await this.props.spHttpClient.post(
-        `${this._listEndpoint}/items(${item.id})`,
-        SPHttpClient.configurations.v1,
-        this._createOptions(
-          {
-            Votes: voters.length,
-            Voters: JSON.stringify(voters)
-          },
-          {
-            'IF-MATCH': '*',
-            'X-HTTP-Method': 'MERGE'
-          }
-        )
-      );
+      const listId: string = this._getResolvedListId();
 
-      if (!response.ok) {
-        throw new Error('Failed to update the vote.');
-      }
+      await this.props.graphService.updateSuggestion(listId, item.id, {
+        Votes: voters.length,
+        Voters: JSON.stringify(voters)
+      });
 
       await this._loadSuggestions();
 
@@ -506,25 +370,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
-      const response: SPHttpClientResponse = await this.props.spHttpClient.post(
-        `${this._listEndpoint}/items(${item.id})`,
-        SPHttpClient.configurations.v1,
-        this._createOptions(
-          {
-            Status: 'Done',
-            Votes: 0,
-            Voters: JSON.stringify([])
-          },
-          {
-            'IF-MATCH': '*',
-            'X-HTTP-Method': 'MERGE'
-          }
-        )
-      );
+      const listId: string = this._getResolvedListId();
 
-      if (!response.ok) {
-        throw new Error('Failed to update the suggestion status.');
-      }
+      await this.props.graphService.updateSuggestion(listId, item.id, {
+        Status: 'Done',
+        Votes: 0,
+        Voters: JSON.stringify([])
+      });
 
       await this._loadSuggestions();
 
@@ -546,21 +398,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
-      const response: SPHttpClientResponse = await this.props.spHttpClient.post(
-        `${this._listEndpoint}/items(${item.id})`,
-        SPHttpClient.configurations.v1,
-        this._createOptions(
-          undefined,
-          {
-            'IF-MATCH': '*',
-            'X-HTTP-Method': 'DELETE'
-          }
-        )
-      );
+      const listId: string = this._getResolvedListId();
 
-      if (!response.ok) {
-        throw new Error('Failed to delete the suggestion.');
-      }
+      await this.props.graphService.deleteSuggestion(listId, item.id);
 
       await this._loadSuggestions();
 
@@ -572,43 +412,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
-  private _createOptions(body?: unknown, extraHeaders?: Record<string, string>): ISPHttpClientOptions {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json;odata=nometadata',
-      'odata-version': '3.0'
-    };
-
-    if (body !== undefined) {
-      headers['Content-type'] = 'application/json;odata=nometadata';
-    }
-
-    if (extraHeaders) {
-      for (const key in extraHeaders) {
-        if (Object.prototype.hasOwnProperty.call(extraHeaders, key)) {
-          const value: string | undefined = extraHeaders[key];
-          if (typeof value === 'string') {
-            headers[key] = value;
-          }
-        }
-      }
-    }
-
-    const options: ISPHttpClientOptions = {
-      headers
-    };
-
-    if (body !== undefined) {
-      options.body = JSON.stringify(body);
-    }
-
-    return options;
-  }
-
-  private get _listEndpoint(): string {
-    const escapedTitle: string = this._listTitle.replace(/'/g, "''");
-    return `${this.props.siteUrl}/_api/web/lists/GetByTitle('${escapedTitle}')`;
-  }
-
   private _normalizeListTitle(value?: string): string {
     const trimmed: string = (value ?? '').trim();
     return trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE;
@@ -616,6 +419,29 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private get _listTitle(): string {
     return this._normalizeListTitle(this.props.listTitle);
+  }
+
+  private _parseVotes(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed: number = parseInt(value, 10);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return 0;
+  }
+
+  private _getResolvedListId(): string {
+    if (!this._currentListId) {
+      throw new Error('The suggestions list has not been initialized yet.');
+    }
+
+    return this._currentListId;
   }
 
   private _handleError(message: string, error?: unknown): void {
