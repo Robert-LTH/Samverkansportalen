@@ -8,7 +8,8 @@ import {
   PropertyPaneDropdown,
   type IPropertyPaneDropdownOption,
   PropertyPaneLabel,
-  PropertyPaneTextField
+  PropertyPaneTextField,
+  PropertyPaneToggle
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
@@ -22,6 +23,7 @@ export interface ISamverkansportalenWebPartProps {
   description: string;
   listTitle?: string;
   newListTitle?: string;
+  useTableLayout?: boolean;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -48,7 +50,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         userLoginName: this.context.pageContext.user.loginName,
         isCurrentUserAdmin: this._isCurrentUserSiteAdmin,
         graphService: this._getGraphService(),
-        listTitle: this._selectedListTitle
+        listTitle: this._selectedListTitle,
+        useTableLayout: this.properties.useTableLayout
       }
     );
 
@@ -185,7 +188,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   }
 
   private _handleCreateListClick = (): void => {
-    void this._createListFromPropertyPane();
+    this._createListFromPropertyPane().catch(() => {
+      // Errors are handled inside _createListFromPropertyPane.
+    });
   };
 
   private async _createListFromPropertyPane(): Promise<void> {
@@ -281,6 +286,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneTextField('description', {
                   label: strings.DescriptionFieldLabel
+                }),
+                PropertyPaneToggle('useTableLayout', {
+                  label: strings.UseTableLayoutToggleLabel,
+                  onText: strings.UseTableLayoutToggleOnText,
+                  offText: strings.UseTableLayoutToggleOffText
                 })
               ]
             }

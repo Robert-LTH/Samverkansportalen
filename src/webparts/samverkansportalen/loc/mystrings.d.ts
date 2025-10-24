@@ -10,6 +10,9 @@ declare interface ISamverkansportalenWebPartStrings {
   CreateListAlreadyExistsMessage: string;
   CreateListNameMissingMessage: string;
   CreateListErrorMessage: string;
+  UseTableLayoutToggleLabel: string;
+  UseTableLayoutToggleOnText: string;
+  UseTableLayoutToggleOffText: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
   AppLocalEnvironmentOffice: string;
