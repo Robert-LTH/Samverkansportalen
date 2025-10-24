@@ -8,7 +8,7 @@ export interface IGraphListInfo {
 export interface IGraphSuggestionItemFields {
   Title?: string;
   Details?: string;
-  Votes?: number;
+  Votes?: number | string;
   Status?: string;
   Voters?: string;
 }
@@ -144,20 +144,24 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items`)
-      .version('v1.0')
-      .post({ fields });
+    await this._executeWithVoteFallback(fields, async (payload) => {
+      await client
+        .api(`/sites/${siteId}/lists/${listId}/items`)
+        .version('v1.0')
+        .post({ fields: payload });
+    });
   }
 
   public async updateSuggestion(listId: string, itemId: number, fields: Partial<IGraphSuggestionItemFields>): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
-      .version('v1.0')
-      .patch(fields);
+    await this._executeWithVoteFallback(fields, async (payload) => {
+      await client
+        .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
+        .version('v1.0')
+        .patch(payload);
+    });
   }
 
   public async deleteSuggestion(listId: string, itemId: number): Promise<void> {
@@ -285,6 +289,78 @@ export class GraphSuggestionsService {
     }
 
     return response.id;
+  }
+
+  private async _executeWithVoteFallback(
+    fields: Partial<IGraphSuggestionItemFields>,
+    executor: (payload: Partial<IGraphSuggestionItemFields>) => Promise<void>
+  ): Promise<void> {
+    try {
+      await executor(fields);
+    } catch (error) {
+      if (!this._shouldRetryWithStringVotes(fields, error)) {
+        throw error;
+      }
+
+      const fallbackPayload: Partial<IGraphSuggestionItemFields> = {
+        ...fields,
+        Votes: String(fields.Votes)
+      };
+
+      await executor(fallbackPayload);
+    }
+  }
+
+  private _shouldRetryWithStringVotes(
+    fields: Partial<IGraphSuggestionItemFields>,
+    error: unknown
+  ): boolean {
+    const votes: unknown = fields.Votes;
+
+    if (typeof votes !== 'number' || !Number.isFinite(votes)) {
+      return false;
+    }
+
+    const message: string | undefined = this._extractErrorMessage(error);
+
+    if (!message) {
+      return false;
+    }
+
+    const normalized: string = message.toLowerCase();
+    return normalized.includes('cannot convert the literal') && normalized.includes('edm.string');
+  }
+
+  private _extractErrorMessage(error: unknown): string | undefined {
+    if (!error || typeof error !== 'object') {
+      return undefined;
+    }
+
+    const directMessage: unknown = (error as { message?: unknown }).message;
+    if (typeof directMessage === 'string') {
+      return directMessage;
+    }
+
+    const body: unknown = (error as { body?: unknown }).body;
+    if (body && typeof body === 'object') {
+      const bodyMessage: unknown = (body as { error?: unknown }).error;
+      if (bodyMessage && typeof bodyMessage === 'object') {
+        const nestedMessage: unknown = (bodyMessage as { message?: unknown }).message;
+        if (typeof nestedMessage === 'string') {
+          return nestedMessage;
+        }
+      }
+    }
+
+    const nestedError: unknown = (error as { error?: unknown }).error;
+    if (nestedError && typeof nestedError === 'object') {
+      const nestedMessage: unknown = (nestedError as { message?: unknown }).message;
+      if (typeof nestedMessage === 'string') {
+        return nestedMessage;
+      }
+    }
+
+    return undefined;
   }
 }
 
