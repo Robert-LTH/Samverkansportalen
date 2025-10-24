@@ -316,15 +316,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     await this._createField({
       Title: 'Details',
-      FieldTypeKind: 3,
-      RichText: false,
-      NumberOfLines: 6
+      FieldTypeKind: 3
     });
 
     await this._createField({
       Title: 'Votes',
       FieldTypeKind: 9,
-      MinimumValue: 0,
       DefaultValue: '0'
     });
 
@@ -339,9 +336,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     await this._createField({
       Title: 'Voters',
-      FieldTypeKind: 3,
-      RichText: false,
-      NumberOfLines: 6
+      FieldTypeKind: 3
     });
   }
 

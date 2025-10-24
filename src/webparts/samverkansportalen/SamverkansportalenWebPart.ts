@@ -298,15 +298,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     await this._createField(listEndpoint, {
       Title: 'Details',
-      FieldTypeKind: 3,
-      RichText: false,
-      NumberOfLines: 6
+      FieldTypeKind: 3
     });
 
     await this._createField(listEndpoint, {
       Title: 'Votes',
       FieldTypeKind: 9,
-      MinimumValue: 0,
       DefaultValue: '0'
     });
 
@@ -321,9 +318,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     await this._createField(listEndpoint, {
       Title: 'Voters',
-      FieldTypeKind: 3,
-      RichText: false,
-      NumberOfLines: 6
+      FieldTypeKind: 3
     });
   }
 
