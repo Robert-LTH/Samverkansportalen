@@ -271,7 +271,7 @@ export class GraphSuggestionsService {
             name: 'Votes',
             displayName: 'Votes',
             number: {
-              decimalPlaces: 0
+              decimalPlaces: '0'
             }
           },
           {
