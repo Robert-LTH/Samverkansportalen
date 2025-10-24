@@ -135,16 +135,20 @@
 }
 
 .tableHeaderSuggestion {
-  width: 40%;
+  width: 35%;
 }
 
 .tableHeaderCategory {
-  width: 10rem;
+  width: 9rem;
+}
+
+.tableHeaderSubcategory {
+  width: 12rem;
 }
 
 .tableHeaderActions,
 .tableCellActions {
-  width: 16rem;
+  width: 14rem;
 }
 
 .tableCellSuggestion {
@@ -152,7 +156,11 @@
 }
 
 .tableCellCategory {
-  width: 10rem;
+  width: 9rem;
+}
+
+.tableCellSubcategory {
+  width: 12rem;
 }
 
 .tableActions {
@@ -215,6 +223,22 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.subcategoryBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  color: "[theme:neutralPrimary, default: #323130]";
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.subcategoryPlaceholder {
+  color: "[theme:neutralTertiary, default: #a19f9d]";
+  font-style: italic;
 }
 
 .suggestionTitle {

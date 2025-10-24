@@ -3,6 +3,8 @@ declare interface ISamverkansportalenWebPartStrings {
   BasicGroupName: string;
   DescriptionFieldLabel: string;
   ListFieldLabel: string;
+  SubcategoryListFieldLabel: string;
+  SubcategoryListNoneOptionLabel: string;
   NewListNameFieldLabel: string;
   CreateListButtonLabel: string;
   CreateListProgressMessage: string;

@@ -13,4 +13,5 @@ export interface ISamverkansportalenProps {
   graphService: GraphSuggestionsService;
   listTitle?: string;
   useTableLayout?: boolean;
+  subcategoryListTitle?: string;
 }

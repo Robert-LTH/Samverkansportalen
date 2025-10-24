@@ -17,6 +17,7 @@ export interface IGraphSuggestionItemFields {
   Status?: string;
   Voters?: string;
   Category?: SuggestionCategory;
+  Subcategory?: string;
 }
 
 export interface IGraphSuggestionItem {
@@ -33,6 +34,16 @@ export interface IGraphVoteItemFields {
 export interface IGraphVoteItem {
   id: number;
   fields: IGraphVoteItemFields;
+}
+
+export interface IGraphSubcategoryItemFields {
+  Title?: string;
+  Category?: string;
+}
+
+export interface IGraphSubcategoryItem {
+  id: number;
+  fields: IGraphSubcategoryItemFields;
 }
 
 interface IGraphListApiModel {
@@ -143,7 +154,7 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('createdBy')
-      .expand('fields($select=Id,Title,Details,Status,Category)')
+      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory)')
       .expand('createdByUser($select=userPrincipalName,mail,email)')
       .orderby('createdDateTime desc')
       .top(999)
@@ -230,12 +241,55 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphVoteItem => !!item);
   }
 
+  public async getSubcategoryItems(listId: string): Promise<IGraphSubcategoryItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListItemApiModel[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id')
+      .expand('fields($select=Title,Category)')
+      .top(999)
+      .get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => {
+        const rawId: unknown = entry.id;
+        const fields: unknown = entry.fields;
+
+        let id: number | undefined;
+
+        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+          id = rawId;
+        } else if (typeof rawId === 'string') {
+          const parsed: number = parseInt(rawId, 10);
+
+          if (Number.isFinite(parsed)) {
+            id = parsed;
+          }
+        }
+
+        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+          return undefined;
+        }
+
+        return {
+          id,
+          fields: fields as IGraphSubcategoryItemFields
+        } as IGraphSubcategoryItem;
+      })
+      .filter((item): item is IGraphSubcategoryItem => !!item);
+  }
+
   public async addSuggestion(listId: string, fields: IGraphSuggestionItemFields): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await this._executeWithCategoryFallback(fields, async (categoryPayload) => {
-      await this._executeWithVoteFallback(categoryPayload, async (payload) => {
+    await this._executeWithMetadataFallback(fields, async (metadataPayload) => {
+      await this._executeWithVoteFallback(metadataPayload, async (payload) => {
         await client
           .api(`/sites/${siteId}/lists/${listId}/items`)
           .version('v1.0')
@@ -248,8 +302,8 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await this._executeWithCategoryFallback(fields, async (categoryPayload) => {
-      await this._executeWithVoteFallback(categoryPayload, async (payload) => {
+    await this._executeWithMetadataFallback(fields, async (metadataPayload) => {
+      await this._executeWithVoteFallback(metadataPayload, async (payload) => {
         await client
           .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
           .version('v1.0')
@@ -324,6 +378,16 @@ export class GraphSuggestionsService {
     );
   }
 
+  public async getListByTitle(listTitle: string): Promise<IGraphListInfo | undefined> {
+    const normalized: string = listTitle.trim();
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    return this._getListByTitle(normalized);
+  }
+
   private async _getListByTitle(listTitle: string): Promise<IGraphListInfo | undefined> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
@@ -378,6 +442,13 @@ export class GraphSuggestionsService {
               allowTextEntry: false,
               allowMultipleSelections: false,
               choices: [...SUGGESTION_CATEGORIES]
+            }
+          },
+          {
+            name: 'Subcategory',
+            displayName: 'Subcategory',
+            text: {
+              allowMultipleLines: false
             }
           },
           {
@@ -484,19 +555,29 @@ export class GraphSuggestionsService {
     return response.id;
   }
 
-  private async _executeWithCategoryFallback<T extends { Category?: SuggestionCategory }>(
+  private async _executeWithMetadataFallback<T extends { Category?: SuggestionCategory; Subcategory?: string }>(
     fields: Partial<T>,
     executor: (payload: Partial<T>) => Promise<void>
   ): Promise<void> {
     try {
       await executor(fields);
     } catch (error) {
-      if (!this._shouldRetryWithoutCategory(fields, error)) {
+      const shouldRetryWithoutCategory: boolean = this._shouldRetryWithoutCategory(fields, error);
+      const shouldRetryWithoutSubcategory: boolean = this._shouldRetryWithoutSubcategory(fields, error);
+
+      if (!shouldRetryWithoutCategory && !shouldRetryWithoutSubcategory) {
         throw error;
       }
 
       const fallbackPayload: Partial<T> = { ...fields };
-      delete (fallbackPayload as { Category?: SuggestionCategory }).Category;
+
+      if (shouldRetryWithoutCategory) {
+        delete (fallbackPayload as { Category?: SuggestionCategory }).Category;
+      }
+
+      if (shouldRetryWithoutSubcategory) {
+        delete (fallbackPayload as { Subcategory?: string }).Subcategory;
+      }
 
       await executor(fallbackPayload);
     }
@@ -554,6 +635,23 @@ export class GraphSuggestionsService {
     }
 
     return message.toLowerCase().includes('field \'category\' is not recognized');
+  }
+
+  private _shouldRetryWithoutSubcategory(
+    fields: Partial<{ Subcategory?: string }>,
+    error: unknown
+  ): boolean {
+    if (typeof fields.Subcategory === 'undefined') {
+      return false;
+    }
+
+    const message: string | undefined = this._extractErrorMessage(error);
+
+    if (!message) {
+      return false;
+    }
+
+    return message.toLowerCase().includes('field \'subcategory\' is not recognized');
   }
 
   private _extractErrorMessage(error: unknown): string | undefined {
