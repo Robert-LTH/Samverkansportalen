@@ -22,6 +22,7 @@ import {
 
 interface ISuggestionItem {
   id: number;
+  displayId: number;
   title: string;
   description: string;
   votes: number;
@@ -203,6 +204,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               <div className={styles.cardHeader}>
                 <div className={styles.cardText}>
                   <div className={styles.cardMeta}>
+                    <span className={styles.entryId} aria-label={`Entry number ${item.displayId}`}>
+                      #{item.displayId}
+                    </span>
                     <span className={styles.categoryBadge}>{item.category}</span>
                   </div>
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
@@ -273,7 +277,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const listId: string = this._getResolvedListId();
     const itemsFromGraph: IGraphSuggestionItem[] = await this.props.graphService.getSuggestionItems(listId);
 
-    const items: ISuggestionItem[] = itemsFromGraph.map((entry: IGraphSuggestionItem) => {
+    const baseItems: Array<Omit<ISuggestionItem, 'displayId'>> = itemsFromGraph.map((entry: IGraphSuggestionItem) => {
       const fields: IGraphSuggestionItemFields = entry.fields;
 
       const rawVoters: string = typeof fields.Voters === 'string' ? fields.Voters : '[]';
@@ -297,6 +301,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName)
       };
     });
+
+    const items: ISuggestionItem[] = baseItems.map((item, index) => ({
+      ...item,
+      displayId: index + 1
+    }));
 
     const usedVotes: number = items.reduce((count, item) => {
       if (item.status === 'Done') {
