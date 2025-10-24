@@ -234,11 +234,13 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await this._executeWithVoteFallback(fields, async (payload) => {
-      await client
-        .api(`/sites/${siteId}/lists/${listId}/items`)
-        .version('v1.0')
-        .post({ fields: payload });
+    await this._executeWithCategoryFallback(fields, async (categoryPayload) => {
+      await this._executeWithVoteFallback(categoryPayload, async (payload) => {
+        await client
+          .api(`/sites/${siteId}/lists/${listId}/items`)
+          .version('v1.0')
+          .post({ fields: payload });
+      });
     });
   }
 
@@ -246,11 +248,13 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    await this._executeWithVoteFallback(fields, async (payload) => {
-      await client
-        .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
-        .version('v1.0')
-        .patch(payload);
+    await this._executeWithCategoryFallback(fields, async (categoryPayload) => {
+      await this._executeWithVoteFallback(categoryPayload, async (payload) => {
+        await client
+          .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
+          .version('v1.0')
+          .patch(payload);
+      });
     });
   }
 
@@ -480,6 +484,24 @@ export class GraphSuggestionsService {
     return response.id;
   }
 
+  private async _executeWithCategoryFallback<T extends { Category?: SuggestionCategory }>(
+    fields: Partial<T>,
+    executor: (payload: Partial<T>) => Promise<void>
+  ): Promise<void> {
+    try {
+      await executor(fields);
+    } catch (error) {
+      if (!this._shouldRetryWithoutCategory(fields, error)) {
+        throw error;
+      }
+
+      const fallbackPayload: Partial<T> = { ...fields };
+      delete (fallbackPayload as { Category?: SuggestionCategory }).Category;
+
+      await executor(fallbackPayload);
+    }
+  }
+
   private async _executeWithVoteFallback<T extends { Votes?: number | string }>(
     fields: Partial<T>,
     executor: (payload: Partial<T>) => Promise<void>
@@ -515,6 +537,23 @@ export class GraphSuggestionsService {
 
     const normalized: string = message.toLowerCase();
     return normalized.includes('cannot convert the literal') && normalized.includes('edm.string');
+  }
+
+  private _shouldRetryWithoutCategory(
+    fields: Partial<{ Category?: SuggestionCategory }>,
+    error: unknown
+  ): boolean {
+    if (typeof fields.Category === 'undefined') {
+      return false;
+    }
+
+    const message: string | undefined = this._extractErrorMessage(error);
+
+    if (!message) {
+      return false;
+    }
+
+    return message.toLowerCase().includes('field \'category\' is not recognized');
   }
 
   private _extractErrorMessage(error: unknown): string | undefined {
