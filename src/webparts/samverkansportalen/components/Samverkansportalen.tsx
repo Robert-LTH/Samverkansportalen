@@ -320,11 +320,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const baseItems = itemsFromGraph.map((entry: IGraphSuggestionItem): ISuggestionItem => {
       const fields: IGraphSuggestionItemFields = entry.fields;
 
-
-      const voteEntries: IVoteEntry[] = votesBySuggestion.get(fields.id ?? -1) ?? [];
+      const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
+      const suggestionId: number = this._parseNumericId(rawId) ?? -1;
+      const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
 
       return {
-        id: fields.id ?? -1,
+        id: suggestionId,
         title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
         description: typeof fields.Details === 'string' ? fields.Details : '',
         votes: voteEntries.reduce((total, vote) => total + vote.votes, 0),
