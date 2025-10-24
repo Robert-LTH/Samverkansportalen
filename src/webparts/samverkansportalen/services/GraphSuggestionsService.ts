@@ -10,7 +10,7 @@ export const SUGGESTION_CATEGORIES = ['Change request', 'Webbinar', 'Article'] a
 export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
 
 export interface IGraphSuggestionItemFields {
-  id?: number;
+  id?: number | string;
   Title?: string;
   Details?: string;
   Votes?: number | string;
