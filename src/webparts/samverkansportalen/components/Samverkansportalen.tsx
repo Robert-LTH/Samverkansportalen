@@ -56,6 +56,9 @@ interface ISamverkansportalenState {
   newSubcategoryKey?: string;
   subcategories: ISubcategoryDefinition[];
   availableVotes: number;
+  filterCategory?: SuggestionCategory;
+  filterSubcategory?: string;
+  searchQuery: string;
   error?: string;
   success?: string;
 }
@@ -66,6 +69,12 @@ const CATEGORY_OPTIONS: IDropdownOption[] = SUGGESTION_CATEGORIES.map((category)
   key: category,
   text: category
 }));
+const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
+const FILTER_CATEGORY_OPTIONS: IDropdownOption[] = [
+  { key: ALL_CATEGORY_FILTER_KEY, text: 'All categories' },
+  ...CATEGORY_OPTIONS
+];
+const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -84,7 +93,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newCategory: DEFAULT_SUGGESTION_CATEGORY,
       newSubcategoryKey: undefined,
       subcategories: [],
-      availableVotes: MAX_VOTES_PER_USER
+      availableVotes: MAX_VOTES_PER_USER,
+      filterCategory: undefined,
+      filterSubcategory: undefined,
+      searchQuery: ''
     };
   }
 
@@ -119,14 +131,28 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newCategory,
       newSubcategoryKey,
       subcategories,
+      filterCategory,
+      filterSubcategory,
+      searchQuery,
       error,
       success
     } = this.state;
 
     const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
+    const filterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
+      filterCategory,
+      subcategories,
+      suggestions
+    );
+    const filteredSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
+      suggestions,
+      filterCategory,
+      filterSubcategory,
+      searchQuery
+    );
 
-    const activeSuggestions: ISuggestionItem[] = suggestions.filter((item) => item.status !== 'Done');
-    const completedSuggestions: ISuggestionItem[] = suggestions.filter((item) => item.status === 'Done');
+    const activeSuggestions: ISuggestionItem[] = filteredSuggestions.filter((item) => item.status !== 'Done');
+    const completedSuggestions: ISuggestionItem[] = filteredSuggestions.filter((item) => item.status === 'Done');
 
     return (
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
@@ -198,6 +224,36 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               text="Submit suggestion"
               onClick={this._addSuggestion}
               disabled={isLoading || newTitle.trim().length === 0}
+            />
+          </div>
+        </div>
+
+        <div className={styles.filters}>
+          <h3 className={styles.sectionTitle}>Filter suggestions</h3>
+          <div className={styles.filterControls}>
+            <TextField
+              label="Search"
+              value={searchQuery}
+              onChange={this._onSearchChange}
+              disabled={isLoading}
+              placeholder="Search by title or details"
+              className={styles.filterSearch}
+            />
+            <Dropdown
+              label="Category"
+              options={FILTER_CATEGORY_OPTIONS}
+              selectedKey={filterCategory ?? ALL_CATEGORY_FILTER_KEY}
+              onChange={this._onFilterCategoryChange}
+              disabled={isLoading}
+              className={styles.filterDropdown}
+            />
+            <Dropdown
+              label="Subcategory"
+              options={filterSubcategoryOptions}
+              selectedKey={filterSubcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+              onChange={this._onFilterSubcategoryChange}
+              disabled={isLoading || filterSubcategoryOptions.length <= 1}
+              className={styles.filterDropdown}
             />
           </div>
         </div>
@@ -436,11 +492,109 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }));
   }
 
+  private _getFilterSubcategoryOptions(
+    category: SuggestionCategory | undefined,
+    definitions: ISubcategoryDefinition[],
+    suggestions: ISuggestionItem[]
+  ): IDropdownOption[] {
+    const availableValues: string[] = this._getAvailableFilterSubcategoryValues(
+      category,
+      definitions,
+      suggestions
+    );
+
+    const options: IDropdownOption[] = availableValues.map((value) => ({
+      key: value,
+      text: value
+    }));
+
+    return [{ key: ALL_SUBCATEGORY_FILTER_KEY, text: 'All subcategories' }, ...options];
+  }
+
   private _getSubcategoriesForCategory(
     category: SuggestionCategory,
     definitions: ISubcategoryDefinition[] = this.state.subcategories
   ): ISubcategoryDefinition[] {
     return definitions.filter((definition) => !definition.category || definition.category === category);
+  }
+
+  private _getAvailableFilterSubcategoryValues(
+    category: SuggestionCategory | undefined,
+    definitions: ISubcategoryDefinition[],
+    suggestions: ISuggestionItem[]
+  ): string[] {
+    const values: Set<string> = new Set();
+    const relevantDefinitions: ISubcategoryDefinition[] = category
+      ? this._getSubcategoriesForCategory(category, definitions)
+      : definitions;
+
+    relevantDefinitions.forEach((definition) => {
+      const trimmed: string = definition.title.trim();
+      if (trimmed) {
+        values.add(trimmed);
+      }
+    });
+
+    suggestions.forEach((item) => {
+      if (category && item.category !== category) {
+        return;
+      }
+
+      if (item.subcategory) {
+        values.add(item.subcategory);
+      }
+    });
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }
+
+  private _getValidFilterSubcategory(
+    category: SuggestionCategory | undefined,
+    preferredSubcategory: string | undefined,
+    definitions: ISubcategoryDefinition[],
+    suggestions: ISuggestionItem[]
+  ): string | undefined {
+    if (!preferredSubcategory) {
+      return undefined;
+    }
+
+    const availableValues: string[] = this._getAvailableFilterSubcategoryValues(
+      category,
+      definitions,
+      suggestions
+    );
+
+    return availableValues.includes(preferredSubcategory) ? preferredSubcategory : undefined;
+  }
+
+  private _getFilteredSuggestions(
+    suggestions: ISuggestionItem[],
+    category: SuggestionCategory | undefined,
+    subcategory: string | undefined,
+    searchQuery: string
+  ): ISuggestionItem[] {
+    const normalizedQuery: string = searchQuery.trim().toLowerCase();
+
+    return suggestions.filter((item) => {
+      if (category && item.category !== category) {
+        return false;
+      }
+
+      if (subcategory && item.subcategory !== subcategory) {
+        return false;
+      }
+
+      if (normalizedQuery.length > 0) {
+        const title: string = item.title.toLowerCase();
+        const description: string = item.description ? item.description.toLowerCase() : '';
+
+        if (!title.includes(normalizedQuery) && !description.includes(normalizedQuery)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
   }
 
   private _getValidSubcategoryKeyForCategory(
@@ -595,9 +749,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
 
+    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
+      this.state.filterCategory,
+      this.state.filterSubcategory,
+      this.state.subcategories,
+      baseItems
+    );
+
     this._updateState({
       suggestions: baseItems,
-      availableVotes
+      availableVotes,
+      filterSubcategory: nextFilterSubcategory
     });
   }
 
@@ -638,9 +800,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       definitions
     );
 
+    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
+      this.state.filterCategory,
+      this.state.filterSubcategory,
+      definitions,
+      this.state.suggestions
+    );
+
     this._updateState({
       subcategories: definitions,
-      newSubcategoryKey: nextSubcategoryKey
+      newSubcategoryKey: nextSubcategoryKey,
+      filterSubcategory: nextFilterSubcategory
     });
   }
 
@@ -653,6 +823,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     newValue?: string
   ): void => {
     this._updateState({ newDescription: newValue ?? '' });
+  };
+
+  private _onSearchChange = (
+    _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue?: string
+  ): void => {
+    this._updateState({ searchQuery: newValue ?? '' });
   };
 
   private _onCategoryChange = (
@@ -696,6 +873,61 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     this._updateState({ newSubcategoryKey: definition.key });
+  };
+
+  private _onFilterCategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key).trim();
+
+    if (key === ALL_CATEGORY_FILTER_KEY) {
+      const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
+        undefined,
+        this.state.filterSubcategory,
+        this.state.subcategories,
+        this.state.suggestions
+      );
+
+      this._updateState({ filterCategory: undefined, filterSubcategory: nextFilterSubcategory });
+      return;
+    }
+
+    const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
+      (category) => category.toLowerCase() === key.toLowerCase()
+    );
+
+    const nextCategory: SuggestionCategory | undefined = match;
+    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
+      nextCategory,
+      this.state.filterSubcategory,
+      this.state.subcategories,
+      this.state.suggestions
+    );
+
+    this._updateState({ filterCategory: nextCategory, filterSubcategory: nextFilterSubcategory });
+  };
+
+  private _onFilterSubcategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+
+    if (key === ALL_SUBCATEGORY_FILTER_KEY) {
+      this._updateState({ filterSubcategory: undefined });
+      return;
+    }
+
+    this._updateState({ filterSubcategory: key });
   };
 
   private _dismissError = (): void => {
