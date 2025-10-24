@@ -283,9 +283,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       `${siteUrl}/_api/web/lists`,
       SPHttpClient.configurations.v1,
       this._createOptions({
-        __metadata: {
-          type: 'SP.List'
-        },
         Title: listTitle,
         Description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
         BaseTemplate: 100,
@@ -300,9 +297,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     const listEndpoint: string = this._getListEndpoint(listTitle);
 
     await this._createField(listEndpoint, {
-      __metadata: {
-        type: 'SP.FieldMultiLineText'
-      },
       Title: 'Details',
       FieldTypeKind: 3,
       RichText: false,
@@ -310,9 +304,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
 
     await this._createField(listEndpoint, {
-      __metadata: {
-        type: 'SP.FieldNumber'
-      },
       Title: 'Votes',
       FieldTypeKind: 9,
       MinimumValue: 0,
@@ -320,9 +311,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
 
     await this._createField(listEndpoint, {
-      __metadata: {
-        type: 'SP.FieldChoice'
-      },
       Title: 'Status',
       FieldTypeKind: 6,
       Choices: {
@@ -332,9 +320,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
 
     await this._createField(listEndpoint, {
-      __metadata: {
-        type: 'SP.FieldMultiLineText'
-      },
       Title: 'Voters',
       FieldTypeKind: 3,
       RichText: false,
