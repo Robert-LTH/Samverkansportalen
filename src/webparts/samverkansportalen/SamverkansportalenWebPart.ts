@@ -297,6 +297,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     const listEndpoint: string = this._getListEndpoint(listTitle);
 
     await this._createField(listEndpoint, {
+      __metadata: { type: 'SP.FieldMultiLineText' },
       Title: 'Details',
       FieldTypeKind: 3,
       RichText: false,
@@ -320,6 +321,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
 
     await this._createField(listEndpoint, {
+      __metadata: { type: 'SP.FieldMultiLineText' },
       Title: 'Voters',
       FieldTypeKind: 3,
       RichText: false,
