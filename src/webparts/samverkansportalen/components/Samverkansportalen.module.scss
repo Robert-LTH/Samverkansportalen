@@ -114,6 +114,19 @@
   margin-bottom: 0.25rem;
 }
 
+.entryId {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  color: "[theme:neutralPrimary, default: #323130]";
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .categoryBadge {
   display: inline-flex;
   align-items: center;
