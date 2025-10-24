@@ -3,6 +3,13 @@ declare interface ISamverkansportalenWebPartStrings {
   BasicGroupName: string;
   DescriptionFieldLabel: string;
   ListFieldLabel: string;
+  NewListNameFieldLabel: string;
+  CreateListButtonLabel: string;
+  CreateListProgressMessage: string;
+  CreateListSuccessMessage: string;
+  CreateListAlreadyExistsMessage: string;
+  CreateListNameMissingMessage: string;
+  CreateListErrorMessage: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
   AppLocalEnvironmentOffice: string;
