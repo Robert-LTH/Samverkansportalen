@@ -24,6 +24,17 @@ export interface IGraphSuggestionItem {
   createdByUserPrincipalName?: string;
 }
 
+export interface IGraphVoteItemFields {
+  SuggestionId?: number | string;
+  Username?: string;
+  Votes?: number | string;
+}
+
+export interface IGraphVoteItem {
+  id: number;
+  fields: IGraphVoteItemFields;
+}
+
 interface IGraphListApiModel {
   id?: unknown;
   displayName?: unknown;
@@ -112,6 +123,18 @@ export class GraphSuggestionsService {
     return { id: created.id, created: true };
   }
 
+  public async ensureVoteList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const voteListTitle: string = `${listTitle}Votes`;
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(voteListTitle);
+
+    if (existing) {
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createVoteList(voteListTitle);
+    return { id: created.id, created: true };
+  }
+
   public async getSuggestionItems(listId: string): Promise<IGraphSuggestionItem[]> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
@@ -121,7 +144,7 @@ export class GraphSuggestionsService {
       .version('v1.0')
       .select('id,createdBy')
       .expand(
-        'fields($select=Title,Details,Votes,Status,Voters,Category),createdByUser($select=userPrincipalName,mail,email)'
+        'fields($select=Title,Details,Status,Category),createdByUser($select=userPrincipalName,mail,email)'
       )
       .orderby('createdDateTime desc')
       .top(999)
@@ -177,6 +200,47 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphSuggestionItem => !!item);
   }
 
+  public async getVoteItems(listId: string): Promise<IGraphVoteItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListItemApiModel[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id,fields($select=SuggestionId,Username,Votes)')
+      .top(999)
+      .get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => {
+        const rawId: unknown = entry.id;
+
+        if (typeof rawId !== 'string') {
+          return undefined;
+        }
+
+        const id: number = parseInt(rawId, 10);
+
+        if (!Number.isFinite(id)) {
+          return undefined;
+        }
+
+        const fields: unknown = entry.fields;
+
+        if (!fields || typeof fields !== 'object') {
+          return undefined;
+        }
+
+        return {
+          id,
+          fields: fields as IGraphVoteItemFields
+        } as IGraphVoteItem;
+      })
+      .filter((item): item is IGraphVoteItem => !!item);
+  }
+
   public async addSuggestion(listId: string, fields: IGraphSuggestionItemFields): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
@@ -209,6 +273,62 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
       .version('v1.0')
       .delete();
+  }
+
+  public async addVote(listId: string, fields: IGraphVoteItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await this._executeWithVoteFallback(fields, async (payload) => {
+      await client
+        .api(`/sites/${siteId}/lists/${listId}/items`)
+        .version('v1.0')
+        .post({ fields: payload });
+    });
+  }
+
+  public async deleteVote(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
+  }
+
+  public async deleteVotesForSuggestion(listId: string, suggestionId: number): Promise<void> {
+    const voteItems: IGraphVoteItem[] = await this.getVoteItems(listId);
+    const matchingVotes: IGraphVoteItem[] = voteItems.filter((entry) => {
+      const value: unknown = entry.fields?.SuggestionId;
+
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value === suggestionId;
+      }
+
+      if (typeof value === 'string') {
+        const parsed: number = parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed === suggestionId;
+      }
+
+      return false;
+    });
+
+    if (matchingVotes.length === 0) {
+      return;
+    }
+
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await Promise.all(
+      matchingVotes.map(async (vote) => {
+        await client
+          .api(`/sites/${siteId}/lists/${listId}/items/${vote.id}`)
+          .version('v1.0')
+          .delete();
+      })
+    );
   }
 
   private async _getListByTitle(listTitle: string): Promise<IGraphListInfo | undefined> {
@@ -268,24 +388,10 @@ export class GraphSuggestionsService {
             }
           },
           {
-            name: 'Votes',
-            displayName: 'Votes',
-            number: {
-              decimalPlaces: '0'
-            }
-          },
-          {
             name: 'Status',
             displayName: 'Status',
             text: {
               allowMultipleLines: false
-            }
-          },
-          {
-            name: 'Voters',
-            displayName: 'Voters',
-            text: {
-              allowMultipleLines: true
             }
           }
         ]
@@ -293,6 +399,54 @@ export class GraphSuggestionsService {
 
     if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
       throw new Error('Failed to create the suggestions list.');
+    }
+
+    return {
+      id: response.id,
+      displayName: response.displayName
+    };
+  }
+
+  private async _createVoteList(listTitle: string): Promise<IGraphListInfo> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: IGraphListApiModel = await client
+      .api(`/sites/${siteId}/lists`)
+      .version('v1.0')
+      .post({
+        displayName: listTitle,
+        description: 'Stores suggestion votes for the Samverkansportalen web part.',
+        list: {
+          template: 'genericList'
+        },
+        columns: [
+          {
+            name: 'SuggestionId',
+            displayName: 'SuggestionId',
+            number: {
+              decimalPlaces: '0'
+            }
+          },
+          {
+            name: 'Username',
+            displayName: 'Username',
+            text: {
+              allowMultipleLines: false
+            }
+          },
+          {
+            name: 'Votes',
+            displayName: 'Votes',
+            number: {
+              decimalPlaces: '0'
+            }
+          }
+        ]
+      });
+
+    if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
+      throw new Error('Failed to create the votes list.');
     }
 
     return {
@@ -337,9 +491,9 @@ export class GraphSuggestionsService {
     return response.id;
   }
 
-  private async _executeWithVoteFallback(
-    fields: Partial<IGraphSuggestionItemFields>,
-    executor: (payload: Partial<IGraphSuggestionItemFields>) => Promise<void>
+  private async _executeWithVoteFallback<T extends { Votes?: number | string }>(
+    fields: Partial<T>,
+    executor: (payload: Partial<T>) => Promise<void>
   ): Promise<void> {
     try {
       await executor(fields);
@@ -348,7 +502,7 @@ export class GraphSuggestionsService {
         throw error;
       }
 
-      const fallbackPayload: Partial<IGraphSuggestionItemFields> = {
+      const fallbackPayload: Partial<T> = {
         ...fields,
         Votes: String(fields.Votes)
       };
@@ -357,10 +511,7 @@ export class GraphSuggestionsService {
     }
   }
 
-  private _shouldRetryWithStringVotes(
-    fields: Partial<IGraphSuggestionItemFields>,
-    error: unknown
-  ): boolean {
+  private _shouldRetryWithStringVotes(fields: Partial<{ Votes?: number | string }>, error: unknown): boolean {
     const votes: unknown = fields.Votes;
 
     if (typeof votes !== 'number' || !Number.isFinite(votes)) {

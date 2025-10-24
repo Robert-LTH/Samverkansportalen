@@ -17,7 +17,8 @@ import {
   SUGGESTION_CATEGORIES,
   type SuggestionCategory,
   type IGraphSuggestionItem,
-  type IGraphSuggestionItemFields
+  type IGraphSuggestionItemFields,
+  type IGraphVoteItem
 } from '../services/GraphSuggestionsService';
 
 interface ISuggestionItem {
@@ -30,6 +31,13 @@ interface ISuggestionItem {
   voters: string[];
   category: SuggestionCategory;
   createdByLoginName?: string;
+  voteEntries: IVoteEntry[];
+}
+
+interface IVoteEntry {
+  id: number;
+  username: string;
+  votes: number;
 }
 
 interface ISamverkansportalenState {
@@ -53,6 +61,7 @@ const CATEGORY_OPTIONS: IDropdownOption[] = SUGGESTION_CATEGORIES.map((category)
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
   private _currentListId?: string;
+  private _currentVotesListId?: string;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -190,11 +199,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const noVotesRemaining: boolean = this.state.availableVotes <= 0;
+    const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
 
     return (
       <ul className={styles.suggestionList}>
         {items.map((item) => {
-          const hasVoted: boolean = item.voters.indexOf(this.props.userLoginName) !== -1;
+          const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
           const disableVote: boolean = this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
           const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
           const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
@@ -255,10 +265,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _initialize(): Promise<void> {
     this._currentListId = undefined;
+    this._currentVotesListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
-      await this._ensureList();
+      await this._ensureLists();
       await this._loadSuggestions();
     } catch (error) {
       this._handleError('We could not load the suggestions list. Please refresh the page or contact your administrator.', error);
@@ -267,38 +278,61 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
-  private async _ensureList(): Promise<void> {
+  private async _ensureLists(): Promise<void> {
     const listTitle: string = this._listTitle;
     const result = await this.props.graphService.ensureList(listTitle);
     this._currentListId = result.id;
+
+    const votesResult = await this.props.graphService.ensureVoteList(listTitle);
+    this._currentVotesListId = votesResult.id;
   }
 
   private async _loadSuggestions(): Promise<void> {
     const listId: string = this._getResolvedListId();
+    const voteListId: string = this._getResolvedVotesListId();
     const itemsFromGraph: IGraphSuggestionItem[] = await this.props.graphService.getSuggestionItems(listId);
+    const votesFromGraph: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId);
+
+    const votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
+
+    votesFromGraph.forEach((entry: IGraphVoteItem) => {
+      const fields = entry.fields ?? {};
+
+      const suggestionId: number | undefined = this._parseNumericId((fields as { SuggestionId?: unknown }).SuggestionId);
+      const rawUsername: unknown = (fields as { Username?: unknown }).Username;
+      const normalizedUsername: string | undefined = this._normalizeLoginName(
+        typeof rawUsername === 'string' ? rawUsername : undefined
+      );
+      const votes: number = this._parseVotes((fields as { Votes?: unknown }).Votes);
+
+      if (!suggestionId || !normalizedUsername || votes <= 0) {
+        return;
+      }
+
+      const entriesForSuggestion: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
+      entriesForSuggestion.push({
+        id: entry.id,
+        username: normalizedUsername,
+        votes
+      });
+      votesBySuggestion.set(suggestionId, entriesForSuggestion);
+    });
 
     const baseItems: Array<Omit<ISuggestionItem, 'displayId'>> = itemsFromGraph.map((entry: IGraphSuggestionItem) => {
       const fields: IGraphSuggestionItemFields = entry.fields;
 
-      const rawVoters: string = typeof fields.Voters === 'string' ? fields.Voters : '[]';
-      let voters: string[] = [];
-
-      try {
-        const parsed: unknown = JSON.parse(rawVoters);
-        voters = Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'string') : [];
-      } catch (error) {
-        console.warn('Failed to parse voters field for suggestion', entry.id, error);
-      }
+      const voteEntries: IVoteEntry[] = votesBySuggestion.get(entry.id) ?? [];
 
       return {
         id: entry.id,
         title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
         description: typeof fields.Details === 'string' ? fields.Details : '',
-        votes: this._parseVotes(fields.Votes),
+        votes: voteEntries.reduce((total, vote) => total + vote.votes, 0),
         status: fields.Status === 'Done' ? 'Done' : 'Active',
         category: this._normalizeCategory(fields.Category),
-        voters,
-        createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName)
+        voters: voteEntries.map((vote) => vote.username),
+        createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName),
+        voteEntries
       };
     });
 
@@ -307,12 +341,20 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       displayId: index + 1
     }));
 
+    const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
+
     const usedVotes: number = items.reduce((count, item) => {
-      if (item.status === 'Done') {
+      if (item.status === 'Done' || !normalizedUser) {
         return count;
       }
 
-      return item.voters.indexOf(this.props.userLoginName) !== -1 ? count + 1 : count;
+      const voteForUser: IVoteEntry | undefined = item.voteEntries.find((vote) => vote.username === normalizedUser);
+
+      if (!voteForUser) {
+        return count;
+      }
+
+      return count + voteForUser.votes;
     }, 0);
 
     const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
@@ -377,9 +419,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       await this.props.graphService.addSuggestion(listId, {
         Title: title,
         Details: description,
-        Votes: 0,
         Status: 'Active',
-        Voters: JSON.stringify([]),
         Category: category
       });
 
@@ -400,7 +440,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   };
 
   private async _toggleVote(item: ISuggestionItem): Promise<void> {
-    const hasVoted: boolean = item.voters.indexOf(this.props.userLoginName) !== -1;
+    const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
+
+    if (!normalizedUser) {
+      this._handleError('We could not determine the current user. Please try again later.');
+      return;
+    }
+
+    const currentVote: IVoteEntry | undefined = item.voteEntries.find((vote) => vote.username === normalizedUser);
+    const hasVoted: boolean = !!currentVote && currentVote.votes > 0;
 
     if (!hasVoted && this.state.availableVotes <= 0) {
       this._handleError('You have used all of your votes. Mark a suggestion as done or remove one of your votes to continue.');
@@ -409,17 +457,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
-    const voters: string[] = hasVoted
-      ? item.voters.filter((voter) => voter !== this.props.userLoginName)
-      : [...item.voters, this.props.userLoginName];
-
     try {
-      const listId: string = this._getResolvedListId();
+      const voteListId: string = this._getResolvedVotesListId();
 
-      await this.props.graphService.updateSuggestion(listId, item.id, {
-        Votes: voters.length,
-        Voters: JSON.stringify(voters)
-      });
+      if (hasVoted && currentVote) {
+        await this.props.graphService.deleteVote(voteListId, currentVote.id);
+      } else {
+        await this.props.graphService.addVote(voteListId, {
+          SuggestionId: item.id,
+          Username: normalizedUser,
+          Votes: 1
+        });
+      }
 
       await this._loadSuggestions();
 
@@ -465,12 +514,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     try {
       const listId: string = this._getResolvedListId();
+      const voteListId: string = this._getResolvedVotesListId();
 
       await this.props.graphService.updateSuggestion(listId, item.id, {
         Status: 'Done',
-        Votes: 0,
-        Voters: JSON.stringify([])
       });
+
+      await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
 
       await this._loadSuggestions();
 
@@ -561,6 +611,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._currentListId;
   }
 
+  private _getResolvedVotesListId(): string {
+    if (!this._currentVotesListId) {
+      throw new Error('The votes list has not been initialized yet.');
+    }
+
+    return this._currentVotesListId;
+  }
+
   private _handleError(message: string, error?: unknown): void {
     console.error(message, error);
     this._updateState({ error: message, success: undefined });
@@ -572,5 +630,20 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     this.setState(state as Pick<ISamverkansportalenState, keyof ISamverkansportalenState>);
+  }
+
+  private _parseNumericId(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed: number = parseInt(value, 10);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return undefined;
   }
 }
