@@ -16,6 +16,7 @@ export interface IGraphSuggestionItemFields {
 export interface IGraphSuggestionItem {
   id: number;
   fields: IGraphSuggestionItemFields;
+  createdByUserPrincipalName?: string;
 }
 
 interface IGraphListApiModel {
@@ -30,6 +31,13 @@ interface IGraphListApiModel {
 interface IGraphListItemApiModel {
   id?: unknown;
   fields?: unknown;
+  createdBy?: {
+    user?: {
+      userPrincipalName?: unknown;
+      email?: unknown;
+      mail?: unknown;
+    };
+  };
 }
 
 export class GraphSuggestionsService {
@@ -106,7 +114,8 @@ export class GraphSuggestionsService {
     const response: { value?: IGraphListItemApiModel[] } = await client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .expand('fields($select=Title,Details,Votes,Status,Voters)')
+      .select('id,createdBy')
+      .expand('fields($select=Title,Details,Votes,Status,Voters),createdByUser($select=userPrincipalName,mail,email)')
       .orderby('createdDateTime desc')
       .top(999)
       .get();
@@ -131,9 +140,31 @@ export class GraphSuggestionsService {
           return undefined;
         }
 
+        let createdByUserPrincipalName: string | undefined;
+        const createdBy: unknown = entry.createdBy;
+
+        if (createdBy && typeof createdBy === 'object') {
+          const user: unknown = (createdBy as { user?: unknown }).user;
+
+          if (user && typeof user === 'object') {
+            const upn: unknown = (user as { userPrincipalName?: unknown }).userPrincipalName;
+
+            if (typeof upn === 'string' && upn.trim().length > 0) {
+              createdByUserPrincipalName = upn.trim();
+            } else {
+              const email: unknown = (user as { email?: unknown; mail?: unknown }).email ?? (user as { email?: unknown; mail?: unknown }).mail;
+
+              if (typeof email === 'string' && email.trim().length > 0) {
+                createdByUserPrincipalName = email.trim();
+              }
+            }
+          }
+        }
+
         return {
           id,
-          fields: fields as IGraphSuggestionItemFields
+          fields: fields as IGraphSuggestionItemFields,
+          createdByUserPrincipalName
         } as IGraphSuggestionItem;
       })
       .filter((item): item is IGraphSuggestionItem => !!item);

@@ -23,6 +23,7 @@ interface ISuggestionItem {
   votes: number;
   status: 'Active' | 'Done';
   voters: string[];
+  createdByLoginName?: string;
 }
 
 interface ISamverkansportalenState {
@@ -174,6 +175,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         {items.map((item) => {
           const hasVoted: boolean = item.voters.indexOf(this.props.userLoginName) !== -1;
           const disableVote: boolean = this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
+          const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
+          const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
 
           return (
             <li key={item.id} className={styles.suggestionCard}>
@@ -199,20 +202,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     disabled={disableVote}
                   />
                 )}
-                {!readOnly && item.status !== 'Done' && (
+                {canMarkSuggestionAsDone && (
                   <DefaultButton
                     text="Mark as done"
                     onClick={() => this._markSuggestionAsDone(item)}
                     disabled={this.state.isLoading}
                   />
                 )}
-                <IconButton
-                  iconProps={{ iconName: 'Delete' }}
-                  title="Remove suggestion"
-                  ariaLabel="Remove suggestion"
-                  onClick={() => this._deleteSuggestion(item)}
-                  disabled={this.state.isLoading}
-                />
+                {canDeleteSuggestion && (
+                  <IconButton
+                    iconProps={{ iconName: 'Delete' }}
+                    title="Remove suggestion"
+                    ariaLabel="Remove suggestion"
+                    onClick={() => this._deleteSuggestion(item)}
+                    disabled={this.state.isLoading}
+                  />
+                )}
               </div>
             </li>
           );
@@ -264,7 +269,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         description: typeof fields.Details === 'string' ? fields.Details : '',
         votes: this._parseVotes(fields.Votes),
         status: fields.Status === 'Done' ? 'Done' : 'Active',
-        voters
+        voters,
+        createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName)
       };
     });
 
@@ -366,7 +372,36 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
+  private _canCurrentUserDeleteSuggestion(item: ISuggestionItem): boolean {
+    if (this.props.isCurrentUserAdmin) {
+      return true;
+    }
+
+    return this._isCurrentUserSuggestionOwner(item);
+  }
+
+  private _isCurrentUserSuggestionOwner(item: ISuggestionItem): boolean {
+    const ownerLoginName: string | undefined = item.createdByLoginName;
+    const currentUserLoginName: string | undefined = this._normalizeLoginName(this.props.userLoginName);
+
+    return !!ownerLoginName && !!currentUserLoginName && ownerLoginName === currentUserLoginName;
+  }
+
+  private _normalizeLoginName(value?: string): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed: string = value.trim();
+    return trimmed.length > 0 ? trimmed.toLowerCase() : undefined;
+  }
+
   private async _markSuggestionAsDone(item: ISuggestionItem): Promise<void> {
+    if (!this.props.isCurrentUserAdmin) {
+      this._handleError('Only administrators can mark suggestions as done.');
+      return;
+    }
+
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
@@ -389,6 +424,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _deleteSuggestion(item: ISuggestionItem): Promise<void> {
+    if (!this._canCurrentUserDeleteSuggestion(item)) {
+      this._handleError('You do not have permission to remove this suggestion.');
+      return;
+    }
+
     const confirmation: boolean = window.confirm('Are you sure you want to remove this suggestion? This action cannot be undone.');
 
     if (!confirmation) {

@@ -46,12 +46,24 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
         userDisplayName: this.context.pageContext.user.displayName,
         userLoginName: this.context.pageContext.user.loginName,
+        isCurrentUserAdmin: this._isCurrentUserSiteAdmin,
         graphService: this._getGraphService(),
         listTitle: this._selectedListTitle
       }
     );
 
     ReactDom.render(element, this.domElement);
+  }
+
+  private get _isCurrentUserSiteAdmin(): boolean {
+    const legacyContext: unknown = this.context.pageContext.legacyPageContext;
+
+    if (!legacyContext || typeof legacyContext !== 'object') {
+      return false;
+    }
+
+    const isSiteAdmin: unknown = (legacyContext as { isSiteAdmin?: unknown }).isSiteAdmin;
+    return isSiteAdmin === true;
   }
 
   protected onInit(): Promise<void> {
