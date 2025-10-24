@@ -12,6 +12,13 @@ define([], function() {
     "AppOfficeEnvironment": "The app is running in office.com",
     "AppOutlookEnvironment": "The app is running in Outlook",
     "UnknownEnvironment": "The app is running in an unknown environment",
-    "ListFieldLabel": "Suggestions list"
+    "ListFieldLabel": "Suggestions list",
+    "NewListNameFieldLabel": "New list name",
+    "CreateListButtonLabel": "Create list",
+    "CreateListProgressMessage": "Creating the list...",
+    "CreateListSuccessMessage": "Successfully created the list \"{0}\".",
+    "CreateListAlreadyExistsMessage": "The list already exists and has been selected.",
+    "CreateListNameMissingMessage": "Enter a name before creating the list.",
+    "CreateListErrorMessage": "We couldn't create the list. Please try again."
   }
 });
