@@ -61,6 +61,7 @@ interface ISamverkansportalenState {
   searchQuery: string;
   error?: string;
   success?: string;
+  completedPage: number;
 }
 
 const MAX_VOTES_PER_USER: number = 5;
@@ -75,6 +76,7 @@ const FILTER_CATEGORY_OPTIONS: IDropdownOption[] = [
   ...CATEGORY_OPTIONS
 ];
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
+const COMPLETED_SUGGESTIONS_PAGE_SIZE: number = 5;
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -96,7 +98,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       availableVotes: MAX_VOTES_PER_USER,
       filterCategory: undefined,
       filterSubcategory: undefined,
-      searchQuery: ''
+      searchQuery: '',
+      completedPage: 1
     };
   }
 
@@ -144,15 +147,28 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       subcategories,
       suggestions
     );
-    const filteredSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
-      suggestions,
+    const activeSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
+      suggestions.filter((item) => item.status !== 'Done'),
       filterCategory,
       filterSubcategory,
       searchQuery
     );
+    const completedSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
+      suggestions.filter((item) => item.status === 'Done'),
+      filterCategory,
+      filterSubcategory,
+      ''
+    );
 
-    const activeSuggestions: ISuggestionItem[] = filteredSuggestions.filter((item) => item.status !== 'Done');
-    const completedSuggestions: ISuggestionItem[] = filteredSuggestions.filter((item) => item.status === 'Done');
+    const totalCompletedPages: number = Math.max(
+      1,
+      Math.ceil(completedSuggestions.length / COMPLETED_SUGGESTIONS_PAGE_SIZE)
+    );
+    const completedPage: number = Math.min(this.state.completedPage, totalCompletedPages);
+    const paginatedCompletedSuggestions: ISuggestionItem[] = completedSuggestions.slice(
+      (completedPage - 1) * COMPLETED_SUGGESTIONS_PAGE_SIZE,
+      completedPage * COMPLETED_SUGGESTIONS_PAGE_SIZE
+    );
 
     return (
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
@@ -270,7 +286,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         {completedSuggestions.length > 0 && (
           <div className={styles.suggestionSection}>
             <h3 className={styles.sectionTitle}>Completed suggestions</h3>
-            {this._renderSuggestionList(completedSuggestions, true)}
+            {this._renderSuggestionList(paginatedCompletedSuggestions, true)}
+            {totalCompletedPages > 1 && (
+              <div className={styles.paginationControls}>
+                <DefaultButton
+                  text="Previous"
+                  onClick={() => this._goToPreviousCompletedPage(completedPage)}
+                  disabled={completedPage <= 1}
+                />
+                <span className={styles.paginationInfo} aria-live="polite">
+                  Page {completedPage} of {totalCompletedPages}
+                </span>
+                <DefaultButton
+                  text="Next"
+                  onClick={() => this._goToNextCompletedPage(completedPage, totalCompletedPages)}
+                  disabled={completedPage >= totalCompletedPages}
+                />
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -289,6 +322,30 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? this._renderSuggestionTable(items, readOnly, normalizedUser, noVotesRemaining)
       : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining);
   }
+
+  private _setCompletedPage(page: number): void {
+    const nextPage: number = Math.max(1, page);
+
+    if (nextPage !== this.state.completedPage) {
+      this._updateState({ completedPage: nextPage });
+    }
+  }
+
+  private _goToPreviousCompletedPage = (currentPage: number): void => {
+    if (currentPage <= 1) {
+      return;
+    }
+
+    this._setCompletedPage(currentPage - 1);
+  };
+
+  private _goToNextCompletedPage = (currentPage: number, totalPages: number): void => {
+    if (currentPage >= totalPages) {
+      return;
+    }
+
+    this._setCompletedPage(Math.min(currentPage + 1, totalPages));
+  };
 
   private _renderSuggestionCards(
     items: ISuggestionItem[],
@@ -759,7 +816,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({
       suggestions: baseItems,
       availableVotes,
-      filterSubcategory: nextFilterSubcategory
+      filterSubcategory: nextFilterSubcategory,
+      completedPage: 1
     });
   }
 
@@ -893,6 +951,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this.state.suggestions
       );
 
+      this._setCompletedPage(1);
       this._updateState({ filterCategory: undefined, filterSubcategory: nextFilterSubcategory });
       return;
     }
@@ -909,6 +968,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this.state.suggestions
     );
 
+    this._setCompletedPage(1);
     this._updateState({ filterCategory: nextCategory, filterSubcategory: nextFilterSubcategory });
   };
 
@@ -923,10 +983,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const key: string = String(option.key);
 
     if (key === ALL_SUBCATEGORY_FILTER_KEY) {
+      this._setCompletedPage(1);
       this._updateState({ filterSubcategory: undefined });
       return;
     }
 
+    this._setCompletedPage(1);
     this._updateState({ filterSubcategory: key });
   };
 
