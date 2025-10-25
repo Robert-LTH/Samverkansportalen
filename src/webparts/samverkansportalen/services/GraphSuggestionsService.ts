@@ -154,7 +154,7 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('createdBy')
-      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory)')
+      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes)')
       .expand('createdByUser($select=userPrincipalName,mail,email)')
       .orderby('createdDateTime desc')
       .top(999)
@@ -433,6 +433,13 @@ export class GraphSuggestionsService {
             displayName: 'Details',
             text: {
               allowMultipleLines: true
+            }
+          },
+          {
+            name: 'Votes',
+            displayName: 'Votes',
+            number: {
+              decimalPlaces: '0'
             }
           },
           {
