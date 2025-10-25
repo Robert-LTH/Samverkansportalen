@@ -306,6 +306,21 @@
   gap: 0.75rem;
 }
 
+.paginationControls {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.paginationInfo {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
 @media (max-width: 48rem) {
   .suggestionTable {
     min-width: 0;
