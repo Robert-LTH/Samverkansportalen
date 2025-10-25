@@ -33,6 +33,7 @@ interface ISuggestionItem {
   category: SuggestionCategory;
   subcategory?: string;
   createdByLoginName?: string;
+  completedDateTime?: string;
   voteEntries: IVoteEntry[];
 }
 
@@ -49,7 +50,8 @@ interface ISubcategoryDefinition {
 }
 
 interface ISamverkansportalenState {
-  suggestions: ISuggestionItem[];
+  activeSuggestions: IPaginatedSuggestionsState;
+  completedSuggestions: IPaginatedSuggestionsState;
   isLoading: boolean;
   newTitle: string;
   newDescription: string;
@@ -57,16 +59,27 @@ interface ISamverkansportalenState {
   newSubcategoryKey?: string;
   subcategories: ISubcategoryDefinition[];
   availableVotes: number;
-  filterCategory?: SuggestionCategory;
-  filterSubcategory?: string;
-  searchQuery: string;
+  activeFilter: IFilterState;
+  completedFilter: IFilterState;
   error?: string;
   success?: string;
-  completedPage: number;
   isAddSuggestionExpanded: boolean;
-  isFilterExpanded: boolean;
   isActiveSuggestionsExpanded: boolean;
   isCompletedSuggestionsExpanded: boolean;
+}
+
+interface IFilterState {
+  searchQuery: string;
+  category?: SuggestionCategory;
+  subcategory?: string;
+}
+
+interface IPaginatedSuggestionsState {
+  items: ISuggestionItem[];
+  page: number;
+  currentToken?: string;
+  nextToken?: string;
+  previousTokens: (string | undefined)[];
 }
 
 const MAX_VOTES_PER_USER: number = 5;
@@ -81,7 +94,7 @@ const FILTER_CATEGORY_OPTIONS: IDropdownOption[] = [
   ...CATEGORY_OPTIONS
 ];
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
-const COMPLETED_SUGGESTIONS_PAGE_SIZE: number = 5;
+const SUGGESTIONS_PAGE_SIZE: number = 5;
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -90,7 +103,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _currentSubcategoryListId?: string;
   private readonly _sectionIds: {
     add: { title: string; content: string };
-    filter: { title: string; content: string };
     active: { title: string; content: string };
     completed: { title: string; content: string };
   };
@@ -101,7 +113,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const uniquePrefix: string = `samverkansportalen-${Math.random().toString(36).slice(2, 10)}`;
     this._sectionIds = {
       add: { title: `${uniquePrefix}-add-title`, content: `${uniquePrefix}-add-content` },
-      filter: { title: `${uniquePrefix}-filter-title`, content: `${uniquePrefix}-filter-content` },
       active: { title: `${uniquePrefix}-active-title`, content: `${uniquePrefix}-active-content` },
       completed: {
         title: `${uniquePrefix}-completed-title`,
@@ -110,7 +121,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     };
 
     this.state = {
-      suggestions: [],
+      activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
+      completedSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
       isLoading: false,
       newTitle: '',
       newDescription: '',
@@ -118,12 +130,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newSubcategoryKey: undefined,
       subcategories: [],
       availableVotes: MAX_VOTES_PER_USER,
-      filterCategory: undefined,
-      filterSubcategory: undefined,
-      searchQuery: '',
-      completedPage: 1,
+      activeFilter: { searchQuery: '', category: undefined, subcategory: undefined },
+      completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
       isAddSuggestionExpanded: true,
-      isFilterExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true
     };
@@ -152,7 +161,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   public render(): React.ReactElement<ISamverkansportalenProps> {
     const {
-      suggestions,
+      activeSuggestions,
+      completedSuggestions,
       isLoading,
       availableVotes,
       newTitle,
@@ -160,44 +170,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newCategory,
       newSubcategoryKey,
       subcategories,
-      filterCategory,
-      filterSubcategory,
-      searchQuery,
+      activeFilter,
+      completedFilter,
       error,
       success,
       isAddSuggestionExpanded,
-      isFilterExpanded,
       isActiveSuggestionsExpanded,
       isCompletedSuggestionsExpanded
     } = this.state;
 
     const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
-    const filterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
-      filterCategory,
-      subcategories,
-      suggestions
+    const activeFilterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
+      activeFilter.category,
+      subcategories
     );
-    const activeSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
-      suggestions.filter((item) => item.status !== 'Done'),
-      filterCategory,
-      filterSubcategory,
-      searchQuery
-    );
-    const completedSuggestions: ISuggestionItem[] = this._getFilteredSuggestions(
-      suggestions.filter((item) => item.status === 'Done'),
-      filterCategory,
-      filterSubcategory,
-      ''
-    );
-
-    const totalCompletedPages: number = Math.max(
-      1,
-      Math.ceil(completedSuggestions.length / COMPLETED_SUGGESTIONS_PAGE_SIZE)
-    );
-    const completedPage: number = Math.min(this.state.completedPage, totalCompletedPages);
-    const paginatedCompletedSuggestions: ISuggestionItem[] = completedSuggestions.slice(
-      (completedPage - 1) * COMPLETED_SUGGESTIONS_PAGE_SIZE,
-      completedPage * COMPLETED_SUGGESTIONS_PAGE_SIZE
+    const completedFilterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
+      completedFilter.category,
+      subcategories
     );
 
     return (
@@ -296,54 +285,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </div>
         </div>
 
-        <div className={styles.filters}>
-          {this._renderSectionHeader(
-            'Filter suggestions',
-            this._sectionIds.filter.title,
-            this._sectionIds.filter.content,
-            isFilterExpanded,
-            this._toggleFilterSection
-          )}
-          <div
-            id={this._sectionIds.filter.content}
-            role="region"
-            aria-labelledby={this._sectionIds.filter.title}
-            className={`${styles.sectionContent} ${
-              isFilterExpanded ? '' : styles.sectionContentCollapsed
-            }`}
-            hidden={!isFilterExpanded}
-          >
-            {isFilterExpanded && (
-              <div className={styles.filterControls}>
-                <TextField
-                  label="Search"
-                  value={searchQuery}
-                  onChange={this._onSearchChange}
-                  disabled={isLoading}
-                  placeholder="Search by title or details"
-                  className={styles.filterSearch}
-                />
-                <Dropdown
-                  label="Category"
-                  options={FILTER_CATEGORY_OPTIONS}
-                  selectedKey={filterCategory ?? ALL_CATEGORY_FILTER_KEY}
-                  onChange={this._onFilterCategoryChange}
-                  disabled={isLoading}
-                  className={styles.filterDropdown}
-                />
-                <Dropdown
-                  label="Subcategory"
-                  options={filterSubcategoryOptions}
-                  selectedKey={filterSubcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-                  onChange={this._onFilterSubcategoryChange}
-                  disabled={isLoading || filterSubcategoryOptions.length <= 1}
-                  className={styles.filterDropdown}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
         <div className={styles.suggestionSection}>
           {this._renderSectionHeader(
             'Active suggestions',
@@ -361,12 +302,50 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             }`}
             hidden={!isActiveSuggestionsExpanded}
           >
-            {isActiveSuggestionsExpanded &&
-              (isLoading ? (
-                <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
-              ) : (
-                this._renderSuggestionList(activeSuggestions, false)
-              ))}
+            {isActiveSuggestionsExpanded && (
+              <>
+                <div className={styles.filterControls}>
+                  <TextField
+                    label="Search"
+                    value={activeFilter.searchQuery}
+                    onChange={this._onActiveSearchChange}
+                    disabled={isLoading}
+                    placeholder="Search by title or details"
+                    className={styles.filterSearch}
+                  />
+                  <Dropdown
+                    label="Category"
+                    options={FILTER_CATEGORY_OPTIONS}
+                    selectedKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                    onChange={this._onActiveFilterCategoryChange}
+                    disabled={isLoading}
+                    className={styles.filterDropdown}
+                  />
+                  <Dropdown
+                    label="Subcategory"
+                    options={activeFilterSubcategoryOptions}
+                    selectedKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                    onChange={this._onActiveFilterSubcategoryChange}
+                    disabled={isLoading || activeFilterSubcategoryOptions.length <= 1}
+                    className={styles.filterDropdown}
+                  />
+                </div>
+                {isLoading ? (
+                  <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
+                ) : (
+                  <>
+                    {this._renderSuggestionList(activeSuggestions.items, false)}
+                    {this._renderPaginationControls(
+                      activeSuggestions.page,
+                      activeSuggestions.previousTokens.length > 0,
+                      !!activeSuggestions.nextToken,
+                      this._goToPreviousActivePage,
+                      this._goToNextActivePage
+                    )}
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -389,23 +368,45 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           >
             {isCompletedSuggestionsExpanded && (
               <>
-                {this._renderSuggestionList(paginatedCompletedSuggestions, true)}
-                {totalCompletedPages > 1 && (
-                  <div className={styles.paginationControls}>
-                    <DefaultButton
-                      text="Previous"
-                      onClick={() => this._goToPreviousCompletedPage(completedPage)}
-                      disabled={completedPage <= 1}
-                    />
-                    <span className={styles.paginationInfo} aria-live="polite">
-                      Page {completedPage} of {totalCompletedPages}
-                    </span>
-                    <DefaultButton
-                      text="Next"
-                      onClick={() => this._goToNextCompletedPage(completedPage, totalCompletedPages)}
-                      disabled={completedPage >= totalCompletedPages}
-                    />
-                  </div>
+                <div className={styles.filterControls}>
+                  <TextField
+                    label="Search"
+                    value={completedFilter.searchQuery}
+                    onChange={this._onCompletedSearchChange}
+                    disabled={isLoading}
+                    placeholder="Search by title or details"
+                    className={styles.filterSearch}
+                  />
+                  <Dropdown
+                    label="Category"
+                    options={FILTER_CATEGORY_OPTIONS}
+                    selectedKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                    onChange={this._onCompletedFilterCategoryChange}
+                    disabled={isLoading}
+                    className={styles.filterDropdown}
+                  />
+                  <Dropdown
+                    label="Subcategory"
+                    options={completedFilterSubcategoryOptions}
+                    selectedKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                    onChange={this._onCompletedFilterSubcategoryChange}
+                    disabled={isLoading || completedFilterSubcategoryOptions.length <= 1}
+                    className={styles.filterDropdown}
+                  />
+                </div>
+                {isLoading ? (
+                  <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
+                ) : (
+                  <>
+                    {this._renderSuggestionList(completedSuggestions.items, true)}
+                    {this._renderPaginationControls(
+                      completedSuggestions.page,
+                      completedSuggestions.previousTokens.length > 0,
+                      !!completedSuggestions.nextToken,
+                      this._goToPreviousCompletedPage,
+                      this._goToNextCompletedPage
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -453,28 +454,112 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining);
   }
 
-  private _setCompletedPage(page: number): void {
-    const nextPage: number = Math.max(1, page);
+  private _goToPreviousActivePage = async (): Promise<void> => {
+    const { activeSuggestions, activeFilter } = this.state;
 
-    if (nextPage !== this.state.completedPage) {
-      this._updateState({ completedPage: nextPage });
-    }
-  }
-
-  private _goToPreviousCompletedPage = (currentPage: number): void => {
-    if (currentPage <= 1) {
+    if (activeSuggestions.previousTokens.length === 0) {
       return;
     }
 
-    this._setCompletedPage(currentPage - 1);
+    const tokens: (string | undefined)[] = [...activeSuggestions.previousTokens];
+    const previousToken: string | undefined = tokens.pop();
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      await this._fetchActiveSuggestions({
+        page: Math.max(activeSuggestions.page - 1, 1),
+        previousTokens: tokens,
+        skipToken: previousToken,
+        filter: activeFilter
+      });
+    } catch (error) {
+      this._handleError('We could not load the previous page of active suggestions.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
   };
 
-  private _goToNextCompletedPage = (currentPage: number, totalPages: number): void => {
-    if (currentPage >= totalPages) {
+  private _goToNextActivePage = async (): Promise<void> => {
+    const { activeSuggestions, activeFilter } = this.state;
+
+    if (!activeSuggestions.nextToken) {
       return;
     }
 
-    this._setCompletedPage(Math.min(currentPage + 1, totalPages));
+    const tokens: (string | undefined)[] = [
+      ...activeSuggestions.previousTokens,
+      activeSuggestions.currentToken
+    ];
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      await this._fetchActiveSuggestions({
+        page: activeSuggestions.page + 1,
+        previousTokens: tokens,
+        skipToken: activeSuggestions.nextToken,
+        filter: activeFilter
+      });
+    } catch (error) {
+      this._handleError('We could not load more active suggestions. Please try again.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
+  };
+
+  private _goToPreviousCompletedPage = async (): Promise<void> => {
+    const { completedSuggestions, completedFilter } = this.state;
+
+    if (completedSuggestions.previousTokens.length === 0) {
+      return;
+    }
+
+    const tokens: (string | undefined)[] = [...completedSuggestions.previousTokens];
+    const previousToken: string | undefined = tokens.pop();
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      await this._fetchCompletedSuggestions({
+        page: Math.max(completedSuggestions.page - 1, 1),
+        previousTokens: tokens,
+        skipToken: previousToken,
+        filter: completedFilter
+      });
+    } catch (error) {
+      this._handleError('We could not load the previous page of completed suggestions.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
+  };
+
+  private _goToNextCompletedPage = async (): Promise<void> => {
+    const { completedSuggestions, completedFilter } = this.state;
+
+    if (!completedSuggestions.nextToken) {
+      return;
+    }
+
+    const tokens: (string | undefined)[] = [
+      ...completedSuggestions.previousTokens,
+      completedSuggestions.currentToken
+    ];
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      await this._fetchCompletedSuggestions({
+        page: completedSuggestions.page + 1,
+        previousTokens: tokens,
+        skipToken: completedSuggestions.nextToken,
+        filter: completedFilter
+      });
+    } catch (error) {
+      this._handleError('We could not load more completed suggestions. Please try again.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
   };
 
   private _renderSuggestionCards(
@@ -509,6 +594,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
+                  )}
+                  {readOnly && item.completedDateTime && (
+                    <p className={styles.completedMeta}>
+                      Completed {this._formatCompletedDate(item.completedDateTime)}
+                    </p>
                   )}
                 </div>
                 <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
@@ -571,6 +661,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
+                  )}
+                  {readOnly && item.completedDateTime && (
+                    <p className={styles.completedMeta}>
+                      Completed {this._formatCompletedDate(item.completedDateTime)}
+                    </p>
                   )}
                 </td>
                 <td className={styles.tableCellCategory} data-label="Category">
@@ -669,6 +764,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion };
   }
 
+  private _formatCompletedDate(value: string): string {
+    try {
+      const parsed: Date = new Date(value);
+
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toLocaleString();
+      }
+    } catch (error) {
+      console.warn('Failed to parse completion date.', error);
+    }
+
+    return value;
+  }
+
+  private _renderPaginationControls(
+    page: number,
+    hasPrevious: boolean,
+    hasNext: boolean,
+    onPrevious: () => void,
+    onNext: () => void
+  ): React.ReactNode {
+    if (!hasPrevious && !hasNext && page <= 1) {
+      return undefined;
+    }
+
+    return (
+      <div className={styles.paginationControls}>
+        <DefaultButton text="Previous" onClick={onPrevious} disabled={!hasPrevious} />
+        <span className={styles.paginationInfo} aria-live="polite">
+          Page {page}
+        </span>
+        <DefaultButton text="Next" onClick={onNext} disabled={!hasNext} />
+      </div>
+    );
+  }
+
   private _getSubcategoryOptions(
     category: SuggestionCategory,
     definitions: ISubcategoryDefinition[]
@@ -681,107 +812,39 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private _getFilterSubcategoryOptions(
     category: SuggestionCategory | undefined,
-    definitions: ISubcategoryDefinition[],
-    suggestions: ISuggestionItem[]
+    definitions: ISubcategoryDefinition[]
   ): IDropdownOption[] {
-    const availableValues: string[] = this._getAvailableFilterSubcategoryValues(
-      category,
-      definitions,
-      suggestions
+    const options: IDropdownOption[] = this._getSubcategoriesForCategory(category, definitions).map(
+      (definition) => ({
+        key: definition.title,
+        text: definition.title
+      })
     );
-
-    const options: IDropdownOption[] = availableValues.map((value) => ({
-      key: value,
-      text: value
-    }));
 
     return [{ key: ALL_SUBCATEGORY_FILTER_KEY, text: 'All subcategories' }, ...options];
   }
 
   private _getSubcategoriesForCategory(
-    category: SuggestionCategory,
+    category: SuggestionCategory | undefined,
     definitions: ISubcategoryDefinition[] = this.state.subcategories
   ): ISubcategoryDefinition[] {
-    return definitions.filter((definition) => !definition.category || definition.category === category);
+    return definitions.filter((definition) => !definition.category || !category || definition.category === category);
   }
 
-  private _getAvailableFilterSubcategoryValues(
-    category: SuggestionCategory | undefined,
-    definitions: ISubcategoryDefinition[],
-    suggestions: ISuggestionItem[]
-  ): string[] {
-    const values: string[] = [];
-    const relevantDefinitions: ISubcategoryDefinition[] = category
-      ? this._getSubcategoriesForCategory(category, definitions)
-      : definitions;
-
-    relevantDefinitions.forEach((definition) => {
-      const trimmed: string = definition.title.trim();
-      if (trimmed) {
-        values.push(trimmed);
-      }
-    });
-
-    suggestions.forEach((item) => {
-      if (category && item.category !== category) {
-        return;
-      }
-
-      if (item.subcategory) {
-        values.push(item.subcategory);
-      }
-    });
-
-    return Array.from(values).sort((a: string, b: string) => a.localeCompare(b));
-  }
-
-  private _getValidFilterSubcategory(
+  private _normalizeFilterSubcategory(
     category: SuggestionCategory | undefined,
     preferredSubcategory: string | undefined,
-    definitions: ISubcategoryDefinition[],
-    suggestions: ISuggestionItem[]
+    definitions: ISubcategoryDefinition[]
   ): string | undefined {
     if (!preferredSubcategory) {
       return undefined;
     }
 
-    const availableValues: string[] = this._getAvailableFilterSubcategoryValues(
-      category,
-      definitions,
-      suggestions
+    const availableTitles: string[] = this._getSubcategoriesForCategory(category, definitions).map((definition) =>
+      definition.title.trim()
     );
 
-    return availableValues.filter( x => x === preferredSubcategory).length > 0 ? preferredSubcategory : undefined;
-  }
-
-  private _getFilteredSuggestions(
-    suggestions: ISuggestionItem[],
-    category: SuggestionCategory | undefined,
-    subcategory: string | undefined,
-    searchQuery: string
-  ): ISuggestionItem[] {
-    const normalizedQuery: string = searchQuery.trim().toLowerCase();
-
-    return suggestions.filter((item) => {
-      if (category && item.category !== category) {
-        return false;
-      }
-
-      if (subcategory && item.subcategory !== subcategory) {
-        return false;
-      }
-
-      if (normalizedQuery.length > 0) {
-        const title: string = item.title.toLowerCase();
-        const description: string = item.description ? item.description.toLowerCase() : '';
-
-        if (!title.includes(normalizedQuery) && !description.includes(normalizedQuery)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
+    return availableTitles.indexOf(preferredSubcategory) !== -1 ? preferredSubcategory : undefined;
   }
 
   private _getValidSubcategoryKeyForCategory(
@@ -859,101 +922,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _loadSuggestions(): Promise<void> {
-    const listId: string = this._getResolvedListId();
-    const voteListId: string = this._getResolvedVotesListId();
-    const itemsFromGraph: IGraphSuggestionItem[] = await this.props.graphService.getSuggestionItems(listId);
-    const votesFromGraph: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId);
-
-    const votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
-
-    votesFromGraph.forEach((entry: IGraphVoteItem) => {
-      const fields = entry.fields ?? {};
-
-      const suggestionId: number | undefined = this._parseNumericId((fields as { SuggestionId?: unknown }).SuggestionId);
-      const rawUsername: unknown = (fields as { Username?: unknown }).Username;
-      const normalizedUsername: string | undefined = this._normalizeLoginName(
-        typeof rawUsername === 'string' ? rawUsername : undefined
-      );
-      const votes: number = this._parseVotes((fields as { Votes?: unknown }).Votes);
-
-      if (!suggestionId || !normalizedUsername || votes <= 0) {
-        return;
-      }
-
-      const entriesForSuggestion: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
-      entriesForSuggestion.push({
-        id: entry.id,
-        username: normalizedUsername,
-        votes
-      });
-      votesBySuggestion.set(suggestionId, entriesForSuggestion);
-    });
-
-    const baseItems = itemsFromGraph.map((entry: IGraphSuggestionItem): ISuggestionItem => {
-      const fields: IGraphSuggestionItemFields = entry.fields;
-
-      const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
-      const suggestionId: number = this._parseNumericId(rawId) ?? -1;
-      const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
-
-      const storedVotes: number = this._parseVotes(fields.Votes);
-      const status: 'Active' | 'Done' = fields.Status === 'Done' ? 'Done' : 'Active';
-      const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
-      const votes: number = status === 'Done' ? Math.max(liveVotes, storedVotes) : liveVotes;
-
-      return {
-        id: suggestionId,
-        title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
-        description: typeof fields.Details === 'string' ? fields.Details : '',
-        votes,
-        status,
-        category: this._normalizeCategory(fields.Category),
-        subcategory:
-          typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
-            ? fields.Subcategory.trim()
-            : undefined,
-        voters: voteEntries.map((vote) => vote.username),
-        createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName),
-        voteEntries
-      };
-    });
-
-    const items: ISuggestionItem[] = baseItems.map((item, index) => ({
-      ...item,
-      displayId: index + 1
-    }));
-
-    const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
-
-    const usedVotes: number = items.reduce((count, item) => {
-      if (item.status === 'Done' || !normalizedUser) {
-        return count;
-      }
-
-      const voteForUser: IVoteEntry | undefined = item.voteEntries.find((vote) => vote.username === normalizedUser);
-
-      if (!voteForUser) {
-        return count;
-      }
-
-      return count + voteForUser.votes;
-    }, 0);
-
-    const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
-
-    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
-      this.state.filterCategory,
-      this.state.filterSubcategory,
-      this.state.subcategories,
-      baseItems
-    );
-
-    this._updateState({
-      suggestions: baseItems,
-      availableVotes,
-      filterSubcategory: nextFilterSubcategory,
-      completedPage: 1
-    });
+    await Promise.all([
+      this._fetchActiveSuggestions({
+        page: 1,
+        previousTokens: [],
+        skipToken: undefined,
+        filter: this.state.activeFilter
+      }),
+      this._fetchCompletedSuggestions({
+        page: 1,
+        previousTokens: [],
+        skipToken: undefined,
+        filter: this.state.completedFilter
+      }),
+      this._loadAvailableVotes()
+    ]);
   }
 
   private async _loadSubcategories(): Promise<void> {
@@ -993,18 +976,249 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       definitions
     );
 
-    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
-      this.state.filterCategory,
-      this.state.filterSubcategory,
-      definitions,
-      this.state.suggestions
+    const nextActiveFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      this.state.activeFilter.category,
+      this.state.activeFilter.subcategory,
+      definitions
+    );
+
+    const nextCompletedFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      this.state.completedFilter.category,
+      this.state.completedFilter.subcategory,
+      definitions
     );
 
     this._updateState({
       subcategories: definitions,
       newSubcategoryKey: nextSubcategoryKey,
-      filterSubcategory: nextFilterSubcategory
+      activeFilter: { ...this.state.activeFilter, subcategory: nextActiveFilterSubcategory },
+      completedFilter: { ...this.state.completedFilter, subcategory: nextCompletedFilterSubcategory }
     });
+  }
+
+  private async _fetchActiveSuggestions(options: {
+    page: number;
+    previousTokens: (string | undefined)[];
+    skipToken?: string;
+    filter?: IFilterState;
+  }): Promise<void> {
+    const filter: IFilterState = options.filter ?? this.state.activeFilter;
+    const { items, nextToken } = await this._getSuggestionsPage('Active', options.skipToken, filter);
+
+    if (items.length === 0 && options.previousTokens.length > 0) {
+      const tokens: (string | undefined)[] = [...options.previousTokens];
+      const previousToken: string | undefined = tokens.pop();
+
+      await this._fetchActiveSuggestions({
+        page: Math.max(options.page - 1, 1),
+        previousTokens: tokens,
+        skipToken: previousToken,
+        filter
+      });
+      return;
+    }
+
+    this._updateState({
+      activeSuggestions: {
+        items,
+        page: options.page,
+        currentToken: options.skipToken,
+        nextToken,
+        previousTokens: options.previousTokens
+      },
+      activeFilter: filter
+    });
+  }
+
+  private async _fetchCompletedSuggestions(options: {
+    page: number;
+    previousTokens: (string | undefined)[];
+    skipToken?: string;
+    filter?: IFilterState;
+  }): Promise<void> {
+    const filter: IFilterState = options.filter ?? this.state.completedFilter;
+    const { items, nextToken } = await this._getSuggestionsPage('Done', options.skipToken, filter);
+
+    if (items.length === 0 && options.previousTokens.length > 0) {
+      const tokens: (string | undefined)[] = [...options.previousTokens];
+      const previousToken: string | undefined = tokens.pop();
+
+      await this._fetchCompletedSuggestions({
+        page: Math.max(options.page - 1, 1),
+        previousTokens: tokens,
+        skipToken: previousToken,
+        filter
+      });
+      return;
+    }
+
+    this._updateState({
+      completedSuggestions: {
+        items,
+        page: options.page,
+        currentToken: options.skipToken,
+        nextToken,
+        previousTokens: options.previousTokens
+      },
+      completedFilter: filter
+    });
+  }
+
+  private async _refreshActiveSuggestions(): Promise<void> {
+    const { activeSuggestions, activeFilter } = this.state;
+
+    await this._fetchActiveSuggestions({
+      page: activeSuggestions.page,
+      previousTokens: activeSuggestions.previousTokens,
+      skipToken: activeSuggestions.currentToken,
+      filter: activeFilter
+    });
+  }
+
+  private async _refreshCompletedSuggestions(): Promise<void> {
+    const { completedSuggestions, completedFilter } = this.state;
+
+    await this._fetchCompletedSuggestions({
+      page: completedSuggestions.page,
+      previousTokens: completedSuggestions.previousTokens,
+      skipToken: completedSuggestions.currentToken,
+      filter: completedFilter
+    });
+  }
+
+  private async _getSuggestionsPage(
+    status: 'Active' | 'Done',
+    skipToken: string | undefined,
+    filter: IFilterState
+  ): Promise<{ items: ISuggestionItem[]; nextToken?: string }> {
+    const listId: string = this._getResolvedListId();
+    const response = await this.props.graphService.getSuggestionItems(listId, {
+      status,
+      top: SUGGESTIONS_PAGE_SIZE,
+      skipToken,
+      category: filter.category,
+      subcategory: filter.subcategory,
+      searchQuery: filter.searchQuery,
+      orderBy: status === 'Done' ? 'fields/CompletedDateTime desc' : 'createdDateTime desc'
+    });
+
+    let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
+
+    if (status === 'Active') {
+      const voteListId: string = this._getResolvedVotesListId();
+      const suggestionIds: number[] = response.items
+        .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
+        .filter((value): value is number => typeof value === 'number');
+
+      if (suggestionIds.length > 0) {
+        const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+          suggestionIds
+        });
+        votesBySuggestion = this._groupVotesBySuggestion(voteItems);
+      }
+    }
+
+    const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(response.items, votesBySuggestion);
+    return { items, nextToken: response.nextToken };
+  }
+
+  private _mapGraphItemsToSuggestions(
+    graphItems: IGraphSuggestionItem[],
+    votesBySuggestion: Map<number, IVoteEntry[]>
+  ): ISuggestionItem[] {
+    return graphItems
+      .map((entry) => {
+        const fields: IGraphSuggestionItemFields = entry.fields;
+        const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
+        const suggestionId: number | undefined = this._parseNumericId(rawId);
+
+        if (typeof suggestionId !== 'number') {
+          return undefined;
+        }
+
+        const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
+        const storedVotes: number = this._parseVotes(fields.Votes);
+        const status: 'Active' | 'Done' = fields.Status === 'Done' ? 'Done' : 'Active';
+        const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
+        const votes: number = status === 'Done' ? Math.max(liveVotes, storedVotes) : liveVotes;
+        const completedDateTime: string | undefined =
+          typeof fields.CompletedDateTime === 'string' && fields.CompletedDateTime.trim().length > 0
+            ? fields.CompletedDateTime.trim()
+            : undefined;
+
+        return {
+          id: suggestionId,
+          title:
+            typeof fields.Title === 'string' && fields.Title.trim().length > 0
+              ? fields.Title
+              : 'Untitled suggestion',
+          description: typeof fields.Details === 'string' ? fields.Details : '',
+          votes,
+          status,
+          category: this._normalizeCategory(fields.Category),
+          subcategory:
+            typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
+              ? fields.Subcategory.trim()
+              : undefined,
+          voters: voteEntries.map((vote) => vote.username),
+          createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName),
+          completedDateTime,
+          voteEntries
+        } as ISuggestionItem;
+      })
+      .filter((item): item is ISuggestionItem => !!item);
+  }
+
+  private _groupVotesBySuggestion(voteItems: IGraphVoteItem[]): Map<number, IVoteEntry[]> {
+    const votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
+
+    voteItems.forEach((entry: IGraphVoteItem) => {
+      const fields = entry.fields ?? {};
+      const suggestionId: number | undefined = this._parseNumericId(
+        (fields as { SuggestionId?: unknown }).SuggestionId
+      );
+      const rawUsername: unknown = (fields as { Username?: unknown }).Username;
+      const normalizedUsername: string | undefined = this._normalizeLoginName(
+        typeof rawUsername === 'string' ? rawUsername : undefined
+      );
+      const votes: number = this._parseVotes((fields as { Votes?: unknown }).Votes);
+
+      if (!suggestionId || !normalizedUsername || votes <= 0) {
+        return;
+      }
+
+      const entriesForSuggestion: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
+      entriesForSuggestion.push({
+        id: entry.id,
+        username: normalizedUsername,
+        votes
+      });
+      votesBySuggestion.set(suggestionId, entriesForSuggestion);
+    });
+
+    return votesBySuggestion;
+  }
+
+  private async _loadAvailableVotes(): Promise<void> {
+    const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
+
+    if (!normalizedUser) {
+      this._updateState({ availableVotes: MAX_VOTES_PER_USER });
+      return;
+    }
+
+    const voteListId: string = this._getResolvedVotesListId();
+    const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+      username: normalizedUser
+    });
+
+    const usedVotes: number = voteItems.reduce((total, entry) => {
+      const votes: number = this._parseVotes(entry.fields?.Votes);
+      return total + votes;
+    }, 0);
+
+    const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
+    this._updateState({ availableVotes });
   }
 
   private _onTitleChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string): void => {
@@ -1018,11 +1232,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ newDescription: newValue ?? '' });
   };
 
-  private _onSearchChange = (
+  private _onActiveSearchChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue?: string
   ): void => {
-    this._updateState({ searchQuery: newValue ?? '' });
+    const nextFilter: IFilterState = { ...this.state.activeFilter, searchQuery: newValue ?? '' };
+    this._applyActiveFilter(nextFilter);
   };
 
   private _onCategoryChange = (
@@ -1068,7 +1283,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ newSubcategoryKey: definition.key });
   };
 
-  private _onFilterCategoryChange = (
+  private _onActiveFilterCategoryChange = (
     _event: React.FormEvent<HTMLDivElement>,
     option?: IDropdownOption
   ): void => {
@@ -1077,37 +1292,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string = String(option.key).trim();
+    let nextCategory: SuggestionCategory | undefined;
 
-    if (key === ALL_CATEGORY_FILTER_KEY) {
-      const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
-        undefined,
-        this.state.filterSubcategory,
-        this.state.subcategories,
-        this.state.suggestions
+    if (key !== ALL_CATEGORY_FILTER_KEY) {
+      nextCategory = SUGGESTION_CATEGORIES.find(
+        (category) => category.toLowerCase() === key.toLowerCase()
       );
-
-      this._setCompletedPage(1);
-      this._updateState({ filterCategory: undefined, filterSubcategory: nextFilterSubcategory });
-      return;
     }
 
-    const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
-      (category) => category.toLowerCase() === key.toLowerCase()
-    );
+    const nextFilter: IFilterState = {
+      ...this.state.activeFilter,
+      category: nextCategory,
+      subcategory: this._normalizeFilterSubcategory(nextCategory, this.state.activeFilter.subcategory, this.state.subcategories)
+    };
 
-    const nextCategory: SuggestionCategory | undefined = match;
-    const nextFilterSubcategory: string | undefined = this._getValidFilterSubcategory(
-      nextCategory,
-      this.state.filterSubcategory,
-      this.state.subcategories,
-      this.state.suggestions
-    );
-
-    this._setCompletedPage(1);
-    this._updateState({ filterCategory: nextCategory, filterSubcategory: nextFilterSubcategory });
+    this._applyActiveFilter(nextFilter);
   };
 
-  private _onFilterSubcategoryChange = (
+  private _onActiveFilterSubcategoryChange = (
     _event: React.FormEvent<HTMLDivElement>,
     option?: IDropdownOption
   ): void => {
@@ -1116,15 +1318,67 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string = String(option.key);
+    const nextFilter: IFilterState =
+      key === ALL_SUBCATEGORY_FILTER_KEY
+        ? { ...this.state.activeFilter, subcategory: undefined }
+        : { ...this.state.activeFilter, subcategory: key };
 
-    if (key === ALL_SUBCATEGORY_FILTER_KEY) {
-      this._setCompletedPage(1);
-      this._updateState({ filterSubcategory: undefined });
+    this._applyActiveFilter(nextFilter);
+  };
+
+  private _onCompletedSearchChange = (
+    _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue?: string
+  ): void => {
+    const nextFilter: IFilterState = { ...this.state.completedFilter, searchQuery: newValue ?? '' };
+    this._applyCompletedFilter(nextFilter);
+  };
+
+  private _onCompletedFilterCategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
       return;
     }
 
-    this._setCompletedPage(1);
-    this._updateState({ filterSubcategory: key });
+    const key: string = String(option.key).trim();
+    let nextCategory: SuggestionCategory | undefined;
+
+    if (key !== ALL_CATEGORY_FILTER_KEY) {
+      nextCategory = SUGGESTION_CATEGORIES.find(
+        (category) => category.toLowerCase() === key.toLowerCase()
+      );
+    }
+
+    const nextFilter: IFilterState = {
+      ...this.state.completedFilter,
+      category: nextCategory,
+      subcategory: this._normalizeFilterSubcategory(
+        nextCategory,
+        this.state.completedFilter.subcategory,
+        this.state.subcategories
+      )
+    };
+
+    this._applyCompletedFilter(nextFilter);
+  };
+
+  private _onCompletedFilterSubcategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+    const nextFilter: IFilterState =
+      key === ALL_SUBCATEGORY_FILTER_KEY
+        ? { ...this.state.completedFilter, subcategory: undefined }
+        : { ...this.state.completedFilter, subcategory: key };
+
+    this._applyCompletedFilter(nextFilter);
   };
 
   private _dismissError = (): void => {
@@ -1134,6 +1388,44 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _dismissSuccess = (): void => {
     this._updateState({ success: undefined });
   };
+
+  private _applyActiveFilter(nextFilter: IFilterState): void {
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    this._fetchActiveSuggestions({
+      page: 1,
+      previousTokens: [],
+      skipToken: undefined,
+      filter: nextFilter
+    }).then(
+      () => {
+        this._updateState({ isLoading: false });
+      },
+      (error) => {
+        this._handleError('We could not load the active suggestions. Please try again.', error);
+        this._updateState({ isLoading: false });
+      }
+    );
+  }
+
+  private _applyCompletedFilter(nextFilter: IFilterState): void {
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    this._fetchCompletedSuggestions({
+      page: 1,
+      previousTokens: [],
+      skipToken: undefined,
+      filter: nextFilter
+    }).then(
+      () => {
+        this._updateState({ isLoading: false });
+      },
+      (error) => {
+        this._handleError('We could not load the completed suggestions. Please try again.', error);
+        this._updateState({ isLoading: false });
+      }
+    );
+  }
 
   private _addSuggestion = async (): Promise<void> => {
     const title: string = this.state.newTitle.trim();
@@ -1214,7 +1506,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         });
       }
 
-      await this._loadSuggestions();
+      await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
 
       this._updateState({ success: hasVoted ? 'Your vote has been removed.' : 'Thanks for voting!' });
     } catch (error) {
@@ -1262,7 +1554,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await this.props.graphService.updateSuggestion(listId, item.id, {
         Status: 'Done',
-        Votes: item.votes
+        Votes: item.votes,
+        CompletedDateTime: new Date().toISOString()
       });
 
       await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
@@ -1296,7 +1589,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await this.props.graphService.deleteSuggestion(listId, item.id);
 
-      await this._loadSuggestions();
+      if (item.status === 'Done') {
+        await this._refreshCompletedSuggestions();
+      } else {
+        await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
+      }
 
       this._updateState({ success: 'The suggestion has been removed.' });
     } catch (error) {
@@ -1401,16 +1698,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this.setState((prevState) => ({
       isAddSuggestionExpanded: !prevState.isAddSuggestionExpanded
-    }));
-  };
-
-  private _toggleFilterSection = (): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    this.setState((prevState) => ({
-      isFilterExpanded: !prevState.isFilterExpanded
     }));
   };
 

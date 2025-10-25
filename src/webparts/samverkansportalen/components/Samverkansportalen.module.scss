@@ -304,6 +304,12 @@
   color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
+.completedMeta {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: "[theme:neutralTertiary, default: #a19f9d]";
+}
+
 .voteBadge {
   align-self: flex-start;
   min-width: 5rem;

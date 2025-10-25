@@ -18,6 +18,7 @@ export interface IGraphSuggestionItemFields {
   Voters?: string;
   Category?: SuggestionCategory;
   Subcategory?: string;
+  CompletedDateTime?: string;
 }
 
 export interface IGraphSuggestionItem {
@@ -127,6 +128,7 @@ export class GraphSuggestionsService {
     const existing: IGraphListInfo | undefined = await this._getListByTitle(listTitle);
 
     if (existing) {
+      await this._ensureCompletedDateTimeColumn(existing.id);
       return { id: existing.id, created: false };
     }
 
@@ -146,23 +148,79 @@ export class GraphSuggestionsService {
     return { id: created.id, created: true };
   }
 
-  public async getSuggestionItems(listId: string): Promise<IGraphSuggestionItem[]> {
+  public async getSuggestionItems(
+    listId: string,
+    options: {
+      status?: 'Active' | 'Done';
+      top?: number;
+      skipToken?: string;
+      category?: SuggestionCategory;
+      subcategory?: string;
+      searchQuery?: string;
+      orderBy?: string;
+    } = {}
+  ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    const response: { value?: IGraphListItemApiModel[] } = await client
+    let request = client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('createdBy')
-      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes)')
-      .expand('createdByUser($select=userPrincipalName,mail,email)')
-      .orderby('createdDateTime desc')
-      .top(999)
-      .get();
+      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes,CompletedDateTime)')
+      .expand('createdByUser($select=userPrincipalName,mail,email)');
+
+    const filterParts: string[] = [];
+
+    if (options.status) {
+      const normalizedStatus: string = options.status === 'Done' ? 'Done' : 'Active';
+      filterParts.push(`fields/Status eq '${normalizedStatus}'`);
+    }
+
+    if (options.category) {
+      const escapedCategory: string = this._escapeFilterValue(options.category);
+      filterParts.push(`fields/Category eq '${escapedCategory}'`);
+    }
+
+    if (options.subcategory) {
+      const escapedSubcategory: string = this._escapeFilterValue(options.subcategory);
+      filterParts.push(`fields/Subcategory eq '${escapedSubcategory}'`);
+    }
+
+    if (options.searchQuery) {
+      const trimmedQuery: string = options.searchQuery.trim();
+
+      if (trimmedQuery.length > 0) {
+        const escapedQuery: string = this._escapeFilterValue(trimmedQuery);
+        filterParts.push(
+          `(contains(fields/Title,'${escapedQuery}') or contains(fields/Details,'${escapedQuery}'))`
+        );
+      }
+    }
+
+    if (filterParts.length > 0) {
+      request = request.filter(filterParts.join(' and '));
+    }
+
+    if (options.orderBy) {
+      request = request.orderby(options.orderBy);
+    } else {
+      request = request.orderby('createdDateTime desc');
+    }
+
+    if (options.top && Number.isFinite(options.top)) {
+      request = request.top(options.top);
+    }
+
+    if (options.skipToken) {
+      request = request.query({ $skiptoken: options.skipToken });
+    }
+
+    const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
 
     const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
 
-    return items
+    const mappedItems: IGraphSuggestionItem[] = items
       .map((entry) => {
         const fields: unknown = entry.fields;
 
@@ -196,19 +254,51 @@ export class GraphSuggestionsService {
         } as IGraphSuggestionItem;
       })
       .filter((item): item is IGraphSuggestionItem => !!item);
+
+    const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
+
+    return { items: mappedItems, nextToken };
   }
 
-  public async getVoteItems(listId: string): Promise<IGraphVoteItem[]> {
+  public async getVoteItems(
+    listId: string,
+    options: { suggestionIds?: number[]; username?: string } = {}
+  ): Promise<IGraphVoteItem[]> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    const response: { value?: IGraphListItemApiModel[] } = await client
+    let request = client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('id')
-      .expand('fields($select=SuggestionId,Username,Votes)')
-      .top(999)
-      .get();
+      .expand('fields($select=SuggestionId,Username,Votes)');
+
+    const filterParts: string[] = [];
+
+    if (options.username) {
+      const normalizedUsername: string = options.username.trim().toLowerCase();
+      if (normalizedUsername.length > 0) {
+        const escapedUsername: string = this._escapeFilterValue(normalizedUsername);
+        filterParts.push(`fields/Username eq '${escapedUsername}'`);
+      }
+    }
+
+    const suggestionIds: number[] | undefined = options.suggestionIds?.filter((id) =>
+      typeof id === 'number' && Number.isFinite(id)
+    );
+
+    if (suggestionIds && suggestionIds.length > 0) {
+      const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
+      filterParts.push(`(${suggestionFilters.join(' or ')})`);
+    }
+
+    if (filterParts.length > 0) {
+      request = request.filter(filterParts.join(' and '));
+    }
+
+    request = request.top(999);
+
+    const response: { value?: IGraphListItemApiModel[] } = await request.get();
 
     const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
 
@@ -345,7 +435,9 @@ export class GraphSuggestionsService {
   }
 
   public async deleteVotesForSuggestion(listId: string, suggestionId: number): Promise<void> {
-    const voteItems: IGraphVoteItem[] = await this.getVoteItems(listId);
+    const voteItems: IGraphVoteItem[] = await this.getVoteItems(listId, {
+      suggestionIds: [suggestionId]
+    });
     const matchingVotes: IGraphVoteItem[] = voteItems.filter((entry) => {
       const value: unknown = entry.fields?.SuggestionId;
 
@@ -463,6 +555,13 @@ export class GraphSuggestionsService {
             displayName: 'Status',
             text: {
               allowMultipleLines: false
+            }
+          },
+          {
+            name: 'CompletedDateTime',
+            displayName: 'CompletedDateTime',
+            dateTime: {
+              displayAs: 'default'
             }
           }
         ]
@@ -691,6 +790,63 @@ export class GraphSuggestionsService {
     }
 
     return undefined;
+  }
+
+  private _escapeFilterValue(value: string): string {
+    return value.replace(/'/g, "''");
+  }
+
+  private _extractSkipToken(nextLink: unknown): string | undefined {
+    if (typeof nextLink !== 'string' || nextLink.length === 0) {
+      return undefined;
+    }
+
+    const skipTokenMatch: RegExpMatchArray | null = nextLink.match(/[?&]\$skiptoken=([^&]+)/i);
+
+    if (!skipTokenMatch || skipTokenMatch.length < 2) {
+      return undefined;
+    }
+
+    try {
+      return decodeURIComponent(skipTokenMatch[1]);
+    } catch (error) {
+      console.warn('Failed to decode skip token from nextLink.', error);
+      return undefined;
+    }
+  }
+
+  private async _ensureCompletedDateTimeColumn(listId: string): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const existingColumns: { value?: { name?: unknown }[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/columns`)
+      .version('v1.0')
+      .select('name')
+      .filter("name eq 'CompletedDateTime'")
+      .top(1)
+      .get();
+
+    const hasColumn: boolean = Array.isArray(existingColumns.value)
+      ? existingColumns.value.some(
+          (entry) => !!entry && typeof entry.name === 'string' && entry.name === 'CompletedDateTime'
+        )
+      : false;
+
+    if (hasColumn) {
+      return;
+    }
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/columns`)
+      .version('v1.0')
+      .post({
+        name: 'CompletedDateTime',
+        displayName: 'CompletedDateTime',
+        dateTime: {
+          displayAs: 'default'
+        }
+      });
   }
 }
 
