@@ -17,12 +17,15 @@ import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import * as strings from 'SamverkansportalenWebPartStrings';
 import Samverkansportalen from './components/Samverkansportalen';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, ISamverkansportalenProps } from './components/ISamverkansportalenProps';
-import GraphSuggestionsService from './services/GraphSuggestionsService';
+import GraphSuggestionsService, {
+  DEFAULT_SUBCATEGORY_LIST_TITLE
+} from './services/GraphSuggestionsService';
+
+type ListCreationType = 'suggestions' | 'votes' | 'subcategories';
 
 export interface ISamverkansportalenWebPartProps {
   description: string;
   listTitle?: string;
-  newListTitle?: string;
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
   voteListTitle?: string;
@@ -36,7 +39,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     { key: DEFAULT_SUGGESTIONS_LIST_TITLE, text: DEFAULT_SUGGESTIONS_LIST_TITLE }
   ];
   private _isLoadingLists: boolean = false;
-  private _isCreatingList: boolean = false;
+  private _pendingListCreation?: ListCreationType;
   private _listCreationMessage?: string;
   private _graphService?: GraphSuggestionsService;
 
@@ -206,45 +209,122 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       .sort((a, b) => a.text.localeCompare(b.text));
   }
 
-  private _handleCreateListClick = (): void => {
-    this._createListFromPropertyPane().catch(() => {
-      // Errors are handled inside _createListFromPropertyPane.
+  private _handleEnsureSuggestionsListClick = (): void => {
+    this._ensureListFromPropertyPane('suggestions').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
     });
   };
 
-  private async _createListFromPropertyPane(): Promise<void> {
-    const rawTitle: string = (this.properties.newListTitle ?? '').trim();
+  private _handleEnsureVoteListClick = (): void => {
+    this._ensureListFromPropertyPane('votes').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
+    });
+  };
 
-    if (!rawTitle) {
+  private _handleEnsureSubcategoryListClick = (): void => {
+    this._ensureListFromPropertyPane('subcategories').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
+    });
+  };
+
+  private async _ensureListFromPropertyPane(type: ListCreationType): Promise<void> {
+    const promptLabel: string = this._getListPromptLabel(type);
+    const promptMessage: string = strings.CreateListPromptMessage.replace('{0}', promptLabel);
+    const defaultName: string = this._getDefaultListName(type);
+    const input: string | null = window.prompt(promptMessage, defaultName);
+
+    if (input === null) {
+      return;
+    }
+
+    const trimmed: string = input.trim();
+
+    if (!trimmed) {
       this._setListCreationMessage(strings.CreateListNameMissingMessage);
       return;
     }
 
-    this._isCreatingList = true;
-    this._setListCreationMessage(strings.CreateListProgressMessage);
+    this._pendingListCreation = type;
+    this._setListCreationMessage(this._getListProgressMessage(type));
 
     let message: string | undefined;
 
     try {
-      const result: { created: boolean } = await this._getGraphService().ensureList(rawTitle);
+      const service: GraphSuggestionsService = this._getGraphService();
 
-      this.properties.listTitle = rawTitle;
-      this.properties.newListTitle = '';
-      const defaultVoteListTitle: string = this._getDefaultVoteListTitle(rawTitle);
-      this.properties.voteListTitle = defaultVoteListTitle;
-      this._addListOption(rawTitle);
-      this._addListOption(defaultVoteListTitle);
-      this.render();
+      if (type === 'suggestions') {
+        const result: { created: boolean } = await service.ensureList(trimmed);
+        this.properties.listTitle = trimmed;
+        this._addListOption(trimmed);
 
-      message = result.created
-        ? strings.CreateListSuccessMessage.replace('{0}', rawTitle)
-        : strings.CreateListAlreadyExistsMessage;
+        if (result.created) {
+          const defaultVoteListTitle: string = this._getDefaultVoteListTitle(trimmed);
+          this.properties.voteListTitle = defaultVoteListTitle;
+          this._addListOption(defaultVoteListTitle);
+        }
+
+        this.render();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
+      } else if (type === 'votes') {
+        const result: { created: boolean } = await service.ensureVoteList(trimmed);
+        this.properties.voteListTitle = trimmed;
+        this._addListOption(trimmed);
+        this.render();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
+      } else {
+        const result: { created: boolean } = await service.ensureSubcategoryList(trimmed);
+        this.properties.subcategoryListTitle = trimmed;
+        this._addListOption(trimmed);
+        this.render();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
+      }
+
+      this.context.propertyPane.refresh();
     } catch (error) {
-      console.error('Failed to create the SharePoint list from the property pane.', error);
+      console.error('Failed to create or update the SharePoint list from the property pane.', error);
       message = strings.CreateListErrorMessage;
     } finally {
-      this._isCreatingList = false;
+      this._pendingListCreation = undefined;
       this._setListCreationMessage(message);
+    }
+  }
+
+  private _getListPromptLabel(type: ListCreationType): string {
+    switch (type) {
+      case 'votes':
+        return strings.CreateListPromptVotesLabel;
+      case 'subcategories':
+        return strings.CreateListPromptSubcategoryLabel;
+      default:
+        return strings.CreateListPromptSuggestionsLabel;
+    }
+  }
+
+  private _getDefaultListName(type: ListCreationType): string {
+    switch (type) {
+      case 'votes':
+        return this._selectedVoteListTitle;
+      case 'subcategories':
+        return this._selectedSubcategoryListTitle ?? DEFAULT_SUBCATEGORY_LIST_TITLE;
+      default:
+        return this._selectedListTitle;
+    }
+  }
+
+  private _getListProgressMessage(type: ListCreationType): string {
+    switch (type) {
+      case 'votes':
+        return strings.CreateVotesListProgressMessage;
+      case 'subcategories':
+        return strings.CreateSubcategoryListProgressMessage;
+      default:
+        return strings.CreateSuggestionsListProgressMessage;
     }
   }
 
@@ -256,10 +336,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private async _extendConfiguredLists(): Promise<void> {
     const listTitle: string = this._selectedListTitle;
     const voteListTitle: string = this._selectedVoteListTitle;
+    const subcategoryListTitle: string | undefined = this._selectedSubcategoryListTitle;
 
     try {
       await this._getGraphService().ensureList(listTitle);
       await this._getGraphService().ensureVoteList(voteListTitle);
+      if (subcategoryListTitle) {
+        await this._getGraphService().ensureSubcategoryList(subcategoryListTitle);
+      }
     } catch (error) {
       console.error('Failed to ensure the configured suggestions list.', error);
     }
@@ -309,6 +393,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return this._graphService;
   }
 
+  private get _isListCreationInProgress(): boolean {
+    return typeof this._pendingListCreation !== 'undefined';
+  }
+
   protected get dataVersion(): Version {
     return Version.parse('1.0');
   }
@@ -330,11 +418,23 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   selectedKey: this._selectedListTitle,
                   disabled: this._isLoadingLists && this._listOptions.length === 0
                 }),
+                PropertyPaneButton('createSuggestionsListButton', {
+                  text: strings.CreateSuggestionsListButtonLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleEnsureSuggestionsListClick,
+                  disabled: this._isListCreationInProgress
+                }),
                 PropertyPaneDropdown('voteListTitle', {
                   label: strings.VoteListFieldLabel,
                   options: this._listOptions,
                   selectedKey: this._selectedVoteListTitle,
                   disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneButton('createVoteListButton', {
+                  text: strings.CreateVotesListButtonLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleEnsureVoteListClick,
+                  disabled: this._isListCreationInProgress
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
                   label: strings.SubcategoryListFieldLabel,
@@ -345,14 +445,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   selectedKey: this._selectedSubcategoryListTitle ?? '',
                   disabled: this._isLoadingLists && this._listOptions.length === 0
                 }),
-                PropertyPaneTextField('newListTitle', {
-                  label: strings.NewListNameFieldLabel
-                }),
-                PropertyPaneButton('createListButton', {
-                  text: strings.CreateListButtonLabel,
+                PropertyPaneButton('createSubcategoryListButton', {
+                  text: strings.CreateSubcategoryListButtonLabel,
                   buttonType: PropertyPaneButtonType.Primary,
-                  onClick: this._handleCreateListClick,
-                  disabled: this._isCreatingList
+                  onClick: this._handleEnsureSubcategoryListClick,
+                  disabled: this._isListCreationInProgress
                 }),
                 PropertyPaneLabel('createListStatus', {
                   text: this._listCreationMessage ?? ''

@@ -6,6 +6,7 @@ export interface IGraphListInfo {
 }
 
 export const SUGGESTION_CATEGORIES = ['Change request', 'Webbinar', 'Article'] as const;
+export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories';
 
 export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
 
@@ -190,6 +191,23 @@ const VOTE_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
   }
 ];
 
+const SUBCATEGORY_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
+  {
+    name: 'Category',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'Category',
+      displayName: 'Category',
+      indexed: true,
+      choice: {
+        allowTextEntry: false,
+        allowMultipleSelections: false,
+        choices: [...SUGGESTION_CATEGORIES]
+      }
+    })
+  }
+];
+
 export class GraphSuggestionsService {
   private readonly _hostname: string;
   private readonly _sitePath?: string;
@@ -254,7 +272,11 @@ export class GraphSuggestionsService {
       return { id: existing.id, created: false };
     }
 
-    const created: IGraphListInfo = await this._createListWithColumns(listTitle);
+    const created: IGraphListInfo = await this._createListWithColumns(
+      listTitle,
+      'Stores user suggestions and votes from the Samverkansportalen web part.',
+      SUGGESTION_COLUMN_DEFINITIONS
+    );
     await this._ensureColumns(created.id, SUGGESTION_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
@@ -268,8 +290,31 @@ export class GraphSuggestionsService {
       return { id: existing.id, created: false };
     }
 
-    const created: IGraphListInfo = await this._createVoteList(normalizedTitle);
+    const created: IGraphListInfo = await this._createListWithColumns(
+      normalizedTitle,
+      'Stores suggestion votes for the Samverkansportalen web part.',
+      VOTE_COLUMN_DEFINITIONS
+    );
     await this._ensureColumns(created.id, VOTE_COLUMN_DEFINITIONS);
+    return { id: created.id, created: true };
+  }
+
+  public async ensureSubcategoryList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const normalizedTitle: string =
+      listTitle.trim().length > 0 ? listTitle.trim() : DEFAULT_SUBCATEGORY_LIST_TITLE;
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(normalizedTitle);
+
+    if (existing) {
+      await this._ensureColumns(existing.id, SUBCATEGORY_COLUMN_DEFINITIONS);
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createListWithColumns(
+      normalizedTitle,
+      'Defines suggestion subcategories for the Samverkansportalen web part.',
+      SUBCATEGORY_COLUMN_DEFINITIONS
+    );
+    await this._ensureColumns(created.id, SUBCATEGORY_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
 
@@ -631,7 +676,11 @@ export class GraphSuggestionsService {
     };
   }
 
-  private async _createListWithColumns(listTitle: string): Promise<IGraphListInfo> {
+  private async _createListWithColumns(
+    listTitle: string,
+    description: string,
+    definitions: IListColumnDefinition[]
+  ): Promise<IGraphListInfo> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
@@ -640,43 +689,15 @@ export class GraphSuggestionsService {
       .version('v1.0')
       .post({
         displayName: listTitle,
-        description: 'Stores user suggestions and votes from the Samverkansportalen web part.',
+        description,
         list: {
           template: 'genericList'
         },
-        columns: [
-          ...SUGGESTION_COLUMN_DEFINITIONS.map((definition) => definition.createPayload())
-        ]
+        columns: definitions.map((definition) => definition.createPayload())
       });
 
     if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
-      throw new Error('Failed to create the suggestions list.');
-    }
-
-    return {
-      id: response.id,
-      displayName: response.displayName
-    };
-  }
-
-  private async _createVoteList(listTitle: string): Promise<IGraphListInfo> {
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
-
-    const response: IGraphListApiModel = await client
-      .api(`/sites/${siteId}/lists`)
-      .version('v1.0')
-      .post({
-        displayName: listTitle,
-        description: 'Stores suggestion votes for the Samverkansportalen web part.',
-        list: {
-          template: 'genericList'
-        },
-        columns: VOTE_COLUMN_DEFINITIONS.map((definition) => definition.createPayload())
-      });
-
-    if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
-      throw new Error('Failed to create the votes list.');
+      throw new Error('Failed to create the list.');
     }
 
     return {

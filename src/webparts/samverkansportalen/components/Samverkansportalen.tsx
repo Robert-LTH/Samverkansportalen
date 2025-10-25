@@ -53,6 +53,8 @@ interface ISamverkansportalenState {
   activeSuggestions: IPaginatedSuggestionsState;
   completedSuggestions: IPaginatedSuggestionsState;
   isLoading: boolean;
+  isActiveSuggestionsLoading: boolean;
+  isCompletedSuggestionsLoading: boolean;
   newTitle: string;
   newDescription: string;
   newCategory: SuggestionCategory;
@@ -124,6 +126,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
       completedSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
       isLoading: false,
+      isActiveSuggestionsLoading: false,
+      isCompletedSuggestionsLoading: false,
       newTitle: '',
       newDescription: '',
       newCategory: DEFAULT_SUGGESTION_CATEGORY,
@@ -166,6 +170,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       activeSuggestions,
       completedSuggestions,
       isLoading,
+      isActiveSuggestionsLoading,
+      isCompletedSuggestionsLoading,
       availableVotes,
       newTitle,
       newDescription,
@@ -311,7 +317,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     label="Search"
                     value={activeFilter.searchQuery}
                     onChange={this._onActiveSearchChange}
-                    disabled={isLoading}
+                    disabled={isLoading || isActiveSuggestionsLoading}
                     placeholder="Search by title or details"
                     className={styles.filterSearch}
                   />
@@ -320,7 +326,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     options={FILTER_CATEGORY_OPTIONS}
                     selectedKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
                     onChange={this._onActiveFilterCategoryChange}
-                    disabled={isLoading}
+                    disabled={isLoading || isActiveSuggestionsLoading}
                     className={styles.filterDropdown}
                   />
                   <Dropdown
@@ -328,11 +334,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     options={activeFilterSubcategoryOptions}
                     selectedKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
                     onChange={this._onActiveFilterSubcategoryChange}
-                    disabled={isLoading || activeFilterSubcategoryOptions.length <= 1}
+                    disabled={
+                      isLoading ||
+                      isActiveSuggestionsLoading ||
+                      activeFilterSubcategoryOptions.length <= 1
+                    }
                     className={styles.filterDropdown}
                   />
                 </div>
-                {isLoading ? (
+                {isLoading || isActiveSuggestionsLoading ? (
                   <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
                 ) : (
                   <>
@@ -375,7 +385,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     label="Search"
                     value={completedFilter.searchQuery}
                     onChange={this._onCompletedSearchChange}
-                    disabled={isLoading}
+                    disabled={isLoading || isCompletedSuggestionsLoading}
                     placeholder="Search by title or details"
                     className={styles.filterSearch}
                   />
@@ -384,7 +394,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     options={FILTER_CATEGORY_OPTIONS}
                     selectedKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
                     onChange={this._onCompletedFilterCategoryChange}
-                    disabled={isLoading}
+                    disabled={isLoading || isCompletedSuggestionsLoading}
                     className={styles.filterDropdown}
                   />
                   <Dropdown
@@ -392,11 +402,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     options={completedFilterSubcategoryOptions}
                     selectedKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
                     onChange={this._onCompletedFilterSubcategoryChange}
-                    disabled={isLoading || completedFilterSubcategoryOptions.length <= 1}
+                    disabled={
+                      isLoading ||
+                      isCompletedSuggestionsLoading ||
+                      completedFilterSubcategoryOptions.length <= 1
+                    }
                     className={styles.filterDropdown}
                   />
                 </div>
-                {isLoading ? (
+                {isLoading || isCompletedSuggestionsLoading ? (
                   <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
                 ) : (
                   <>
@@ -466,7 +480,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const tokens: (string | undefined)[] = [...activeSuggestions.previousTokens];
     const previousToken: string | undefined = tokens.pop();
 
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isActiveSuggestionsLoading: true, error: undefined, success: undefined });
 
     try {
       await this._fetchActiveSuggestions({
@@ -478,7 +492,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       this._handleError('We could not load the previous page of active suggestions.', error);
     } finally {
-      this._updateState({ isLoading: false });
+      this._updateState({ isActiveSuggestionsLoading: false });
     }
   };
 
@@ -494,7 +508,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       activeSuggestions.currentToken
     ];
 
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isActiveSuggestionsLoading: true, error: undefined, success: undefined });
 
     try {
       await this._fetchActiveSuggestions({
@@ -506,7 +520,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       this._handleError('We could not load more active suggestions. Please try again.', error);
     } finally {
-      this._updateState({ isLoading: false });
+      this._updateState({ isActiveSuggestionsLoading: false });
     }
   };
 
@@ -520,7 +534,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const tokens: (string | undefined)[] = [...completedSuggestions.previousTokens];
     const previousToken: string | undefined = tokens.pop();
 
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isCompletedSuggestionsLoading: true, error: undefined, success: undefined });
 
     try {
       await this._fetchCompletedSuggestions({
@@ -532,7 +546,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       this._handleError('We could not load the previous page of completed suggestions.', error);
     } finally {
-      this._updateState({ isLoading: false });
+      this._updateState({ isCompletedSuggestionsLoading: false });
     }
   };
 
@@ -548,7 +562,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       completedSuggestions.currentToken
     ];
 
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isCompletedSuggestionsLoading: true, error: undefined, success: undefined });
 
     try {
       await this._fetchCompletedSuggestions({
@@ -560,7 +574,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       this._handleError('We could not load more completed suggestions. Please try again.', error);
     } finally {
-      this._updateState({ isLoading: false });
+      this._updateState({ isCompletedSuggestionsLoading: false });
     }
   };
 
@@ -925,21 +939,33 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _loadSuggestions(): Promise<void> {
-    await Promise.all([
-      this._fetchActiveSuggestions({
-        page: 1,
-        previousTokens: [],
-        skipToken: undefined,
-        filter: this.state.activeFilter
-      }),
-      this._fetchCompletedSuggestions({
-        page: 1,
-        previousTokens: [],
-        skipToken: undefined,
-        filter: this.state.completedFilter
-      }),
-      this._loadAvailableVotes()
-    ]);
+    this._updateState({
+      isActiveSuggestionsLoading: true,
+      isCompletedSuggestionsLoading: true
+    });
+
+    try {
+      await Promise.all([
+        this._fetchActiveSuggestions({
+          page: 1,
+          previousTokens: [],
+          skipToken: undefined,
+          filter: this.state.activeFilter
+        }),
+        this._fetchCompletedSuggestions({
+          page: 1,
+          previousTokens: [],
+          skipToken: undefined,
+          filter: this.state.completedFilter
+        }),
+        this._loadAvailableVotes()
+      ]);
+    } finally {
+      this._updateState({
+        isActiveSuggestionsLoading: false,
+        isCompletedSuggestionsLoading: false
+      });
+    }
   }
 
   private async _loadSubcategories(): Promise<void> {
@@ -1029,7 +1055,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         nextToken,
         previousTokens: options.previousTokens
       },
-      activeFilter: filter
+      activeFilter: filter,
+      isActiveSuggestionsLoading: false
     });
   }
 
@@ -1063,30 +1090,43 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         nextToken,
         previousTokens: options.previousTokens
       },
-      completedFilter: filter
+      completedFilter: filter,
+      isCompletedSuggestionsLoading: false
     });
   }
 
   private async _refreshActiveSuggestions(): Promise<void> {
     const { activeSuggestions, activeFilter } = this.state;
 
-    await this._fetchActiveSuggestions({
-      page: activeSuggestions.page,
-      previousTokens: activeSuggestions.previousTokens,
-      skipToken: activeSuggestions.currentToken,
-      filter: activeFilter
-    });
+    this._updateState({ isActiveSuggestionsLoading: true });
+
+    try {
+      await this._fetchActiveSuggestions({
+        page: activeSuggestions.page,
+        previousTokens: activeSuggestions.previousTokens,
+        skipToken: activeSuggestions.currentToken,
+        filter: activeFilter
+      });
+    } finally {
+      this._updateState({ isActiveSuggestionsLoading: false });
+    }
   }
 
   private async _refreshCompletedSuggestions(): Promise<void> {
     const { completedSuggestions, completedFilter } = this.state;
 
-    await this._fetchCompletedSuggestions({
-      page: completedSuggestions.page,
-      previousTokens: completedSuggestions.previousTokens,
-      skipToken: completedSuggestions.currentToken,
-      filter: completedFilter
-    });
+    this._updateState({ isCompletedSuggestionsLoading: true });
+
+    try {
+      await this._fetchCompletedSuggestions({
+        page: completedSuggestions.page,
+        previousTokens: completedSuggestions.previousTokens,
+        skipToken: completedSuggestions.currentToken,
+        filter: completedFilter
+      });
+    } finally {
+      this._updateState({ isCompletedSuggestionsLoading: false });
+    }
   }
 
   private async _getSuggestionsPage(
@@ -1393,41 +1433,39 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   };
 
   private _applyActiveFilter(nextFilter: IFilterState): void {
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isActiveSuggestionsLoading: true, error: undefined, success: undefined });
 
     this._fetchActiveSuggestions({
       page: 1,
       previousTokens: [],
       skipToken: undefined,
       filter: nextFilter
-    }).then(
-      () => {
-        this._updateState({ isLoading: false });
-      },
-      (error) => {
+    })
+      .then(() => {
+        this._updateState({ isActiveSuggestionsLoading: false });
+      })
+      .catch((error) => {
         this._handleError('We could not load the active suggestions. Please try again.', error);
-        this._updateState({ isLoading: false });
-      }
-    );
+        this._updateState({ isActiveSuggestionsLoading: false });
+      });
   }
 
   private _applyCompletedFilter(nextFilter: IFilterState): void {
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState({ isCompletedSuggestionsLoading: true, error: undefined, success: undefined });
 
     this._fetchCompletedSuggestions({
       page: 1,
       previousTokens: [],
       skipToken: undefined,
       filter: nextFilter
-    }).then(
-      () => {
-        this._updateState({ isLoading: false });
-      },
-      (error) => {
+    })
+      .then(() => {
+        this._updateState({ isCompletedSuggestionsLoading: false });
+      })
+      .catch((error) => {
         this._handleError('We could not load the completed suggestions. Please try again.', error);
-        this._updateState({ isLoading: false });
-      }
-    );
+        this._updateState({ isCompletedSuggestionsLoading: false });
+      });
   }
 
   private _addSuggestion = async (): Promise<void> => {
