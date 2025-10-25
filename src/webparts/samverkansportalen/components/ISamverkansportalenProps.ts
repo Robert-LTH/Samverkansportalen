@@ -12,6 +12,7 @@ export interface ISamverkansportalenProps {
   isCurrentUserAdmin: boolean;
   graphService: GraphSuggestionsService;
   listTitle?: string;
+  voteListTitle?: string;
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
 }

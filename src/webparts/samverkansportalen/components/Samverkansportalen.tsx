@@ -150,10 +150,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   public componentDidUpdate(prevProps: ISamverkansportalenProps): void {
     const listChanged: boolean = this._normalizeListTitle(prevProps.listTitle) !== this._listTitle;
+    const voteListChanged: boolean =
+      this._normalizeVoteListTitle(prevProps.voteListTitle, prevProps.listTitle) !== this._voteListTitle;
     const subcategoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
 
-    if (listChanged || subcategoryListChanged) {
+    if (listChanged || voteListChanged || subcategoryListChanged) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
     }
@@ -894,10 +896,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _ensureLists(): Promise<void> {
     const listTitle: string = this._listTitle;
+    const voteListTitle: string = this._voteListTitle;
     const result = await this.props.graphService.ensureList(listTitle);
     this._currentListId = result.id;
 
-    const votesResult = await this.props.graphService.ensureVoteList(listTitle);
+    const votesResult = await this.props.graphService.ensureVoteList(voteListTitle);
     this._currentVotesListId = votesResult.id;
   }
 
@@ -1610,6 +1613,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private get _listTitle(): string {
     return this._normalizeListTitle(this.props.listTitle);
+  }
+
+  private _normalizeVoteListTitle(value?: string, listTitle?: string): string {
+    const trimmed: string = (value ?? '').trim();
+    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.props.listTitle);
+    return trimmed.length > 0 ? trimmed : `${normalizedListTitle}Votes`;
+  }
+
+  private get _voteListTitle(): string {
+    return this._normalizeVoteListTitle(this.props.voteListTitle, this.props.listTitle);
   }
 
   private _normalizeOptionalListTitle(value?: string): string | undefined {

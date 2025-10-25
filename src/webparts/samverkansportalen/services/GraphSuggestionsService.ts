@@ -141,11 +141,50 @@ const SUGGESTION_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
   },
   {
     name: 'CompletedDateTime',
+    shouldBeIndexed: true,
     createPayload: () => ({
       name: 'CompletedDateTime',
       displayName: 'CompletedDateTime',
+      indexed: true,
       dateTime: {
         displayAs: 'default'
+      }
+    })
+  }
+];
+
+const VOTE_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
+  {
+    name: 'SuggestionId',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'SuggestionId',
+      displayName: 'SuggestionId',
+      indexed: true,
+      number: {
+        decimalPlaces: '0'
+      }
+    })
+  },
+  {
+    name: 'Username',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'Username',
+      displayName: 'Username',
+      indexed: true,
+      text: {
+        allowMultipleLines: false
+      }
+    })
+  },
+  {
+    name: 'Votes',
+    createPayload: () => ({
+      name: 'Votes',
+      displayName: 'Votes',
+      number: {
+        decimalPlaces: '0'
       }
     })
   }
@@ -211,24 +250,26 @@ export class GraphSuggestionsService {
     const existing: IGraphListInfo | undefined = await this._getListByTitle(listTitle);
 
     if (existing) {
-      await this._ensureSuggestionColumns(existing.id);
+      await this._ensureColumns(existing.id, SUGGESTION_COLUMN_DEFINITIONS);
       return { id: existing.id, created: false };
     }
 
     const created: IGraphListInfo = await this._createListWithColumns(listTitle);
-    await this._ensureSuggestionColumns(created.id);
+    await this._ensureColumns(created.id, SUGGESTION_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
 
   public async ensureVoteList(listTitle: string): Promise<{ id: string; created: boolean }> {
-    const voteListTitle: string = `${listTitle}Votes`;
-    const existing: IGraphListInfo | undefined = await this._getListByTitle(voteListTitle);
+    const normalizedTitle: string = listTitle.trim().length > 0 ? listTitle.trim() : 'Votes';
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(normalizedTitle);
 
     if (existing) {
+      await this._ensureColumns(existing.id, VOTE_COLUMN_DEFINITIONS);
       return { id: existing.id, created: false };
     }
 
-    const created: IGraphListInfo = await this._createVoteList(voteListTitle);
+    const created: IGraphListInfo = await this._createVoteList(normalizedTitle);
+    await this._ensureColumns(created.id, VOTE_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
 
@@ -631,29 +672,7 @@ export class GraphSuggestionsService {
         list: {
           template: 'genericList'
         },
-        columns: [
-          {
-            name: 'SuggestionId',
-            displayName: 'SuggestionId',
-            number: {
-              decimalPlaces: '0'
-            }
-          },
-          {
-            name: 'Username',
-            displayName: 'Username',
-            text: {
-              allowMultipleLines: false
-            }
-          },
-          {
-            name: 'Votes',
-            displayName: 'Votes',
-            number: {
-              decimalPlaces: '0'
-            }
-          }
-        ]
+        columns: VOTE_COLUMN_DEFINITIONS.map((definition) => definition.createPayload())
       });
 
     if (typeof response.id !== 'string' || typeof response.displayName !== 'string') {
@@ -856,7 +875,7 @@ export class GraphSuggestionsService {
     }
   }
 
-  private async _ensureSuggestionColumns(listId: string): Promise<void> {
+  private async _ensureColumns(listId: string, definitions: IListColumnDefinition[]): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
@@ -886,7 +905,7 @@ export class GraphSuggestionsService {
       }
     }
 
-    for (const definition of SUGGESTION_COLUMN_DEFINITIONS) {
+    for (const definition of definitions) {
       const existing = existingColumns.get(definition.name);
 
       if (!existing) {

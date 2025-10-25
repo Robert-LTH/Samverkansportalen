@@ -25,6 +25,7 @@ export interface ISamverkansportalenWebPartProps {
   newListTitle?: string;
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
+  voteListTitle?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -52,6 +53,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         isCurrentUserAdmin: this._isCurrentUserSiteAdmin,
         graphService: this._getGraphService(),
         listTitle: this._selectedListTitle,
+        voteListTitle: this._selectedVoteListTitle,
         useTableLayout: this.properties.useTableLayout,
         subcategoryListTitle: this._selectedSubcategoryListTitle
       }
@@ -73,6 +75,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   protected onInit(): Promise<void> {
     this.properties.listTitle = this._normalizeListTitle(this.properties.listTitle);
+    this.properties.voteListTitle = this._normalizeVoteListTitle(
+      this.properties.voteListTitle,
+      this.properties.listTitle
+    );
     this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
 
     return this._getEnvironmentMessage().then(message => {
@@ -172,6 +178,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       if (selectedSubcategoryList) {
         ensureOption(selectedSubcategoryList);
       }
+      ensureOption(this._selectedVoteListTitle);
 
       options.sort((a, b) => a.text.localeCompare(b.text));
 
@@ -223,7 +230,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       this.properties.listTitle = rawTitle;
       this.properties.newListTitle = '';
+      const defaultVoteListTitle: string = this._getDefaultVoteListTitle(rawTitle);
+      this.properties.voteListTitle = defaultVoteListTitle;
       this._addListOption(rawTitle);
+      this._addListOption(defaultVoteListTitle);
       this.render();
 
       message = result.created
@@ -245,9 +255,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private async _extendConfiguredLists(): Promise<void> {
     const listTitle: string = this._selectedListTitle;
+    const voteListTitle: string = this._selectedVoteListTitle;
 
     try {
       await this._getGraphService().ensureList(listTitle);
+      await this._getGraphService().ensureVoteList(voteListTitle);
     } catch (error) {
       console.error('Failed to ensure the configured suggestions list.', error);
     }
@@ -260,6 +272,21 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private get _selectedListTitle(): string {
     return this._normalizeListTitle(this.properties.listTitle);
+  }
+
+  private _getDefaultVoteListTitle(listTitle: string): string {
+    const trimmed: string = listTitle.trim();
+    return `${trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE}Votes`;
+  }
+
+  private _normalizeVoteListTitle(value?: string, listTitle?: string): string {
+    const trimmed: string = (value ?? '').trim();
+    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.properties.listTitle);
+    return trimmed.length > 0 ? trimmed : this._getDefaultVoteListTitle(normalizedListTitle);
+  }
+
+  private get _selectedVoteListTitle(): string {
+    return this._normalizeVoteListTitle(this.properties.voteListTitle, this.properties.listTitle);
   }
 
   private _normalizeOptionalListTitle(value?: string): string | undefined {
@@ -301,6 +328,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   label: strings.ListFieldLabel,
                   options: this._listOptions,
                   selectedKey: this._selectedListTitle,
+                  disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneDropdown('voteListTitle', {
+                  label: strings.VoteListFieldLabel,
+                  options: this._listOptions,
+                  selectedKey: this._selectedVoteListTitle,
                   disabled: this._isLoadingLists && this._listOptions.length === 0
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
