@@ -33,6 +33,8 @@ interface ISuggestionItem {
   category: SuggestionCategory;
   subcategory?: string;
   createdByLoginName?: string;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
   completedDateTime?: string;
   voteEntries: IVoteEntry[];
 }
@@ -611,11 +613,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
                   )}
-                  {readOnly && item.completedDateTime && (
-                    <p className={styles.completedMeta}>
-                      Completed {this._formatCompletedDate(item.completedDateTime)}
-                    </p>
-                  )}
+                  {this._renderSuggestionTimestamps(item)}
                 </div>
                 <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
                   <span className={styles.voteNumber}>{item.votes}</span>
@@ -678,11 +676,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
                   )}
-                  {readOnly && item.completedDateTime && (
-                    <p className={styles.completedMeta}>
-                      Completed {this._formatCompletedDate(item.completedDateTime)}
-                    </p>
-                  )}
+                  {this._renderSuggestionTimestamps(item)}
                 </td>
                 <td className={styles.tableCellCategory} data-label="Category">
                   <span className={styles.categoryBadge}>{item.category}</span>
@@ -760,6 +754,37 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
   }
 
+  private _renderSuggestionTimestamps(item: ISuggestionItem): React.ReactNode {
+    const entries: { label: string; value: string }[] = [];
+
+    if (item.createdDateTime) {
+      entries.push({ label: 'Created', value: item.createdDateTime });
+    }
+
+    if (item.lastModifiedDateTime) {
+      entries.push({ label: 'Last modified', value: item.lastModifiedDateTime });
+    }
+
+    if (item.completedDateTime) {
+      entries.push({ label: 'Completed', value: item.completedDateTime });
+    }
+
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    return (
+      <ul className={styles.timestampList}>
+        {entries.map((entry) => (
+          <li key={entry.label} className={styles.timestampItem}>
+            <span className={styles.timestampLabel}>{entry.label}:</span>
+            <span className={styles.timestampValue}>{this._formatDateTime(entry.value)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   private _getInteractionState(
     item: ISuggestionItem,
     readOnly: boolean,
@@ -780,7 +805,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion };
   }
 
-  private _formatCompletedDate(value: string): string {
+  private _formatDateTime(value: string): string {
     try {
       const parsed: Date = new Date(value);
 
@@ -1184,6 +1209,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         const status: 'Active' | 'Done' = fields.Status === 'Done' ? 'Done' : 'Active';
         const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
         const votes: number = status === 'Done' ? Math.max(liveVotes, storedVotes) : liveVotes;
+        const createdDateTime: string | undefined =
+          typeof entry.createdDateTime === 'string' && entry.createdDateTime.trim().length > 0
+            ? entry.createdDateTime.trim()
+            : undefined;
+        const lastModifiedDateTime: string | undefined =
+          typeof entry.lastModifiedDateTime === 'string' && entry.lastModifiedDateTime.trim().length > 0
+            ? entry.lastModifiedDateTime.trim()
+            : undefined;
         const completedDateTime: string | undefined =
           typeof fields.CompletedDateTime === 'string' && fields.CompletedDateTime.trim().length > 0
             ? fields.CompletedDateTime.trim()
@@ -1205,6 +1238,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               : undefined,
           voters: voteEntries.map((vote) => vote.username),
           createdByLoginName: this._normalizeLoginName(entry.createdByUserPrincipalName),
+          createdDateTime,
+          lastModifiedDateTime,
           completedDateTime,
           voteEntries
         } as ISuggestionItem;

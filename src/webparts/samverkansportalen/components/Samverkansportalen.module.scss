@@ -304,10 +304,30 @@
   color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
-.completedMeta {
-  margin: 0.25rem 0 0;
+.timestampList {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   font-size: 0.85rem;
   color: "[theme:neutralTertiary, default: #a19f9d]";
+}
+
+.timestampItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.timestampLabel {
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.timestampValue {
+  color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
 .voteBadge {

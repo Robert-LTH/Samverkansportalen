@@ -25,6 +25,8 @@ export interface IGraphSuggestionItemFields {
 export interface IGraphSuggestionItem {
   fields: IGraphSuggestionItemFields;
   createdByUserPrincipalName?: string;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
 }
 
 export interface IGraphVoteItemFields {
@@ -67,6 +69,8 @@ interface IGraphListItemApiModel {
       mail?: unknown;
     };
   };
+  createdDateTime?: unknown;
+  lastModifiedDateTime?: unknown;
 }
 
 interface IGraphColumnApiModel {
@@ -336,7 +340,7 @@ export class GraphSuggestionsService {
     let request = client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .select('createdBy')
+      .select('createdBy,createdDateTime,lastModifiedDateTime')
       .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes,CompletedDateTime)')
       .expand('createdByUser($select=userPrincipalName,mail,email)');
 
@@ -418,9 +422,14 @@ export class GraphSuggestionsService {
             }
           }
         }
+        const createdDateTime: unknown = entry.createdDateTime;
+        const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
+
         return {
           fields: fields as IGraphSuggestionItemFields,
-          createdByUserPrincipalName
+          createdByUserPrincipalName,
+          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
+          lastModifiedDateTime: typeof lastModifiedDateTime === 'string' ? lastModifiedDateTime : undefined
         } as IGraphSuggestionItem;
       })
       .filter((item): item is IGraphSuggestionItem => !!item);
@@ -542,6 +551,26 @@ export class GraphSuggestionsService {
         } as IGraphSubcategoryItem;
       })
       .filter((item): item is IGraphSubcategoryItem => !!item);
+  }
+
+  public async addSubcategoryItem(listId: string, fields: IGraphSubcategoryItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .post({ fields });
+  }
+
+  public async deleteSubcategoryItem(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
   }
 
   public async addSuggestion(listId: string, fields: IGraphSuggestionItemFields): Promise<void> {
