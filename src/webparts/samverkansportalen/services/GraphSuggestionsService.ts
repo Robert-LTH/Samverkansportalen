@@ -68,6 +68,89 @@ interface IGraphListItemApiModel {
   };
 }
 
+interface IGraphColumnApiModel {
+  id?: unknown;
+  name?: unknown;
+  indexed?: unknown;
+}
+
+interface IListColumnDefinition {
+  name: string;
+  shouldBeIndexed?: boolean;
+  createPayload: () => Record<string, unknown>;
+}
+
+const SUGGESTION_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
+  {
+    name: 'Details',
+    createPayload: () => ({
+      name: 'Details',
+      displayName: 'Details',
+      text: {
+        allowMultipleLines: true
+      }
+    })
+  },
+  {
+    name: 'Votes',
+    createPayload: () => ({
+      name: 'Votes',
+      displayName: 'Votes',
+      number: {
+        decimalPlaces: '0'
+      }
+    })
+  },
+  {
+    name: 'Category',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'Category',
+      displayName: 'Category',
+      indexed: true,
+      choice: {
+        allowTextEntry: false,
+        allowMultipleSelections: false,
+        choices: [...SUGGESTION_CATEGORIES]
+      }
+    })
+  },
+  {
+    name: 'Subcategory',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'Subcategory',
+      displayName: 'Subcategory',
+      indexed: true,
+      text: {
+        allowMultipleLines: false
+      }
+    })
+  },
+  {
+    name: 'Status',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'Status',
+      displayName: 'Status',
+      indexed: true,
+      text: {
+        allowMultipleLines: false
+      }
+    })
+  },
+  {
+    name: 'CompletedDateTime',
+    createPayload: () => ({
+      name: 'CompletedDateTime',
+      displayName: 'CompletedDateTime',
+      dateTime: {
+        displayAs: 'default'
+      }
+    })
+  }
+];
+
 export class GraphSuggestionsService {
   private readonly _hostname: string;
   private readonly _sitePath?: string;
@@ -128,11 +211,12 @@ export class GraphSuggestionsService {
     const existing: IGraphListInfo | undefined = await this._getListByTitle(listTitle);
 
     if (existing) {
-      await this._ensureCompletedDateTimeColumn(existing.id);
+      await this._ensureSuggestionColumns(existing.id);
       return { id: existing.id, created: false };
     }
 
     const created: IGraphListInfo = await this._createListWithColumns(listTitle);
+    await this._ensureSuggestionColumns(created.id);
     return { id: created.id, created: true };
   }
 
@@ -520,50 +604,7 @@ export class GraphSuggestionsService {
           template: 'genericList'
         },
         columns: [
-          {
-            name: 'Details',
-            displayName: 'Details',
-            text: {
-              allowMultipleLines: true
-            }
-          },
-          {
-            name: 'Votes',
-            displayName: 'Votes',
-            number: {
-              decimalPlaces: '0'
-            }
-          },
-          {
-            name: 'Category',
-            displayName: 'Category',
-            choice: {
-              allowTextEntry: false,
-              allowMultipleSelections: false,
-              choices: [...SUGGESTION_CATEGORIES]
-            }
-          },
-          {
-            name: 'Subcategory',
-            displayName: 'Subcategory',
-            text: {
-              allowMultipleLines: false
-            }
-          },
-          {
-            name: 'Status',
-            displayName: 'Status',
-            text: {
-              allowMultipleLines: false
-            }
-          },
-          {
-            name: 'CompletedDateTime',
-            displayName: 'CompletedDateTime',
-            dateTime: {
-              displayAs: 'default'
-            }
-          }
+          ...SUGGESTION_COLUMN_DEFINITIONS.map((definition) => definition.createPayload())
         ]
       });
 
@@ -815,38 +856,59 @@ export class GraphSuggestionsService {
     }
   }
 
-  private async _ensureCompletedDateTimeColumn(listId: string): Promise<void> {
+  private async _ensureSuggestionColumns(listId: string): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    const existingColumns: { value?: { name?: unknown }[] } = await client
+    const response: { value?: IGraphColumnApiModel[] } = await client
       .api(`/sites/${siteId}/lists/${listId}/columns`)
       .version('v1.0')
-      .select('name')
-      .filter("name eq 'CompletedDateTime'")
-      .top(1)
+      .select('id,name,indexed')
+      .top(999)
       .get();
 
-    const hasColumn: boolean = Array.isArray(existingColumns.value)
-      ? existingColumns.value.some(
-          (entry) => !!entry && typeof entry.name === 'string' && entry.name === 'CompletedDateTime'
-        )
-      : false;
+    const existingColumns: Map<string, IGraphColumnApiModel> = new Map();
 
-    if (hasColumn) {
-      return;
+    if (Array.isArray(response.value)) {
+      for (const rawEntry of response.value) {
+        if (!rawEntry || typeof rawEntry !== 'object') {
+          continue;
+        }
+
+        const entry: IGraphColumnApiModel = rawEntry as IGraphColumnApiModel;
+        const name: unknown = (entry as { name?: unknown }).name;
+
+        if (typeof name !== 'string' || name.length === 0) {
+          continue;
+        }
+
+        existingColumns.set(name, entry);
+      }
     }
 
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/columns`)
-      .version('v1.0')
-      .post({
-        name: 'CompletedDateTime',
-        displayName: 'CompletedDateTime',
-        dateTime: {
-          displayAs: 'default'
+    for (const definition of SUGGESTION_COLUMN_DEFINITIONS) {
+      const existing = existingColumns.get(definition.name);
+
+      if (!existing) {
+        await client
+          .api(`/sites/${siteId}/lists/${listId}/columns`)
+          .version('v1.0')
+          .post(definition.createPayload());
+        continue;
+      }
+
+      if (definition.shouldBeIndexed) {
+        const isIndexed: boolean = existing.indexed === true;
+        const columnId: unknown = existing.id;
+
+        if (!isIndexed && typeof columnId === 'string' && columnId.length > 0) {
+          await client
+            .api(`/sites/${siteId}/lists/${listId}/columns/${columnId}`)
+            .version('v1.0')
+            .patch({ indexed: true });
         }
-      });
+      }
+    }
   }
 }
 

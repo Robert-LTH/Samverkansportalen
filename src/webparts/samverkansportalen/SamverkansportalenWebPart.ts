@@ -137,6 +137,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._listCreationMessage = undefined;
   }
 
+  protected onAfterPropertyPaneChangesApplied(): void {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._extendConfiguredLists();
+  }
+
   private async _ensureListOptions(): Promise<void> {
     if (this._isLoadingLists) {
       return;
@@ -236,6 +241,16 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _setListCreationMessage(message?: string): void {
     this._listCreationMessage = message;
     this.context.propertyPane.refresh();
+  }
+
+  private async _extendConfiguredLists(): Promise<void> {
+    const listTitle: string = this._selectedListTitle;
+
+    try {
+      await this._getGraphService().ensureList(listTitle);
+    } catch (error) {
+      console.error('Failed to ensure the configured suggestions list.', error);
+    }
   }
 
   private _normalizeListTitle(value?: string): string {
