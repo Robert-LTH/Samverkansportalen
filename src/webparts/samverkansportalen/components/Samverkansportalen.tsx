@@ -3,6 +3,7 @@ import {
   PrimaryButton,
   DefaultButton,
   IconButton,
+  ActionButton,
   MessageBar,
   MessageBarType,
   Spinner,
@@ -62,6 +63,10 @@ interface ISamverkansportalenState {
   error?: string;
   success?: string;
   completedPage: number;
+  isAddSuggestionExpanded: boolean;
+  isFilterExpanded: boolean;
+  isActiveSuggestionsExpanded: boolean;
+  isCompletedSuggestionsExpanded: boolean;
 }
 
 const MAX_VOTES_PER_USER: number = 5;
@@ -83,9 +88,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _currentListId?: string;
   private _currentVotesListId?: string;
   private _currentSubcategoryListId?: string;
+  private readonly _sectionIds: {
+    add: { title: string; content: string };
+    filter: { title: string; content: string };
+    active: { title: string; content: string };
+    completed: { title: string; content: string };
+  };
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
+
+    const uniquePrefix: string = `samverkansportalen-${Math.random().toString(36).slice(2, 10)}`;
+    this._sectionIds = {
+      add: { title: `${uniquePrefix}-add-title`, content: `${uniquePrefix}-add-content` },
+      filter: { title: `${uniquePrefix}-filter-title`, content: `${uniquePrefix}-filter-content` },
+      active: { title: `${uniquePrefix}-active-title`, content: `${uniquePrefix}-active-content` },
+      completed: {
+        title: `${uniquePrefix}-completed-title`,
+        content: `${uniquePrefix}-completed-content`
+      }
+    };
 
     this.state = {
       suggestions: [],
@@ -99,7 +121,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       filterCategory: undefined,
       filterSubcategory: undefined,
       searchQuery: '',
-      completedPage: 1
+      completedPage: 1,
+      isAddSuggestionExpanded: true,
+      isFilterExpanded: true,
+      isActiveSuggestionsExpanded: true,
+      isCompletedSuggestionsExpanded: true
     };
   }
 
@@ -138,7 +164,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       filterSubcategory,
       searchQuery,
       error,
-      success
+      success,
+      isAddSuggestionExpanded,
+      isFilterExpanded,
+      isActiveSuggestionsExpanded,
+      isCompletedSuggestionsExpanded
     } = this.state;
 
     const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
@@ -204,109 +234,209 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         )}
 
         <div className={styles.addSuggestion}>
-          <h3 className={styles.sectionTitle}>Add a suggestion</h3>
-          <div className={styles.addForm}>
-            <TextField
-              label="Title"
-              required
-              value={newTitle}
-              onChange={this._onTitleChange}
-              disabled={isLoading}
-            />
-            <TextField
-              label="Details"
-              multiline
-              rows={3}
-              value={newDescription}
-              onChange={this._onDescriptionChange}
-              disabled={isLoading}
-            />
-            <Dropdown
-              label="Category"
-              options={CATEGORY_OPTIONS}
-              selectedKey={newCategory}
-              onChange={this._onCategoryChange}
-              disabled={isLoading}
-            />
-            <Dropdown
-              label="Subcategory"
-              options={subcategoryOptions}
-              selectedKey={newSubcategoryKey}
-              onChange={this._onSubcategoryChange}
-              disabled={isLoading || subcategoryOptions.length === 0}
-              placeholder={subcategoryOptions.length === 0 ? 'No subcategories available' : 'Select a subcategory'}
-            />
-            <PrimaryButton
-              text="Submit suggestion"
-              onClick={this._addSuggestion}
-              disabled={isLoading || newTitle.trim().length === 0}
-            />
-          </div>
-        </div>
-
-        <div className={styles.filters}>
-          <h3 className={styles.sectionTitle}>Filter suggestions</h3>
-          <div className={styles.filterControls}>
-            <TextField
-              label="Search"
-              value={searchQuery}
-              onChange={this._onSearchChange}
-              disabled={isLoading}
-              placeholder="Search by title or details"
-              className={styles.filterSearch}
-            />
-            <Dropdown
-              label="Category"
-              options={FILTER_CATEGORY_OPTIONS}
-              selectedKey={filterCategory ?? ALL_CATEGORY_FILTER_KEY}
-              onChange={this._onFilterCategoryChange}
-              disabled={isLoading}
-              className={styles.filterDropdown}
-            />
-            <Dropdown
-              label="Subcategory"
-              options={filterSubcategoryOptions}
-              selectedKey={filterSubcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-              onChange={this._onFilterSubcategoryChange}
-              disabled={isLoading || filterSubcategoryOptions.length <= 1}
-              className={styles.filterDropdown}
-            />
-          </div>
-        </div>
-
-        <div className={styles.suggestionSection}>
-          <h3 className={styles.sectionTitle}>Active suggestions</h3>
-          {isLoading ? (
-            <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
-          ) : (
-            this._renderSuggestionList(activeSuggestions, false)
+          {this._renderSectionHeader(
+            'Add a suggestion',
+            this._sectionIds.add.title,
+            this._sectionIds.add.content,
+            isAddSuggestionExpanded,
+            this._toggleAddSuggestionSection
           )}
-        </div>
-
-        {completedSuggestions.length > 0 && (
-          <div className={styles.suggestionSection}>
-            <h3 className={styles.sectionTitle}>Completed suggestions</h3>
-            {this._renderSuggestionList(paginatedCompletedSuggestions, true)}
-            {totalCompletedPages > 1 && (
-              <div className={styles.paginationControls}>
-                <DefaultButton
-                  text="Previous"
-                  onClick={() => this._goToPreviousCompletedPage(completedPage)}
-                  disabled={completedPage <= 1}
+          <div
+            id={this._sectionIds.add.content}
+            role="region"
+            aria-labelledby={this._sectionIds.add.title}
+            className={`${styles.sectionContent} ${
+              isAddSuggestionExpanded ? '' : styles.sectionContentCollapsed
+            }`}
+            hidden={!isAddSuggestionExpanded}
+          >
+            {isAddSuggestionExpanded && (
+              <div className={styles.addForm}>
+                <TextField
+                  label="Title"
+                  required
+                  value={newTitle}
+                  onChange={this._onTitleChange}
+                  disabled={isLoading}
                 />
-                <span className={styles.paginationInfo} aria-live="polite">
-                  Page {completedPage} of {totalCompletedPages}
-                </span>
-                <DefaultButton
-                  text="Next"
-                  onClick={() => this._goToNextCompletedPage(completedPage, totalCompletedPages)}
-                  disabled={completedPage >= totalCompletedPages}
+                <TextField
+                  label="Details"
+                  multiline
+                  rows={3}
+                  value={newDescription}
+                  onChange={this._onDescriptionChange}
+                  disabled={isLoading}
+                />
+                <Dropdown
+                  label="Category"
+                  options={CATEGORY_OPTIONS}
+                  selectedKey={newCategory}
+                  onChange={this._onCategoryChange}
+                  disabled={isLoading}
+                />
+                <Dropdown
+                  label="Subcategory"
+                  options={subcategoryOptions}
+                  selectedKey={newSubcategoryKey}
+                  onChange={this._onSubcategoryChange}
+                  disabled={isLoading || subcategoryOptions.length === 0}
+                  placeholder={
+                    subcategoryOptions.length === 0
+                      ? 'No subcategories available'
+                      : 'Select a subcategory'
+                  }
+                />
+                <PrimaryButton
+                  text="Submit suggestion"
+                  onClick={this._addSuggestion}
+                  disabled={isLoading || newTitle.trim().length === 0}
                 />
               </div>
             )}
           </div>
-        )}
+        </div>
+
+        <div className={styles.filters}>
+          {this._renderSectionHeader(
+            'Filter suggestions',
+            this._sectionIds.filter.title,
+            this._sectionIds.filter.content,
+            isFilterExpanded,
+            this._toggleFilterSection
+          )}
+          <div
+            id={this._sectionIds.filter.content}
+            role="region"
+            aria-labelledby={this._sectionIds.filter.title}
+            className={`${styles.sectionContent} ${
+              isFilterExpanded ? '' : styles.sectionContentCollapsed
+            }`}
+            hidden={!isFilterExpanded}
+          >
+            {isFilterExpanded && (
+              <div className={styles.filterControls}>
+                <TextField
+                  label="Search"
+                  value={searchQuery}
+                  onChange={this._onSearchChange}
+                  disabled={isLoading}
+                  placeholder="Search by title or details"
+                  className={styles.filterSearch}
+                />
+                <Dropdown
+                  label="Category"
+                  options={FILTER_CATEGORY_OPTIONS}
+                  selectedKey={filterCategory ?? ALL_CATEGORY_FILTER_KEY}
+                  onChange={this._onFilterCategoryChange}
+                  disabled={isLoading}
+                  className={styles.filterDropdown}
+                />
+                <Dropdown
+                  label="Subcategory"
+                  options={filterSubcategoryOptions}
+                  selectedKey={filterSubcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                  onChange={this._onFilterSubcategoryChange}
+                  disabled={isLoading || filterSubcategoryOptions.length <= 1}
+                  className={styles.filterDropdown}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.suggestionSection}>
+          {this._renderSectionHeader(
+            'Active suggestions',
+            this._sectionIds.active.title,
+            this._sectionIds.active.content,
+            isActiveSuggestionsExpanded,
+            this._toggleActiveSection
+          )}
+          <div
+            id={this._sectionIds.active.content}
+            role="region"
+            aria-labelledby={this._sectionIds.active.title}
+            className={`${styles.sectionContent} ${
+              isActiveSuggestionsExpanded ? '' : styles.sectionContentCollapsed
+            }`}
+            hidden={!isActiveSuggestionsExpanded}
+          >
+            {isActiveSuggestionsExpanded &&
+              (isLoading ? (
+                <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
+              ) : (
+                this._renderSuggestionList(activeSuggestions, false)
+              ))}
+          </div>
+        </div>
+
+        <div className={styles.suggestionSection}>
+          {this._renderSectionHeader(
+            'Completed suggestions',
+            this._sectionIds.completed.title,
+            this._sectionIds.completed.content,
+            isCompletedSuggestionsExpanded,
+            this._toggleCompletedSection
+          )}
+          <div
+            id={this._sectionIds.completed.content}
+            role="region"
+            aria-labelledby={this._sectionIds.completed.title}
+            className={`${styles.sectionContent} ${
+              isCompletedSuggestionsExpanded ? '' : styles.sectionContentCollapsed
+            }`}
+            hidden={!isCompletedSuggestionsExpanded}
+          >
+            {isCompletedSuggestionsExpanded && (
+              <>
+                {this._renderSuggestionList(paginatedCompletedSuggestions, true)}
+                {totalCompletedPages > 1 && (
+                  <div className={styles.paginationControls}>
+                    <DefaultButton
+                      text="Previous"
+                      onClick={() => this._goToPreviousCompletedPage(completedPage)}
+                      disabled={completedPage <= 1}
+                    />
+                    <span className={styles.paginationInfo} aria-live="polite">
+                      Page {completedPage} of {totalCompletedPages}
+                    </span>
+                    <DefaultButton
+                      text="Next"
+                      onClick={() => this._goToNextCompletedPage(completedPage, totalCompletedPages)}
+                      disabled={completedPage >= totalCompletedPages}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </section>
+    );
+  }
+
+  private _renderSectionHeader(
+    title: string,
+    titleId: string,
+    contentId: string,
+    isExpanded: boolean,
+    onToggle: () => void
+  ): React.ReactNode {
+    return (
+      <div className={styles.sectionHeader}>
+        <h3 id={titleId} className={styles.sectionTitle}>
+          {title}
+        </h3>
+        <ActionButton
+          className={styles.sectionToggleButton}
+          iconProps={{ iconName: isExpanded ? 'ChevronUpSmall' : 'ChevronDownSmall' }}
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          aria-controls={contentId}
+        >
+          {isExpanded ? 'Hide' : 'Show'}
+        </ActionButton>
+      </div>
     );
   }
 
@@ -580,7 +710,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     definitions: ISubcategoryDefinition[],
     suggestions: ISuggestionItem[]
   ): string[] {
-    const values: Array<string> = new Array();
+    const values: string[] = [];
     const relevantDefinitions: ISubcategoryDefinition[] = category
       ? this._getSubcategoriesForCategory(category, definitions)
       : definitions;
@@ -766,12 +896,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const suggestionId: number = this._parseNumericId(rawId) ?? -1;
       const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
 
+      const storedVotes: number = this._parseVotes(fields.Votes);
+      const status: 'Active' | 'Done' = fields.Status === 'Done' ? 'Done' : 'Active';
+      const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
+      const votes: number = status === 'Done' ? Math.max(liveVotes, storedVotes) : liveVotes;
+
       return {
         id: suggestionId,
         title: typeof fields.Title === 'string' && fields.Title.trim().length > 0 ? fields.Title : 'Untitled suggestion',
         description: typeof fields.Details === 'string' ? fields.Details : '',
-        votes: voteEntries.reduce((total, vote) => total + vote.votes, 0),
-        status: fields.Status === 'Done' ? 'Done' : 'Active',
+        votes,
+        status,
         category: this._normalizeCategory(fields.Category),
         subcategory:
           typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
@@ -1127,6 +1262,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await this.props.graphService.updateSuggestion(listId, item.id, {
         Status: 'Done',
+        Votes: item.votes
       });
 
       await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
@@ -1257,6 +1393,46 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     console.error(message, error);
     this._updateState({ error: message, success: undefined });
   }
+
+  private _toggleAddSuggestionSection = (): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => ({
+      isAddSuggestionExpanded: !prevState.isAddSuggestionExpanded
+    }));
+  };
+
+  private _toggleFilterSection = (): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => ({
+      isFilterExpanded: !prevState.isFilterExpanded
+    }));
+  };
+
+  private _toggleActiveSection = (): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => ({
+      isActiveSuggestionsExpanded: !prevState.isActiveSuggestionsExpanded
+    }));
+  };
+
+  private _toggleCompletedSection = (): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => ({
+      isCompletedSuggestionsExpanded: !prevState.isCompletedSuggestionsExpanded
+    }));
+  };
 
   private _updateState(state: Partial<ISamverkansportalenState>): void {
     if (!this._isMounted) {
