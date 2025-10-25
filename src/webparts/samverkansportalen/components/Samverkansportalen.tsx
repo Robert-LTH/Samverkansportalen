@@ -523,7 +523,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     definitions: ISubcategoryDefinition[],
     suggestions: ISuggestionItem[]
   ): string[] {
-    const values: Set<string> = new Set();
+    const values: Array<string> = new Array();
     const relevantDefinitions: ISubcategoryDefinition[] = category
       ? this._getSubcategoriesForCategory(category, definitions)
       : definitions;
@@ -531,7 +531,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     relevantDefinitions.forEach((definition) => {
       const trimmed: string = definition.title.trim();
       if (trimmed) {
-        values.add(trimmed);
+        values.push(trimmed);
       }
     });
 
@@ -541,11 +541,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
 
       if (item.subcategory) {
-        values.add(item.subcategory);
+        values.push(item.subcategory);
       }
     });
 
-    return Array.from(values).sort((a, b) => a.localeCompare(b));
+    return Array.from(values).sort((a: string, b: string) => a.localeCompare(b));
   }
 
   private _getValidFilterSubcategory(
@@ -564,7 +564,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       suggestions
     );
 
-    return availableValues.includes(preferredSubcategory) ? preferredSubcategory : undefined;
+    return availableValues.filter( x => x === preferredSubcategory).length > 0 ? preferredSubcategory : undefined;
   }
 
   private _getFilteredSuggestions(
