@@ -739,6 +739,16 @@ export class GraphSuggestionsService {
       .post({ fields });
   }
 
+  public async deleteCommentItem(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
+  }
+
   public async deleteCommentsForSuggestion(listId: string, suggestionId: number): Promise<void> {
     const commentItems: IGraphCommentItem[] = await this.getCommentItems(listId, {
       suggestionIds: [suggestionId]
