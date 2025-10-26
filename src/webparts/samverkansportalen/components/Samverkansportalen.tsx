@@ -611,12 +611,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return (
       <ul className={styles.suggestionList}>
         {items.map((item) => {
-          const { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion } = this._getInteractionState(
-            item,
-            readOnly,
-            normalizedUser,
-            noVotesRemaining
-          );
+          const {
+            hasVoted,
+            disableVote,
+            canAddComment,
+            canMarkSuggestionAsDone,
+            canDeleteSuggestion
+          } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
 
           return (
             <li key={item.id} className={styles.suggestionCard}>
@@ -648,6 +649,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 readOnly,
                 hasVoted,
                 disableVote,
+                canAddComment,
                 canMarkSuggestionAsDone,
                 canDeleteSuggestion,
                 styles.cardActions
@@ -680,12 +682,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </thead>
         <tbody>
           {items.map((item) => {
-            const { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion } = this._getInteractionState(
-              item,
-              readOnly,
-              normalizedUser,
-              noVotesRemaining
-            );
+            const {
+              hasVoted,
+              disableVote,
+              canAddComment,
+              canMarkSuggestionAsDone,
+              canDeleteSuggestion
+            } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
 
             return (
               <tr key={item.id}>
@@ -724,6 +727,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     readOnly,
                     hasVoted,
                     disableVote,
+                    canAddComment,
                     canMarkSuggestionAsDone,
                     canDeleteSuggestion,
                     styles.tableActions
@@ -743,6 +747,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     readOnly: boolean,
     hasVoted: boolean,
     disableVote: boolean,
+    canAddComment: boolean,
     canMarkSuggestionAsDone: boolean,
     canDeleteSuggestion: boolean,
     containerClassName: string
@@ -756,6 +761,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             text={hasVoted ? 'Remove vote' : 'Vote'}
             onClick={() => this._toggleVote(item)}
             disabled={disableVote}
+          />
+        )}
+        {canAddComment && (
+          <DefaultButton
+            text="Add comment"
+            onClick={() => this._addCommentToSuggestion(item)}
+            disabled={this.state.isLoading}
           />
         )}
         {canMarkSuggestionAsDone && (
@@ -850,6 +862,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   ): {
     hasVoted: boolean;
     disableVote: boolean;
+    canAddComment: boolean;
     canMarkSuggestionAsDone: boolean;
     canDeleteSuggestion: boolean;
   } {
@@ -858,8 +871,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
     const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
     const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
+    const canAddComment: boolean = !readOnly && item.status !== 'Done';
 
-    return { hasVoted, disableVote, canMarkSuggestionAsDone, canDeleteSuggestion };
+    return { hasVoted, disableVote, canAddComment, canMarkSuggestionAsDone, canDeleteSuggestion };
   }
 
   private _formatDateTime(value: string): string {
@@ -1900,6 +1914,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const trimmed: string = value.trim();
     return trimmed.length > 0 ? trimmed.toLowerCase() : undefined;
+  }
+
+  private async _addCommentToSuggestion(item: ISuggestionItem): Promise<void> {
+    const commentInput: string | null = window.prompt('Add a comment for this suggestion.', '');
+
+    if (commentInput === null) {
+      return;
+    }
+
+    const commentText: string = commentInput.trim();
+
+    if (commentText.length === 0) {
+      this._handleError('Please enter a comment before submitting.');
+      return;
+    }
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      const commentListId: string = this._getResolvedCommentsListId();
+      const title: string = `Suggestion #${item.id}`;
+
+      await this.props.graphService.addCommentItem(commentListId, {
+        Title: title.length > 255 ? title.slice(0, 255) : title,
+        SuggestionId: item.id,
+        Comment: commentText
+      });
+
+      await this._refreshActiveSuggestions();
+
+      this._updateState({ success: 'Your comment has been added.' });
+    } catch (error) {
+      this._handleError('We could not add your comment. Please try again.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
   }
 
   private async _markSuggestionAsDone(item: ISuggestionItem): Promise<void> {
