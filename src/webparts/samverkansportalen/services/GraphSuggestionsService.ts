@@ -580,7 +580,7 @@ export class GraphSuggestionsService {
           }
         }
 
-        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+        if ((!fields && typeof fields !== 'object') || typeof id !== 'number') {
           return undefined;
         }
 
