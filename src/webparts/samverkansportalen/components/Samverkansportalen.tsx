@@ -15,12 +15,12 @@ import {
 import styles from './Samverkansportalen.module.scss';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
 import {
-  SUGGESTION_CATEGORIES,
   type SuggestionCategory,
   type IGraphSuggestionItem,
   type IGraphSuggestionItemFields,
   type IGraphVoteItem,
-  type IGraphSubcategoryItem
+  type IGraphSubcategoryItem,
+  type IGraphCategoryItem
 } from '../services/GraphSuggestionsService';
 
 interface ISuggestionItem {
@@ -62,6 +62,7 @@ interface ISamverkansportalenState {
   newCategory: SuggestionCategory;
   newSubcategoryKey?: string;
   subcategories: ISubcategoryDefinition[];
+  categories: SuggestionCategory[];
   availableVotes: number;
   activeFilter: IFilterState;
   completedFilter: IFilterState;
@@ -87,16 +88,9 @@ interface IPaginatedSuggestionsState {
 }
 
 const MAX_VOTES_PER_USER: number = 5;
-const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = 'Change request';
-const CATEGORY_OPTIONS: IDropdownOption[] = SUGGESTION_CATEGORIES.map((category) => ({
-  key: category,
-  text: category
-}));
+const FALLBACK_CATEGORIES: SuggestionCategory[] = ['Change request', 'Webbinar', 'Article'];
+const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
-const FILTER_CATEGORY_OPTIONS: IDropdownOption[] = [
-  { key: ALL_CATEGORY_FILTER_KEY, text: 'All categories' },
-  ...CATEGORY_OPTIONS
-];
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
 const SUGGESTIONS_PAGE_SIZE: number = 5;
 
@@ -105,6 +99,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _currentListId?: string;
   private _currentVotesListId?: string;
   private _currentSubcategoryListId?: string;
+  private _currentCategoryListId?: string;
   private readonly _sectionIds: {
     add: { title: string; content: string };
     active: { title: string; content: string };
@@ -135,6 +130,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newCategory: DEFAULT_SUGGESTION_CATEGORY,
       newSubcategoryKey: undefined,
       subcategories: [],
+      categories: [...FALLBACK_CATEGORIES],
       availableVotes: MAX_VOTES_PER_USER,
       activeFilter: { searchQuery: '', category: undefined, subcategory: undefined },
       completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
@@ -160,8 +156,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this._normalizeVoteListTitle(prevProps.voteListTitle, prevProps.listTitle) !== this._voteListTitle;
     const subcategoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
+    const categoryListChanged: boolean =
+      this._normalizeOptionalListTitle(prevProps.categoryListTitle) !== this._categoryListTitle;
 
-    if (listChanged || voteListChanged || subcategoryListChanged) {
+    if (listChanged || voteListChanged || subcategoryListChanged || categoryListChanged) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
     }
@@ -180,6 +178,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newCategory,
       newSubcategoryKey,
       subcategories,
+      categories,
       activeFilter,
       completedFilter,
       error,
@@ -190,6 +189,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } = this.state;
 
     const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
+    const categoryOptions: IDropdownOption[] = this._getCategoryOptions(categories);
+    const filterCategoryOptions: IDropdownOption[] = this._getFilterCategoryOptions(categories);
     const activeFilterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
       activeFilter.category,
       subcategories
@@ -268,10 +269,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 />
                 <Dropdown
                   label="Category"
-                  options={CATEGORY_OPTIONS}
+                  options={categoryOptions}
                   selectedKey={newCategory}
                   onChange={this._onCategoryChange}
-                  disabled={isLoading}
+                  disabled={isLoading || categoryOptions.length === 0}
                 />
                 <Dropdown
                   label="Subcategory"
@@ -325,10 +326,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   />
                   <Dropdown
                     label="Category"
-                    options={FILTER_CATEGORY_OPTIONS}
+                    options={filterCategoryOptions}
                     selectedKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
                     onChange={this._onActiveFilterCategoryChange}
-                    disabled={isLoading || isActiveSuggestionsLoading}
+                    disabled={
+                      isLoading ||
+                      isActiveSuggestionsLoading ||
+                      filterCategoryOptions.length <= 1
+                    }
                     className={styles.filterDropdown}
                   />
                   <Dropdown
@@ -393,10 +398,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   />
                   <Dropdown
                     label="Category"
-                    options={FILTER_CATEGORY_OPTIONS}
+                    options={filterCategoryOptions}
                     selectedKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
                     onChange={this._onCompletedFilterCategoryChange}
-                    disabled={isLoading || isCompletedSuggestionsLoading}
+                    disabled={
+                      isLoading ||
+                      isCompletedSuggestionsLoading ||
+                      filterCategoryOptions.length <= 1
+                    }
                     className={styles.filterDropdown}
                   />
                   <Dropdown
@@ -865,6 +874,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return [{ key: ALL_SUBCATEGORY_FILTER_KEY, text: 'All subcategories' }, ...options];
   }
 
+  private _getCategoryOptions(categories: SuggestionCategory[]): IDropdownOption[] {
+    return categories.map((category) => ({ key: category, text: category }));
+  }
+
+  private _getFilterCategoryOptions(categories: SuggestionCategory[]): IDropdownOption[] {
+    return [{ key: ALL_CATEGORY_FILTER_KEY, text: 'All categories' }, ...this._getCategoryOptions(categories)];
+  }
+
   private _getSubcategoriesForCategory(
     category: SuggestionCategory | undefined,
     definitions: ISubcategoryDefinition[] = this.state.subcategories
@@ -916,15 +933,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._currentListId = undefined;
     this._currentVotesListId = undefined;
     this._currentSubcategoryListId = undefined;
+    this._currentCategoryListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
       await this._ensureLists();
+      await this._ensureCategoryList();
       await this._ensureSubcategoryList();
       await this._loadSuggestions();
     } catch (error) {
       const message: string =
-        error instanceof Error && error.message.includes('subcategory list')
+        error instanceof Error && error.message.includes('category list')
+          ? 'We could not load the configured category list. Please verify the configuration or reset it to use the default categories.'
+          : error instanceof Error && error.message.includes('subcategory list')
           ? 'We could not load the configured subcategory list. Please verify the configuration or remove it.'
           : 'We could not load the suggestions list. Please refresh the page or contact your administrator.';
       this._handleError(message, error);
@@ -941,6 +962,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const votesResult = await this.props.graphService.ensureVoteList(voteListTitle);
     this._currentVotesListId = votesResult.id;
+  }
+
+  private async _ensureCategoryList(): Promise<void> {
+    this._currentCategoryListId = undefined;
+
+    const listTitle: string | undefined = this._categoryListTitle;
+
+    if (!listTitle) {
+      this._applyCategories(FALLBACK_CATEGORIES);
+      return;
+    }
+
+    const listInfo = await this.props.graphService.getListByTitle(listTitle);
+
+    if (!listInfo) {
+      throw new Error(`Failed to load the category list "${listTitle}".`);
+    }
+
+    this._currentCategoryListId = listInfo.id;
+    await this._loadCategories();
   }
 
   private async _ensureSubcategoryList(): Promise<void> {
@@ -991,6 +1032,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         isCompletedSuggestionsLoading: false
       });
     }
+  }
+
+  private async _loadCategories(): Promise<void> {
+    const listId: string = this._getResolvedCategoryListId();
+    const itemsFromGraph: IGraphCategoryItem[] = await this.props.graphService.getCategoryItems(listId);
+
+    const definitions: SuggestionCategory[] = itemsFromGraph
+      .map((item) => {
+        const rawTitle: unknown = item.fields?.Title;
+        if (typeof rawTitle !== 'string') {
+          return undefined;
+        }
+
+        const trimmed: string = rawTitle.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+      })
+      .filter((value): value is SuggestionCategory => !!value);
+
+    this._applyCategories(definitions);
   }
 
   private async _loadSubcategories(): Promise<void> {
@@ -1048,6 +1108,104 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       activeFilter: { ...this.state.activeFilter, subcategory: nextActiveFilterSubcategory },
       completedFilter: { ...this.state.completedFilter, subcategory: nextCompletedFilterSubcategory }
     });
+  }
+
+  private _applyCategories(definitions: SuggestionCategory[]): void {
+    const normalized: SuggestionCategory[] = this._normalizeCategoryList(definitions);
+    const categories: SuggestionCategory[] = normalized.length > 0 ? normalized : [...FALLBACK_CATEGORIES];
+
+    const nextCategory: SuggestionCategory =
+      this._findCategoryMatch(this.state.newCategory, categories) ?? this._getDefaultCategory(categories);
+
+    const nextActiveFilterCategory: SuggestionCategory | undefined = this._findCategoryMatch(
+      this.state.activeFilter.category,
+      categories
+    );
+    const nextCompletedFilterCategory: SuggestionCategory | undefined = this._findCategoryMatch(
+      this.state.completedFilter.category,
+      categories
+    );
+
+    const nextSubcategoryKey: string | undefined = this._getValidSubcategoryKeyForCategory(
+      nextCategory,
+      this.state.newSubcategoryKey,
+      this.state.subcategories
+    );
+
+    const nextActiveFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      nextActiveFilterCategory,
+      this.state.activeFilter.subcategory,
+      this.state.subcategories
+    );
+
+    const nextCompletedFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      nextCompletedFilterCategory,
+      this.state.completedFilter.subcategory,
+      this.state.subcategories
+    );
+
+    this._updateState({
+      categories,
+      newCategory: nextCategory,
+      newSubcategoryKey: nextSubcategoryKey,
+      activeFilter: {
+        ...this.state.activeFilter,
+        category: nextActiveFilterCategory,
+        subcategory: nextActiveFilterSubcategory
+      },
+      completedFilter: {
+        ...this.state.completedFilter,
+        category: nextCompletedFilterCategory,
+        subcategory: nextCompletedFilterSubcategory
+      }
+    });
+  }
+
+  private _normalizeCategoryList(values: SuggestionCategory[]): SuggestionCategory[] {
+    const seen: Set<string> = new Set();
+    const normalized: SuggestionCategory[] = [];
+
+    values.forEach((value) => {
+      const trimmed: string = value.trim();
+
+      if (!trimmed) {
+        return;
+      }
+
+      const key: string = trimmed.toLowerCase();
+
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      normalized.push(trimmed);
+    });
+
+    normalized.sort((a, b) => a.localeCompare(b));
+    return normalized;
+  }
+
+  private _findCategoryMatch(
+    value: SuggestionCategory | undefined,
+    categories: SuggestionCategory[]
+  ): SuggestionCategory | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const normalized: string = value.trim();
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    const lower: string = normalized.toLowerCase();
+    return categories.find((category) => category.toLowerCase() === lower);
+  }
+
+  private _getDefaultCategory(categories: SuggestionCategory[]): SuggestionCategory {
+    return categories[0] ?? DEFAULT_SUGGESTION_CATEGORY;
   }
 
   private async _fetchActiveSuggestions(options: {
@@ -1328,11 +1486,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const key: string = String(option.key);
     const normalized: string = key.trim();
-    const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
-      (category) => category.toLowerCase() === normalized.toLowerCase()
-    );
-
-    const nextCategory: SuggestionCategory = match ?? DEFAULT_SUGGESTION_CATEGORY;
+    const nextCategory: SuggestionCategory =
+      this._findCategoryMatch(normalized, this.state.categories) ?? this._getDefaultCategory(this.state.categories);
     const nextSubcategoryKey: string | undefined = this._getValidSubcategoryKeyForCategory(
       nextCategory,
       this.state.newSubcategoryKey
@@ -1373,9 +1528,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     let nextCategory: SuggestionCategory | undefined;
 
     if (key !== ALL_CATEGORY_FILTER_KEY) {
-      nextCategory = SUGGESTION_CATEGORIES.find(
-        (category) => category.toLowerCase() === key.toLowerCase()
-      );
+      nextCategory =
+        this._findCategoryMatch(key, this.state.categories) ?? (key.length > 0 ? key : undefined);
     }
 
     const nextFilter: IFilterState = {
@@ -1424,9 +1578,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     let nextCategory: SuggestionCategory | undefined;
 
     if (key !== ALL_CATEGORY_FILTER_KEY) {
-      nextCategory = SUGGESTION_CATEGORIES.find(
-        (category) => category.toLowerCase() === key.toLowerCase()
-      );
+      nextCategory =
+        this._findCategoryMatch(key, this.state.categories) ?? (key.length > 0 ? key : undefined);
     }
 
     const nextFilter: IFilterState = {
@@ -1531,12 +1684,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await this.props.graphService.addSuggestion(listId, payload);
 
+      const defaultCategory: SuggestionCategory = this._getDefaultCategory(this.state.categories);
+
       this._updateState({
         newTitle: '',
         newDescription: '',
-        newCategory: DEFAULT_SUGGESTION_CATEGORY,
+        newCategory: defaultCategory,
         newSubcategoryKey: this._getValidSubcategoryKeyForCategory(
-          DEFAULT_SUGGESTION_CATEGORY,
+          defaultCategory,
           undefined
         )
       });
@@ -1711,6 +1866,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._normalizeOptionalListTitle(this.props.subcategoryListTitle);
   }
 
+  private get _categoryListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.props.categoryListTitle);
+  }
+
   private _parseVotes(value: unknown): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
@@ -1727,25 +1886,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _tryNormalizeCategory(value: unknown): SuggestionCategory | undefined {
-    if (typeof value === 'string') {
-      const normalized: string = value.trim();
-
-      if (normalized.length > 0) {
-        const match: SuggestionCategory | undefined = SUGGESTION_CATEGORIES.find(
-          (category) => category.toLowerCase() === normalized.toLowerCase()
-        );
-
-        if (match) {
-          return match;
-        }
-      }
+    if (typeof value !== 'string') {
+      return undefined;
     }
 
-    return undefined;
+    const normalized: string = value.trim();
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    return this._findCategoryMatch(normalized, this.state.categories) ?? normalized;
   }
 
   private _normalizeCategory(value: unknown): SuggestionCategory {
-    return this._tryNormalizeCategory(value) ?? DEFAULT_SUGGESTION_CATEGORY;
+    return this._tryNormalizeCategory(value) ?? this._getDefaultCategory(this.state.categories);
   }
 
   private _getResolvedListId(): string {
@@ -1762,6 +1917,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return this._currentVotesListId;
+  }
+
+  private _getResolvedCategoryListId(): string {
+    if (!this._currentCategoryListId) {
+      throw new Error('The category list has not been initialized yet.');
+    }
+
+    return this._currentCategoryListId;
   }
 
   private _getResolvedSubcategoryListId(): string {

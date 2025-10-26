@@ -15,4 +15,5 @@ export interface ISamverkansportalenProps {
   voteListTitle?: string;
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
+  categoryListTitle?: string;
 }
