@@ -5,6 +5,7 @@ import {
   DefaultButton,
   IconButton,
   ActionButton,
+  Icon,
   MessageBar,
   MessageBarType,
   Spinner,
@@ -81,6 +82,7 @@ interface ISamverkansportalenState {
   isAddSuggestionExpanded: boolean;
   isActiveSuggestionsExpanded: boolean;
   isCompletedSuggestionsExpanded: boolean;
+  collapsedCommentIds: number[];
 }
 
 interface IFilterState {
@@ -116,6 +118,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     active: { title: string; content: string };
     completed: { title: string; content: string };
   };
+  private readonly _commentSectionPrefix: string;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -129,6 +132,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         content: `${uniquePrefix}-completed-content`
       }
     };
+    this._commentSectionPrefix = `${uniquePrefix}-comment`;
 
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
@@ -147,7 +151,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
-      isCompletedSuggestionsExpanded: true
+      isCompletedSuggestionsExpanded: true,
+      collapsedCommentIds: []
     };
   }
 
@@ -618,6 +623,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             canMarkSuggestionAsDone,
             canDeleteSuggestion
           } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
+          const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
 
           return (
             <li key={item.id} className={styles.suggestionCard}>
@@ -643,17 +649,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
               </div>
             </div>
-              {this._renderComments(item.comments)}
               {this._renderActionButtons(
                 item,
                 readOnly,
                 hasVoted,
                 disableVote,
-                canAddComment,
                 canMarkSuggestionAsDone,
                 canDeleteSuggestion,
                 styles.cardActions
               )}
+              {this._renderCommentSection(item, {
+                canAddComment,
+                canDeleteComments
+              })}
             </li>
           );
         })}
@@ -689,6 +697,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               canMarkSuggestionAsDone,
               canDeleteSuggestion
             } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
+            const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
 
             return (
               <tr key={item.id}>
@@ -703,7 +712,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     <p className={styles.suggestionDescription}>{item.description}</p>
                   )}
                   {this._renderSuggestionTimestamps(item)}
-                  {this._renderComments(item.comments)}
+                  {this._renderCommentSection(item, {
+                    canAddComment,
+                    canDeleteComments
+                  })}
                 </td>
                 <td className={styles.tableCellCategory} data-label="Category">
                   <span className={styles.categoryBadge}>{item.category}</span>
@@ -727,7 +739,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     readOnly,
                     hasVoted,
                     disableVote,
-                    canAddComment,
                     canMarkSuggestionAsDone,
                     canDeleteSuggestion,
                     styles.tableActions
@@ -747,7 +758,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     readOnly: boolean,
     hasVoted: boolean,
     disableVote: boolean,
-    canAddComment: boolean,
     canMarkSuggestionAsDone: boolean,
     canDeleteSuggestion: boolean,
     containerClassName: string
@@ -761,13 +771,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             text={hasVoted ? 'Remove vote' : 'Vote'}
             onClick={() => this._toggleVote(item)}
             disabled={disableVote}
-          />
-        )}
-        {canAddComment && (
-          <DefaultButton
-            text="Add comment"
-            onClick={() => this._addCommentToSuggestion(item)}
-            disabled={this.state.isLoading}
           />
         )}
         {canMarkSuggestionAsDone && (
@@ -821,35 +824,94 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
   }
 
-  private _renderComments(comments: ISuggestionComment[]): React.ReactNode {
-    if (comments.length === 0) {
-      return undefined;
-    }
+  private _renderCommentSection(
+    item: ISuggestionItem,
+    options: { canAddComment: boolean; canDeleteComments: boolean }
+  ): React.ReactNode {
+    const { canAddComment, canDeleteComments } = options;
+    const commentCount: number = item.comments.length;
+    const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
+    const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
+    const toggleId: string = `${regionId}-toggle`;
 
     return (
       <div className={styles.commentSection}>
-        <h5 className={styles.commentHeading}>Comments</h5>
-        <ul className={styles.commentList}>
-          {comments.map((comment) => {
-            const hasMeta: boolean = !!comment.author || !!comment.createdDateTime;
+        <div className={styles.commentHeader}>
+          <button
+            type="button"
+            id={toggleId}
+            className={styles.commentToggleButton}
+            onClick={() => this._toggleCommentsSection(item.id)}
+            aria-expanded={isExpanded}
+            aria-controls={regionId}
+          >
+            <Icon
+              iconName={isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'}
+              className={styles.commentToggleIcon}
+            />
+            <span className={styles.commentHeading}>Comments</span>
+            <span className={styles.commentCount}>({commentCount})</span>
+          </button>
+          {canAddComment && (
+            <DefaultButton
+              className={styles.commentAddButton}
+              text="Add comment"
+              onClick={() => this._addCommentToSuggestion(item)}
+              disabled={this.state.isLoading}
+            />
+          )}
+        </div>
+        <div
+          id={regionId}
+          role="region"
+          aria-labelledby={toggleId}
+          className={`${styles.commentContent} ${isExpanded ? '' : styles.commentContentCollapsed}`}
+          hidden={!isExpanded}
+        >
+          {isExpanded && (
+            commentCount === 0 ? (
+              <p className={styles.commentEmpty}>No comments yet.</p>
+            ) : (
+              <ul className={styles.commentList}>
+                {item.comments.map((comment) => {
+                  const hasMeta: boolean = !!comment.author || !!comment.createdDateTime;
 
-            return (
-              <li key={comment.id} className={styles.commentItem}>
-                {hasMeta && (
-                  <div className={styles.commentMeta}>
-                    {comment.author && <span className={styles.commentAuthor}>{comment.author}</span>}
-                    {comment.createdDateTime && (
-                      <span className={styles.commentTimestamp}>
-                        {this._formatDateTime(comment.createdDateTime)}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <p className={styles.commentText}>{comment.text}</p>
-              </li>
-            );
-          })}
-        </ul>
+                  return (
+                    <li key={comment.id} className={styles.commentItem}>
+                      {(hasMeta || canDeleteComments) && (
+                        <div className={styles.commentItemTopRow}>
+                          {hasMeta ? (
+                            <div className={styles.commentMeta}>
+                              {comment.author && <span className={styles.commentAuthor}>{comment.author}</span>}
+                              {comment.createdDateTime && (
+                                <span className={styles.commentTimestamp}>
+                                  {this._formatDateTime(comment.createdDateTime)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className={styles.commentMetaPlaceholder} aria-hidden={true} />
+                          )}
+                          {canDeleteComments && (
+                            <IconButton
+                              className={styles.commentDeleteButton}
+                              iconProps={{ iconName: 'Delete' }}
+                              title="Delete comment"
+                              ariaLabel="Delete comment"
+                              onClick={() => this._deleteCommentFromSuggestion(item, comment)}
+                              disabled={this.state.isLoading}
+                            />
+                          )}
+                        </div>
+                      )}
+                      <p className={styles.commentText}>{comment.text}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          )}
+        </div>
       </div>
     );
   }
@@ -1916,6 +1978,41 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return trimmed.length > 0 ? trimmed.toLowerCase() : undefined;
   }
 
+  private _isCommentSectionExpanded(suggestionId: number): boolean {
+    return this.state.collapsedCommentIds.indexOf(suggestionId) === -1;
+  }
+
+  private _toggleCommentsSection = (suggestionId: number): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => {
+      const isCollapsed: boolean = prevState.collapsedCommentIds.indexOf(suggestionId) !== -1;
+      const nextCollapsed: number[] = isCollapsed
+        ? prevState.collapsedCommentIds.filter((id) => id !== suggestionId)
+        : [...prevState.collapsedCommentIds, suggestionId];
+
+      return { collapsedCommentIds: nextCollapsed };
+    });
+  };
+
+  private _ensureCommentSectionExpanded(suggestionId: number): void {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => {
+      if (prevState.collapsedCommentIds.indexOf(suggestionId) === -1) {
+        return null;
+      }
+
+      return {
+        collapsedCommentIds: prevState.collapsedCommentIds.filter((id) => id !== suggestionId)
+      };
+    });
+  }
+
   private async _addCommentToSuggestion(item: ISuggestionItem): Promise<void> {
     const commentInput: string | null = window.prompt('Add a comment for this suggestion.', '');
 
@@ -1943,10 +2040,47 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
 
       await this._refreshActiveSuggestions();
+      this._ensureCommentSectionExpanded(item.id);
 
       this._updateState({ success: 'Your comment has been added.' });
     } catch (error) {
       this._handleError('We could not add your comment. Please try again.', error);
+    } finally {
+      this._updateState({ isLoading: false });
+    }
+  }
+
+  private async _deleteCommentFromSuggestion(
+    item: ISuggestionItem,
+    comment: ISuggestionComment
+  ): Promise<void> {
+    if (!this.props.isCurrentUserAdmin) {
+      this._handleError('Only administrators can delete comments.');
+      return;
+    }
+
+    const confirmed: boolean = window.confirm('Are you sure you want to delete this comment?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    this._updateState({ isLoading: true, error: undefined, success: undefined });
+
+    try {
+      const commentListId: string = this._getResolvedCommentsListId();
+      await this.props.graphService.deleteCommentItem(commentListId, comment.id);
+
+      if (item.status === 'Done') {
+        await this._refreshCompletedSuggestions();
+      } else {
+        await this._refreshActiveSuggestions();
+      }
+
+      this._ensureCommentSectionExpanded(item.id);
+      this._updateState({ success: 'The comment has been removed.' });
+    } catch (error) {
+      this._handleError('We could not remove the comment. Please try again.', error);
     } finally {
       this._updateState({ isLoading: false });
     }

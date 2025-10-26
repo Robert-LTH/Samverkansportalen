@@ -336,11 +336,70 @@
   padding-top: 0.75rem;
 }
 
-.commentHeading {
-  margin: 0 0 0.5rem;
+.commentHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.commentToggleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.25rem;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
   font-size: 0.95rem;
   font-weight: 600;
   color: "[theme:neutralPrimary, default: #323130]";
+  border-radius: 0.25rem;
+}
+
+.commentToggleButton:hover {
+  color: "[theme:themePrimary, default: #0078d4]";
+}
+
+.commentToggleButton:focus-visible {
+  outline: 2px solid "[theme:themePrimary, default: #0078d4]";
+  outline-offset: 2px;
+}
+
+.commentToggleIcon {
+  font-size: 0.95rem;
+}
+
+.commentHeading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.commentCount {
+  font-weight: 400;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.commentAddButton {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.commentContent {
+  margin-top: 0.25rem;
+}
+
+.commentContentCollapsed {
+  display: none;
+}
+
+.commentEmpty {
+  margin: 0;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  font-style: italic;
 }
 
 .commentList {
@@ -358,13 +417,25 @@
   padding: 0.6rem 0.75rem;
 }
 
+.commentItemTopRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
 .commentMeta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   font-size: 0.8rem;
   color: "[theme:neutralSecondary, default: #605e5c]";
-  margin-bottom: 0.35rem;
+}
+
+.commentMetaPlaceholder {
+  flex: 1 1 auto;
+  visibility: hidden;
 }
 
 .commentAuthor {
@@ -374,6 +445,16 @@
 
 .commentTimestamp {
   color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.commentDeleteButton {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  padding: 0.1rem;
+}
+
+.commentDeleteButton:hover,
+.commentDeleteButton:focus {
+  color: "[theme:themePrimary, default: #0078d4]";
 }
 
 .commentText {
