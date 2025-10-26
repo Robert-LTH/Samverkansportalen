@@ -5,10 +5,10 @@ export interface IGraphListInfo {
   displayName: string;
 }
 
-export const SUGGESTION_CATEGORIES = ['Change request', 'Webbinar', 'Article'] as const;
+export const DEFAULT_CATEGORY_LIST_TITLE: string = 'Suggestion categories';
 export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories';
 
-export type SuggestionCategory = (typeof SUGGESTION_CATEGORIES)[number];
+export type SuggestionCategory = string;
 
 export interface IGraphSuggestionItemFields {
   id?: number | string;
@@ -48,6 +48,15 @@ export interface IGraphSubcategoryItemFields {
 export interface IGraphSubcategoryItem {
   id: number;
   fields: IGraphSubcategoryItemFields;
+}
+
+export interface IGraphCategoryItemFields {
+  Title?: string;
+}
+
+export interface IGraphCategoryItem {
+  id: number;
+  fields: IGraphCategoryItemFields;
 }
 
 interface IGraphListApiModel {
@@ -113,10 +122,8 @@ const SUGGESTION_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
       name: 'Category',
       displayName: 'Category',
       indexed: true,
-      choice: {
-        allowTextEntry: false,
-        allowMultipleSelections: false,
-        choices: [...SUGGESTION_CATEGORIES]
+      text: {
+        allowMultipleLines: false
       }
     })
   },
@@ -203,10 +210,8 @@ const SUBCATEGORY_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
       name: 'Category',
       displayName: 'Category',
       indexed: true,
-      choice: {
-        allowTextEntry: false,
-        allowMultipleSelections: false,
-        choices: [...SUGGESTION_CATEGORIES]
+      text: {
+        allowMultipleLines: false
       }
     })
   }
@@ -319,6 +324,23 @@ export class GraphSuggestionsService {
       SUBCATEGORY_COLUMN_DEFINITIONS
     );
     await this._ensureColumns(created.id, SUBCATEGORY_COLUMN_DEFINITIONS);
+    return { id: created.id, created: true };
+  }
+
+  public async ensureCategoryList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const normalizedTitle: string =
+      listTitle.trim().length > 0 ? listTitle.trim() : DEFAULT_CATEGORY_LIST_TITLE;
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(normalizedTitle);
+
+    if (existing) {
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createListWithColumns(
+      normalizedTitle,
+      'Defines suggestion categories for the Samverkansportalen web part.',
+      []
+    );
     return { id: created.id, created: true };
   }
 
@@ -510,6 +532,49 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphVoteItem => !!item);
   }
 
+  public async getCategoryItems(listId: string): Promise<IGraphCategoryItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListItemApiModel[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id')
+      .expand('fields($select=Title)')
+      .top(999)
+      .get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => {
+        const rawId: unknown = entry.id;
+        const fields: unknown = entry.fields;
+
+        let id: number | undefined;
+
+        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+          id = rawId;
+        } else if (typeof rawId === 'string') {
+          const parsed: number = parseInt(rawId, 10);
+
+          if (Number.isFinite(parsed)) {
+            id = parsed;
+          }
+        }
+
+        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+          return undefined;
+        }
+
+        return {
+          id,
+          fields: fields as IGraphCategoryItemFields
+        } as IGraphCategoryItem;
+      })
+      .filter((item): item is IGraphCategoryItem => !!item);
+  }
+
   public async getSubcategoryItems(listId: string): Promise<IGraphSubcategoryItem[]> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
@@ -553,6 +618,16 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphSubcategoryItem => !!item);
   }
 
+  public async addCategoryItem(listId: string, fields: IGraphCategoryItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .post({ fields });
+  }
+
   public async addSubcategoryItem(listId: string, fields: IGraphSubcategoryItemFields): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
@@ -564,6 +639,16 @@ export class GraphSuggestionsService {
   }
 
   public async deleteSubcategoryItem(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
+  }
+
+  public async deleteCategoryItem(listId: string, itemId: number): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 

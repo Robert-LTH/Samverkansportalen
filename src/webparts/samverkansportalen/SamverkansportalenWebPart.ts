@@ -18,19 +18,23 @@ import * as strings from 'SamverkansportalenWebPartStrings';
 import Samverkansportalen from './components/Samverkansportalen';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, ISamverkansportalenProps } from './components/ISamverkansportalenProps';
 import GraphSuggestionsService, {
+  DEFAULT_CATEGORY_LIST_TITLE,
   DEFAULT_SUBCATEGORY_LIST_TITLE
 } from './services/GraphSuggestionsService';
 
-type ListCreationType = 'suggestions' | 'votes' | 'subcategories';
+type ListCreationType = 'suggestions' | 'votes' | 'subcategories' | 'categories';
 
 export interface ISamverkansportalenWebPartProps {
   description: string;
   listTitle?: string;
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
+  categoryListTitle?: string;
   voteListTitle?: string;
   selectedSubcategoryKey?: string;
   newSubcategoryTitle?: string;
+  selectedCategoryKey?: string;
+  newCategoryTitle?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -50,6 +54,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _subcategoryStatusMessage?: string;
   private _resolvedSubcategoryListId?: string;
   private _resolvedSubcategoryListTitle?: string;
+  private _categoryOptions: IPropertyPaneDropdownOption[] = [];
+  private _isLoadingCategories: boolean = false;
+  private _isMutatingCategories: boolean = false;
+  private _categoryStatusMessage?: string;
+  private _resolvedCategoryListId?: string;
+  private _resolvedCategoryListTitle?: string;
 
   public render(): void {
     const element: React.ReactElement<ISamverkansportalenProps> = React.createElement(
@@ -66,7 +76,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         listTitle: this._selectedListTitle,
         voteListTitle: this._selectedVoteListTitle,
         useTableLayout: this.properties.useTableLayout,
-        subcategoryListTitle: this._selectedSubcategoryListTitle
+        subcategoryListTitle: this._selectedSubcategoryListTitle,
+        categoryListTitle: this._selectedCategoryListTitle
       }
     );
 
@@ -91,6 +102,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       this.properties.listTitle
     );
     this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
+    this.properties.categoryListTitle = this._normalizeOptionalListTitle(this.properties.categoryListTitle);
 
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
@@ -153,6 +165,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._ensureListOptions();
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this._ensureSubcategoryOptions();
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._ensureCategoryOptions();
     this._listCreationMessage = undefined;
   }
 
@@ -177,6 +191,16 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       this._ensureSubcategoryOptions().catch(() => {
         // Errors are handled inside _ensureSubcategoryOptions.
+      });
+    } else if (propertyPath === 'categoryListTitle') {
+      this.properties.categoryListTitle = this._normalizeOptionalListTitle(
+        typeof newValue === 'string' ? newValue : undefined
+      );
+      this._resetCategoryState();
+      this.context.propertyPane.refresh();
+
+      this._ensureCategoryOptions().catch(() => {
+        // Errors are handled inside _ensureCategoryOptions.
       });
     }
   }
@@ -211,6 +235,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       if (selectedSubcategoryList) {
         ensureOption(selectedSubcategoryList);
       }
+      const selectedCategoryList: string | undefined = this._selectedCategoryListTitle;
+      if (selectedCategoryList) {
+        ensureOption(selectedCategoryList);
+      }
+      ensureOption(DEFAULT_CATEGORY_LIST_TITLE);
       ensureOption(this._selectedVoteListTitle);
 
       options.sort((a, b) => a.text.localeCompare(b.text));
@@ -246,6 +275,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._resolvedSubcategoryListTitle = undefined;
     this.properties.selectedSubcategoryKey = undefined;
     this.properties.newSubcategoryTitle = undefined;
+  }
+
+  private _resetCategoryState(): void {
+    this._categoryOptions = [];
+    this._categoryStatusMessage = undefined;
+    this._resolvedCategoryListId = undefined;
+    this._resolvedCategoryListTitle = undefined;
+    this.properties.selectedCategoryKey = undefined;
+    this.properties.newCategoryTitle = undefined;
   }
 
   private async _ensureSubcategoryOptions(): Promise<void> {
@@ -318,6 +356,68 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
   }
 
+  private async _ensureCategoryOptions(): Promise<void> {
+    if (this._isLoadingCategories) {
+      return;
+    }
+
+    const listTitle: string | undefined = this._selectedCategoryListTitle;
+
+    if (!listTitle) {
+      this._resetCategoryState();
+      this._categoryStatusMessage = strings.CategoryListNotConfiguredMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    this._isLoadingCategories = true;
+
+    try {
+      const listId: string | undefined = await this._getResolvedCategoryListId(listTitle);
+
+      if (!listId) {
+        this._categoryOptions = [];
+        if (!this._categoryStatusMessage) {
+          this._categoryStatusMessage = strings.CategoryLoadErrorMessage;
+        }
+        return;
+      }
+
+      const items = await this._getGraphService().getCategoryItems(listId);
+
+      this._categoryOptions = items
+        .map((item) => {
+          const title: string = (item.fields?.Title ?? '').toString().trim();
+
+          if (!title) {
+            return undefined;
+          }
+
+          return {
+            key: item.id.toString(),
+            text: title
+          } as IPropertyPaneDropdownOption;
+        })
+        .filter((option): option is IPropertyPaneDropdownOption => !!option)
+        .sort((a, b) => a.text.localeCompare(b.text));
+
+      const availableKeys: Set<string> = new Set(this._categoryOptions.map((option) => option.key.toString()));
+
+      const currentKey: string | undefined = this.properties.selectedCategoryKey;
+
+      if (!currentKey || !availableKeys.has(currentKey)) {
+        const firstKey: string | undefined = this._categoryOptions[0]?.key?.toString();
+        this.properties.selectedCategoryKey = firstKey;
+      }
+    } catch (error) {
+      console.error('Failed to load categories for the property pane.', error);
+      this._categoryStatusMessage = strings.CategoryLoadErrorMessage;
+    } finally {
+      this._isLoadingCategories = false;
+      this.context.propertyPane.refresh();
+    }
+  }
+
   private async _getResolvedSubcategoryListId(listTitle?: string): Promise<string | undefined> {
     const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
       listTitle ?? this._selectedSubcategoryListTitle
@@ -345,6 +445,36 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     this._resolvedSubcategoryListId = listInfo.id;
     this._resolvedSubcategoryListTitle = normalizedTitle;
+    return listInfo.id;
+  }
+
+  private async _getResolvedCategoryListId(listTitle?: string): Promise<string | undefined> {
+    const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
+      listTitle ?? this._selectedCategoryListTitle
+    );
+
+    if (!normalizedTitle) {
+      return undefined;
+    }
+
+    if (
+      this._resolvedCategoryListId &&
+      this._resolvedCategoryListTitle &&
+      this._resolvedCategoryListTitle.localeCompare(normalizedTitle, undefined, {
+        sensitivity: 'accent'
+      }) === 0
+    ) {
+      return this._resolvedCategoryListId;
+    }
+
+    const listInfo = await this._getGraphService().getListByTitle(normalizedTitle);
+
+    if (!listInfo) {
+      return undefined;
+    }
+
+    this._resolvedCategoryListId = listInfo.id;
+    this._resolvedCategoryListTitle = normalizedTitle;
     return listInfo.id;
   }
 
@@ -383,6 +513,41 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
   }
 
+  private async _mutateCategoryList(
+    executor: (listId: string) => Promise<string | undefined>
+  ): Promise<void> {
+    if (this._isMutatingCategories) {
+      return;
+    }
+
+    const listId: string | undefined = await this._getResolvedCategoryListId();
+
+    if (!listId) {
+      this._categoryStatusMessage = strings.CategoryListNotConfiguredMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    this._isMutatingCategories = true;
+    this._categoryStatusMessage = strings.CategoryUpdateProgressMessage;
+    this.context.propertyPane.refresh();
+
+    try {
+      const message: string | undefined = await executor(listId);
+      const previousStatus: string | undefined = this._categoryStatusMessage;
+      await this._ensureCategoryOptions();
+      if (this._categoryStatusMessage === previousStatus) {
+        this._categoryStatusMessage = message ?? strings.CategoryUpdateSuccessMessage;
+      }
+    } catch (error) {
+      console.error('Failed to update the category list.', error);
+      this._categoryStatusMessage = strings.CategoryUpdateErrorMessage;
+    } finally {
+      this._isMutatingCategories = false;
+      this.context.propertyPane.refresh();
+    }
+  }
+
   private _handleAddSubcategoryClick = (): void => {
     this._addSubcategory().catch(() => {
       // Errors are handled in _mutateSubcategoryList.
@@ -402,6 +567,57 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       await this._getGraphService().addSubcategoryItem(listId, { Title: title });
       this.properties.newSubcategoryTitle = undefined;
       return strings.SubcategoryAddedMessage.replace('{0}', title);
+    });
+  }
+
+  private _handleAddCategoryClick = (): void => {
+    this._addCategory().catch(() => {
+      // Errors are handled in _mutateCategoryList.
+    });
+  };
+
+  private async _addCategory(): Promise<void> {
+    const title: string = (this.properties.newCategoryTitle ?? '').trim();
+
+    if (!title) {
+      this._categoryStatusMessage = strings.CategoryNameMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    await this._mutateCategoryList(async (listId) => {
+      await this._getGraphService().addCategoryItem(listId, { Title: title });
+      this.properties.newCategoryTitle = undefined;
+      return strings.CategoryAddedMessage.replace('{0}', title);
+    });
+  }
+
+  private _handleRemoveCategoryClick = (): void => {
+    this._removeCategory().catch(() => {
+      // Errors are handled in _mutateCategoryList.
+    });
+  };
+
+  private async _removeCategory(): Promise<void> {
+    const key: string | undefined = this.properties.selectedCategoryKey;
+
+    if (!key) {
+      this._categoryStatusMessage = strings.CategorySelectionMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    const parsedId: number = parseInt(key, 10);
+
+    if (!Number.isFinite(parsedId)) {
+      this._categoryStatusMessage = strings.CategorySelectionMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    await this._mutateCategoryList(async (listId) => {
+      await this._getGraphService().deleteCategoryItem(listId, parsedId);
+      return strings.CategoryRemovedMessage;
     });
   }
 
@@ -448,6 +664,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private _handleEnsureSubcategoryListClick = (): void => {
     this._ensureListFromPropertyPane('subcategories').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
+    });
+  };
+
+  private _handleEnsureCategoryListClick = (): void => {
+    this._ensureListFromPropertyPane('categories').catch(() => {
       // Errors are handled inside _ensureListFromPropertyPane.
     });
   };
@@ -500,7 +722,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         message = result.created
           ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
           : strings.CreateListAlreadyExistsMessage;
-      } else {
+      } else if (type === 'subcategories') {
         const result: { id: string; created: boolean } = await service.ensureSubcategoryList(trimmed);
         this.properties.subcategoryListTitle = trimmed;
         this._addListOption(trimmed);
@@ -509,6 +731,18 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         this._resolvedSubcategoryListTitle = trimmed;
         this.render();
         await this._ensureSubcategoryOptions();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
+      } else {
+        const result: { id: string; created: boolean } = await service.ensureCategoryList(trimmed);
+        this.properties.categoryListTitle = trimmed;
+        this._addListOption(trimmed);
+        this._resetCategoryState();
+        this._resolvedCategoryListId = result.id;
+        this._resolvedCategoryListTitle = trimmed;
+        this.render();
+        await this._ensureCategoryOptions();
         message = result.created
           ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
           : strings.CreateListAlreadyExistsMessage;
@@ -530,6 +764,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return strings.CreateListPromptVotesLabel;
       case 'subcategories':
         return strings.CreateListPromptSubcategoryLabel;
+      case 'categories':
+        return strings.CreateListPromptCategoryLabel;
       default:
         return strings.CreateListPromptSuggestionsLabel;
     }
@@ -541,6 +777,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return this._selectedVoteListTitle;
       case 'subcategories':
         return this._selectedSubcategoryListTitle ?? DEFAULT_SUBCATEGORY_LIST_TITLE;
+      case 'categories':
+        return this._selectedCategoryListTitle ?? DEFAULT_CATEGORY_LIST_TITLE;
       default:
         return this._selectedListTitle;
     }
@@ -552,6 +790,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return strings.CreateVotesListProgressMessage;
       case 'subcategories':
         return strings.CreateSubcategoryListProgressMessage;
+      case 'categories':
+        return strings.CreateCategoryListProgressMessage;
       default:
         return strings.CreateSuggestionsListProgressMessage;
     }
@@ -566,12 +806,16 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     const listTitle: string = this._selectedListTitle;
     const voteListTitle: string = this._selectedVoteListTitle;
     const subcategoryListTitle: string | undefined = this._selectedSubcategoryListTitle;
+    const categoryListTitle: string | undefined = this._selectedCategoryListTitle;
 
     try {
       await this._getGraphService().ensureList(listTitle);
       await this._getGraphService().ensureVoteList(voteListTitle);
       if (subcategoryListTitle) {
         await this._getGraphService().ensureSubcategoryList(subcategoryListTitle);
+      }
+      if (categoryListTitle) {
+        await this._getGraphService().ensureCategoryList(categoryListTitle);
       }
     } catch (error) {
       console.error('Failed to ensure the configured suggestions list.', error);
@@ -611,6 +855,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
   }
 
+  private get _selectedCategoryListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.properties.categoryListTitle);
+  }
+
   private _getGraphService(): GraphSuggestionsService {
     if (!this._graphService) {
       this._graphService = new GraphSuggestionsService(
@@ -632,16 +880,27 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {
     const hasSubcategoryListConfigured: boolean = !!this._selectedSubcategoryListTitle;
+    const hasCategoryListConfigured: boolean = !!this._selectedCategoryListTitle;
     const subcategoryDropdownOptions: IPropertyPaneDropdownOption[] =
       this._subcategoryOptions.length > 0
         ? this._subcategoryOptions
         : [{ key: '__no_subcategories__', text: strings.SubcategoryDropdownPlaceholder }];
+    const categoryDropdownOptions: IPropertyPaneDropdownOption[] =
+      this._categoryOptions.length > 0
+        ? this._categoryOptions
+        : [{ key: '__no_categories__', text: strings.CategoryDropdownPlaceholder }];
     const canMutateSubcategories: boolean =
       hasSubcategoryListConfigured && !this._isLoadingSubcategories && !this._isMutatingSubcategories;
+    const canMutateCategories: boolean =
+      hasCategoryListConfigured && !this._isLoadingCategories && !this._isMutatingCategories;
     const canAddSubcategory: boolean =
       canMutateSubcategories && (this.properties.newSubcategoryTitle ?? '').trim().length > 0;
     const canRemoveSubcategory: boolean =
       canMutateSubcategories && !!this.properties.selectedSubcategoryKey && this._subcategoryOptions.length > 0;
+    const canAddCategory: boolean =
+      canMutateCategories && (this.properties.newCategoryTitle ?? '').trim().length > 0;
+    const canRemoveCategory: boolean =
+      canMutateCategories && !!this.properties.selectedCategoryKey && this._categoryOptions.length > 0;
 
     return {
       pages: [
@@ -676,6 +935,55 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   buttonType: PropertyPaneButtonType.Primary,
                   onClick: this._handleEnsureVoteListClick,
                   disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneDropdown('categoryListTitle', {
+                  label: strings.CategoryListFieldLabel,
+                  options: [
+                    { key: '', text: strings.CategoryListDefaultOptionLabel },
+                    ...this._listOptions
+                  ],
+                  selectedKey: this._selectedCategoryListTitle ?? '',
+                  disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneButton('createCategoryListButton', {
+                  text: strings.CreateCategoryListButtonLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleEnsureCategoryListClick,
+                  disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneLabel('categoryManagementLabel', {
+                  text: strings.CategoryManagementLabel
+                }),
+                PropertyPaneDropdown('selectedCategoryKey', {
+                  label: strings.CategoryItemsFieldLabel,
+                  options: categoryDropdownOptions,
+                  selectedKey: this._categoryOptions.length > 0
+                    ? this.properties.selectedCategoryKey
+                    : '__no_categories__',
+                  disabled: !canMutateCategories || this._categoryOptions.length === 0
+                }),
+                PropertyPaneTextField('newCategoryTitle', {
+                  label: strings.NewCategoryFieldLabel,
+                  value: this.properties.newCategoryTitle ?? '',
+                  placeholder: strings.NewCategoryFieldPlaceholder,
+                  disabled: !canMutateCategories
+                }),
+                PropertyPaneButton('addCategoryButton', {
+                  text: '+',
+                  ariaLabel: strings.AddCategoryButtonAriaLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleAddCategoryClick,
+                  disabled: !canAddCategory
+                }),
+                PropertyPaneButton('removeCategoryButton', {
+                  text: '-',
+                  ariaLabel: strings.RemoveCategoryButtonAriaLabel,
+                  buttonType: PropertyPaneButtonType.Normal,
+                  onClick: this._handleRemoveCategoryClick,
+                  disabled: !canRemoveCategory
+                }),
+                PropertyPaneLabel('categoryStatus', {
+                  text: this._categoryStatusMessage ?? ''
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
                   label: strings.SubcategoryListFieldLabel,
