@@ -565,29 +565,13 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
-        const fields: unknown = entry.fields;
+        const parsedEntry = this._extractListItemWithFields<IGraphVoteItemFields>(entry);
 
-        let id: number | undefined;
-
-        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-          id = rawId;
-        } else if (typeof rawId === 'string') {
-          const parsed: number = parseInt(rawId, 10);
-
-          if (Number.isFinite(parsed)) {
-            id = parsed;
-          }
-        }
-
-        if ((!fields && typeof fields !== 'object') || typeof id !== 'number') {
+        if (!parsedEntry) {
           return undefined;
         }
 
-        return {
-          id,
-          fields: fields as IGraphVoteItemFields
-        } as IGraphVoteItem;
+        return parsedEntry;
       })
       .filter((item): item is IGraphVoteItem => !!item);
   }
@@ -608,29 +592,13 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
-        const fields: unknown = entry.fields;
+        const parsedEntry = this._extractListItemWithFields<IGraphCategoryItemFields>(entry);
 
-        let id: number | undefined;
-
-        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-          id = rawId;
-        } else if (typeof rawId === 'string') {
-          const parsed: number = parseInt(rawId, 10);
-
-          if (Number.isFinite(parsed)) {
-            id = parsed;
-          }
-        }
-
-        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+        if (!parsedEntry) {
           return undefined;
         }
 
-        return {
-          id,
-          fields: fields as IGraphCategoryItemFields
-        } as IGraphCategoryItem;
+        return parsedEntry;
       })
       .filter((item): item is IGraphCategoryItem => !!item);
   }
@@ -666,24 +634,13 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
-        const fields: unknown = entry.fields;
+        const parsedEntry = this._extractListItemWithFields<IGraphCommentItemFields>(entry);
 
-        let id: number | undefined;
-
-        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-          id = rawId;
-        } else if (typeof rawId === 'string') {
-          const parsed: number = parseInt(rawId, 10);
-
-          if (Number.isFinite(parsed)) {
-            id = parsed;
-          }
-        }
-
-        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+        if (!parsedEntry) {
           return undefined;
         }
+
+        const { id, fields } = parsedEntry;
 
         let createdByUserPrincipalName: string | undefined;
         let createdByUserDisplayName: string | undefined;
@@ -720,7 +677,7 @@ export class GraphSuggestionsService {
 
         return {
           id,
-          fields: fields as IGraphCommentItemFields,
+          fields,
           createdByUserPrincipalName,
           createdByUserDisplayName,
           createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined
@@ -847,29 +804,13 @@ export class GraphSuggestionsService {
 
     return items
       .map((entry) => {
-        const rawId: unknown = entry.id;
-        const fields: unknown = entry.fields;
+        const parsedEntry = this._extractListItemWithFields<IGraphSubcategoryItemFields>(entry);
 
-        let id: number | undefined;
-
-        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-          id = rawId;
-        } else if (typeof rawId === 'string') {
-          const parsed: number = parseInt(rawId, 10);
-
-          if (Number.isFinite(parsed)) {
-            id = parsed;
-          }
-        }
-
-        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+        if (!parsedEntry) {
           return undefined;
         }
 
-        return {
-          id,
-          fields: fields as IGraphSubcategoryItemFields
-        } as IGraphSubcategoryItem;
+        return parsedEntry;
       })
       .filter((item): item is IGraphSubcategoryItem => !!item);
   }
@@ -1319,6 +1260,22 @@ export class GraphSuggestionsService {
         }
       }
     }
+  }
+
+  private _extractListItemWithFields<TFields extends Record<string, unknown>>(
+    entry: IGraphListItemApiModel
+  ): { id: number; fields: TFields } | undefined {
+    const id: number | undefined = this._normalizeIntegerId(entry.id);
+    const fields: unknown = entry.fields;
+
+    if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+      return undefined;
+    }
+
+    return {
+      id,
+      fields: fields as TFields
+    };
   }
 
   private _normalizeIntegerId(value: unknown): number | undefined {
