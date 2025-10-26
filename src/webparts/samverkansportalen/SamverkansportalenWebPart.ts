@@ -16,7 +16,12 @@ import { IReadonlyTheme } from '@microsoft/sp-component-base';
 
 import * as strings from 'SamverkansportalenWebPartStrings';
 import Samverkansportalen from './components/Samverkansportalen';
-import { DEFAULT_SUGGESTIONS_LIST_TITLE, ISamverkansportalenProps } from './components/ISamverkansportalenProps';
+import {
+  DEFAULT_SUGGESTIONS_HEADER_SUBTITLE,
+  DEFAULT_SUGGESTIONS_HEADER_TITLE,
+  DEFAULT_SUGGESTIONS_LIST_TITLE,
+  ISamverkansportalenProps
+} from './components/ISamverkansportalenProps';
 import GraphSuggestionsService, {
   DEFAULT_CATEGORY_LIST_TITLE,
   DEFAULT_SUBCATEGORY_LIST_TITLE
@@ -35,6 +40,8 @@ export interface ISamverkansportalenWebPartProps {
   newSubcategoryTitle?: string;
   selectedCategoryKey?: string;
   newCategoryTitle?: string;
+  headerTitle: string;
+  headerSubtitle: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -77,7 +84,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         voteListTitle: this._selectedVoteListTitle,
         useTableLayout: this.properties.useTableLayout,
         subcategoryListTitle: this._selectedSubcategoryListTitle,
-        categoryListTitle: this._selectedCategoryListTitle
+        categoryListTitle: this._selectedCategoryListTitle,
+        headerTitle: this._normalizeHeaderText(
+          this.properties.headerTitle,
+          DEFAULT_SUGGESTIONS_HEADER_TITLE
+        ),
+        headerSubtitle: this._normalizeHeaderText(
+          this.properties.headerSubtitle,
+          DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
+        )
       }
     );
 
@@ -103,6 +118,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     );
     this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
     this.properties.categoryListTitle = this._normalizeOptionalListTitle(this.properties.categoryListTitle);
+    this.properties.headerTitle = this._normalizeHeaderText(
+      this.properties.headerTitle,
+      DEFAULT_SUGGESTIONS_HEADER_TITLE
+    );
+    this.properties.headerSubtitle = this._normalizeHeaderText(
+      this.properties.headerSubtitle,
+      DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
+    );
 
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
@@ -202,6 +225,18 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       this._ensureCategoryOptions().catch(() => {
         // Errors are handled inside _ensureCategoryOptions.
       });
+    } else if (propertyPath === 'headerTitle') {
+      this.properties.headerTitle = this._normalizeHeaderText(
+        typeof newValue === 'string' ? newValue : undefined,
+        DEFAULT_SUGGESTIONS_HEADER_TITLE
+      );
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'headerSubtitle') {
+      this.properties.headerSubtitle = this._normalizeHeaderText(
+        typeof newValue === 'string' ? newValue : undefined,
+        DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
+      );
+      this.context.propertyPane.refresh();
     }
   }
 
@@ -851,6 +886,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return trimmed.length > 0 ? trimmed : undefined;
   }
 
+  private _normalizeHeaderText(value: string | undefined, fallback: string): string {
+    const trimmed: string = (value ?? '').trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
   private get _selectedSubcategoryListTitle(): string | undefined {
     return this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
   }
@@ -1036,6 +1076,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneLabel('createListStatus', {
                   text: this._listCreationMessage ?? ''
+                }),
+                PropertyPaneTextField('headerTitle', {
+                  label: strings.HeaderTitleFieldLabel,
+                  value: this.properties.headerTitle
+                }),
+                PropertyPaneTextField('headerSubtitle', {
+                  label: strings.HeaderSubtitleFieldLabel,
+                  value: this.properties.headerSubtitle
                 }),
                 PropertyPaneTextField('description', {
                   label: strings.DescriptionFieldLabel

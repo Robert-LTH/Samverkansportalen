@@ -3,6 +3,8 @@ define([], function() {
     "PropertyPaneDescription": "Beskrivning",
     "BasicGroupName": "Gruppnamn",
     "DescriptionFieldLabel": "Beskrivningsfält",
+    "HeaderTitleFieldLabel": "Rubriktitel",
+    "HeaderSubtitleFieldLabel": "Rubrikens underrubrik",
     "AppLocalEnvironmentSharePoint": "Appen körs i din lokala miljö som en SharePoint-webbdel",
     "AppLocalEnvironmentTeams": "Appen körs i din lokala miljö som en Microsoft Teams-app",
     "AppLocalEnvironmentOffice": "Appen körs i din lokala miljö på office.com",
