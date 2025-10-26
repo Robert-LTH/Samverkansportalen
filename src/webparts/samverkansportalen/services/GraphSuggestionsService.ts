@@ -729,6 +729,55 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphCommentItem => !!item);
   }
 
+  public async getCommentCounts(
+    listId: string,
+    options: { suggestionIds?: number[] } = {}
+  ): Promise<Map<number, number>> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    let request = client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id')
+      .expand('fields($select=SuggestionId)');
+
+    const suggestionIds: number[] = (options.suggestionIds ?? [])
+      .map((id) => this._normalizeIntegerId(id))
+      .filter((id): id is number => typeof id === 'number');
+
+    if (suggestionIds.length > 0) {
+      const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
+      request = request.filter(`(${suggestionFilters.join(' or ')})`);
+    }
+
+    request = request.top(999);
+
+    const response: { value?: IGraphListItemApiModel[] } = await request.get();
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+    const counts: Map<number, number> = new Map();
+
+    items.forEach((entry) => {
+      const fields: unknown = entry.fields;
+
+      if (!fields || typeof fields !== 'object') {
+        return;
+      }
+
+      const suggestionId: number | undefined = this._normalizeIntegerId(
+        (fields as { SuggestionId?: unknown }).SuggestionId
+      );
+
+      if (typeof suggestionId !== 'number') {
+        return;
+      }
+
+      counts.set(suggestionId, (counts.get(suggestionId) ?? 0) + 1);
+    });
+
+    return counts;
+  }
+
   public async addCommentItem(listId: string, fields: IGraphCommentItemFields): Promise<void> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
