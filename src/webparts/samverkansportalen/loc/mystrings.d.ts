@@ -6,16 +6,19 @@ declare interface ISamverkansportalenWebPartStrings {
   HeaderSubtitleFieldLabel: string;
   ListFieldLabel: string;
   VoteListFieldLabel: string;
+  CommentListFieldLabel: string;
   CategoryListFieldLabel: string;
   CategoryListDefaultOptionLabel: string;
   SubcategoryListFieldLabel: string;
   SubcategoryListNoneOptionLabel: string;
   CreateSuggestionsListButtonLabel: string;
   CreateVotesListButtonLabel: string;
+  CreateCommentsListButtonLabel: string;
   CreateCategoryListButtonLabel: string;
   CreateSubcategoryListButtonLabel: string;
   CreateSuggestionsListProgressMessage: string;
   CreateVotesListProgressMessage: string;
+  CreateCommentsListProgressMessage: string;
   CreateCategoryListProgressMessage: string;
   CreateSubcategoryListProgressMessage: string;
   CategoryManagementLabel: string;
@@ -57,6 +60,7 @@ declare interface ISamverkansportalenWebPartStrings {
   CreateListPromptMessage: string;
   CreateListPromptSuggestionsLabel: string;
   CreateListPromptVotesLabel: string;
+  CreateListPromptCommentsLabel: string;
   CreateListPromptCategoryLabel: string;
   CreateListPromptSubcategoryLabel: string;
   UseTableLayoutToggleLabel: string;
