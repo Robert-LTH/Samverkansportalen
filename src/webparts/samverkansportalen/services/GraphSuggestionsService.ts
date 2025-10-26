@@ -544,11 +544,11 @@ export class GraphSuggestionsService {
       }
     }
 
-    const suggestionIds: number[] | undefined = options.suggestionIds?.filter((id) =>
-      typeof id === 'number' && Number.isFinite(id)
-    );
+    const suggestionIds: number[] = (options.suggestionIds ?? [])
+      .map((id) => this._normalizeIntegerId(id))
+      .filter((id): id is number => typeof id === 'number');
 
-    if (suggestionIds && suggestionIds.length > 0) {
+    if (suggestionIds.length > 0) {
       const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
       filterParts.push(`(${suggestionFilters.join(' or ')})`);
     }
@@ -649,11 +649,11 @@ export class GraphSuggestionsService {
       .expand('fields($select=Id,SuggestionId,Comment,Title)')
       .expand('createdByUser($select=userPrincipalName,mail,email,displayName)');
 
-    const suggestionIds: number[] | undefined = options.suggestionIds?.filter((id) =>
-      typeof id === 'number' && Number.isFinite(id)
-    );
+    const suggestionIds: number[] = (options.suggestionIds ?? [])
+      .map((id) => this._normalizeIntegerId(id))
+      .filter((id): id is number => typeof id === 'number');
 
-    if (suggestionIds && suggestionIds.length > 0) {
+    if (suggestionIds.length > 0) {
       const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
       request = request.filter(`(${suggestionFilters.join(' or ')})`);
     }
@@ -733,10 +733,21 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
+    const normalizedSuggestionId: number | undefined = this._normalizeIntegerId(fields.SuggestionId);
+
+    if (typeof normalizedSuggestionId !== 'number') {
+      throw new Error('A valid SuggestionId is required when creating a comment.');
+    }
+
+    const normalizedFields: IGraphCommentItemFields = {
+      ...fields,
+      SuggestionId: normalizedSuggestionId
+    };
+
     await client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .post({ fields });
+      .post({ fields: normalizedFields });
   }
 
   public async deleteCommentItem(listId: string, itemId: number): Promise<void> {
@@ -1259,6 +1270,22 @@ export class GraphSuggestionsService {
         }
       }
     }
+  }
+
+  private _normalizeIntegerId(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+
+    if (typeof value === 'string') {
+      const parsed: number = parseInt(value, 10);
+
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return undefined;
   }
 }
 
