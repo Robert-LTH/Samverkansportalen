@@ -40,7 +40,9 @@ interface ISuggestionItem {
   lastModifiedDateTime?: string;
   completedDateTime?: string;
   voteEntries: IVoteEntry[];
+  commentCount: number;
   comments: ISuggestionComment[];
+  areCommentsLoaded: boolean;
 }
 
 interface IVoteEntry {
@@ -82,7 +84,8 @@ interface ISamverkansportalenState {
   isAddSuggestionExpanded: boolean;
   isActiveSuggestionsExpanded: boolean;
   isCompletedSuggestionsExpanded: boolean;
-  collapsedCommentIds: number[];
+  expandedCommentIds: number[];
+  loadingCommentIds: number[];
 }
 
 interface IFilterState {
@@ -152,7 +155,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
-      collapsedCommentIds: []
+      expandedCommentIds: [],
+      loadingCommentIds: []
     };
   }
 
@@ -829,8 +833,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     options: { canAddComment: boolean; canDeleteComments: boolean }
   ): React.ReactNode {
     const { canAddComment, canDeleteComments } = options;
-    const commentCount: number = item.comments.length;
+    const commentCount: number = item.commentCount;
     const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
+    const isLoadingComments: boolean = this.state.loadingCommentIds.indexOf(item.id) !== -1;
+    const hasLoadedComments: boolean = item.areCommentsLoaded;
     const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
     const toggleId: string = `${regionId}-toggle`;
 
@@ -869,7 +875,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           hidden={!isExpanded}
         >
           {isExpanded && (
-            commentCount === 0 ? (
+            isLoadingComments ? (
+              <Spinner label="Loading comments..." size={SpinnerSize.small} />
+            ) : !hasLoadedComments ? (
+              null
+            ) : commentCount === 0 ? (
               <p className={styles.commentEmpty}>No comments yet.</p>
             ) : (
               <ul className={styles.commentList}>
@@ -1471,20 +1481,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       votesBySuggestion = this._groupVotesBySuggestion(voteItems);
     }
 
-    let commentsBySuggestion: Map<number, ISuggestionComment[]> = new Map();
+    let commentCounts: Map<number, number> = new Map();
 
     if (suggestionIds.length > 0 && this._currentCommentsListId) {
       const commentListId: string = this._getResolvedCommentsListId();
-      const commentItems: IGraphCommentItem[] = await this.props.graphService.getCommentItems(commentListId, {
+      commentCounts = await this.props.graphService.getCommentCounts(commentListId, {
         suggestionIds
       });
-      commentsBySuggestion = this._groupCommentsBySuggestion(commentItems);
     }
 
     const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
       response.items,
       votesBySuggestion,
-      commentsBySuggestion
+      commentCounts
     );
     return { items, nextToken: response.nextToken };
   }
@@ -1492,7 +1501,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _mapGraphItemsToSuggestions(
     graphItems: IGraphSuggestionItem[],
     votesBySuggestion: Map<number, IVoteEntry[]>,
-    commentsBySuggestion: Map<number, ISuggestionComment[]>
+    commentCounts: Map<number, number>
   ): ISuggestionItem[] {
     return graphItems
       .map((entry) => {
@@ -1521,6 +1530,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           typeof fields.CompletedDateTime === 'string' && fields.CompletedDateTime.trim().length > 0
             ? fields.CompletedDateTime.trim()
             : undefined;
+        const commentCount: number = commentCounts.get(suggestionId) ?? 0;
 
         return {
           id: suggestionId,
@@ -1542,7 +1552,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           lastModifiedDateTime,
           completedDateTime,
           voteEntries,
-          comments: commentsBySuggestion.get(suggestionId) ?? []
+          commentCount,
+          comments: [],
+          areCommentsLoaded: commentCount === 0
         } as ISuggestionItem;
       })
       .filter((item): item is ISuggestionItem => !!item);
@@ -1979,7 +1991,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _isCommentSectionExpanded(suggestionId: number): boolean {
-    return this.state.collapsedCommentIds.indexOf(suggestionId) === -1;
+    return this.state.expandedCommentIds.indexOf(suggestionId) !== -1;
   }
 
   private _toggleCommentsSection = (suggestionId: number): void => {
@@ -1987,14 +1999,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
-    this.setState((prevState) => {
-      const isCollapsed: boolean = prevState.collapsedCommentIds.indexOf(suggestionId) !== -1;
-      const nextCollapsed: number[] = isCollapsed
-        ? prevState.collapsedCommentIds.filter((id) => id !== suggestionId)
-        : [...prevState.collapsedCommentIds, suggestionId];
+    this.setState(
+      (prevState) => {
+        const isExpanded: boolean = prevState.expandedCommentIds.indexOf(suggestionId) !== -1;
+        const nextExpanded: number[] = isExpanded
+          ? prevState.expandedCommentIds.filter((id) => id !== suggestionId)
+          : [...prevState.expandedCommentIds, suggestionId];
 
-      return { collapsedCommentIds: nextCollapsed };
-    });
+        return { expandedCommentIds: nextExpanded };
+      },
+      () => {
+        if (this._isCommentSectionExpanded(suggestionId)) {
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          this._ensureCommentsLoaded(suggestionId);
+        }
+      }
+    );
   };
 
   private _ensureCommentSectionExpanded(suggestionId: number): void {
@@ -2002,15 +2022,93 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
-    this.setState((prevState) => {
-      if (prevState.collapsedCommentIds.indexOf(suggestionId) === -1) {
-        return null;
-      }
+    this.setState(
+      (prevState) => {
+        if (prevState.expandedCommentIds.indexOf(suggestionId) !== -1) {
+          return null;
+        }
 
-      return {
-        collapsedCommentIds: prevState.collapsedCommentIds.filter((id) => id !== suggestionId)
-      };
-    });
+        return {
+          expandedCommentIds: [...prevState.expandedCommentIds, suggestionId]
+        };
+      },
+      () => {
+        if (this._isCommentSectionExpanded(suggestionId)) {
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          this._ensureCommentsLoaded(suggestionId);
+        }
+      }
+    );
+  }
+
+  private async _ensureCommentsLoaded(suggestionId: number): Promise<void> {
+    if (!this._isMounted) {
+      return;
+    }
+
+    const suggestion: ISuggestionItem | undefined = this._findSuggestionById(suggestionId);
+
+    if (!suggestion || suggestion.areCommentsLoaded) {
+      return;
+    }
+
+    if (this.state.loadingCommentIds.indexOf(suggestionId) !== -1) {
+      return;
+    }
+
+    this.setState((prevState) => ({
+      loadingCommentIds: [...prevState.loadingCommentIds, suggestionId]
+    }));
+
+    try {
+      const commentListId: string = this._getResolvedCommentsListId();
+      const commentItems: IGraphCommentItem[] = await this.props.graphService.getCommentItems(commentListId, {
+        suggestionIds: [suggestionId]
+      });
+      const commentsBySuggestion: Map<number, ISuggestionComment[]> = this._groupCommentsBySuggestion(
+        commentItems
+      );
+      const comments: ISuggestionComment[] = commentsBySuggestion.get(suggestionId) ?? [];
+
+      this.setState((prevState) => ({
+        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId),
+        activeSuggestions: this._updateSuggestionItem(prevState.activeSuggestions, suggestionId, {
+          comments,
+          commentCount: comments.length,
+          areCommentsLoaded: true
+        }),
+        completedSuggestions: this._updateSuggestionItem(prevState.completedSuggestions, suggestionId, {
+          comments,
+          commentCount: comments.length,
+          areCommentsLoaded: true
+        })
+      }));
+    } catch (error) {
+      this._handleError('We could not load the comments. Please try again.', error);
+      this.setState((prevState) => ({
+        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId)
+      }));
+    }
+  }
+
+  private _findSuggestionById(suggestionId: number): ISuggestionItem | undefined {
+    const { activeSuggestions, completedSuggestions } = this.state;
+    return (
+      activeSuggestions.items.find((item) => item.id === suggestionId) ??
+      completedSuggestions.items.find((item) => item.id === suggestionId)
+    );
+  }
+
+  private _updateSuggestionItem(
+    source: IPaginatedSuggestionsState,
+    suggestionId: number,
+    updates: Partial<ISuggestionItem>
+  ): IPaginatedSuggestionsState {
+    const items: ISuggestionItem[] = source.items.map((item) =>
+      item.id === suggestionId ? { ...item, ...updates } : item
+    );
+
+    return { ...source, items };
   }
 
   private async _addCommentToSuggestion(item: ISuggestionItem): Promise<void> {
