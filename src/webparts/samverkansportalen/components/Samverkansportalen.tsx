@@ -704,51 +704,62 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
 
             return (
-              <tr key={item.id}>
-                <td className={styles.tableCellId} data-label="Entry">
-                  <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
-                    #{item.id}
-                  </span>
-                </td>
-                <td className={styles.tableCellSuggestion} data-label="Suggestion">
-                  <h4 className={styles.suggestionTitle}>{item.title}</h4>
-                  {item.description && (
-                    <p className={styles.suggestionDescription}>{item.description}</p>
-                  )}
-                  {this._renderSuggestionTimestamps(item)}
-                  {this._renderCommentSection(item, {
-                    canAddComment,
-                    canDeleteComments
-                  })}
-                </td>
-                <td className={styles.tableCellCategory} data-label="Category">
-                  <span className={styles.categoryBadge}>{item.category}</span>
-                </td>
-                <td className={styles.tableCellSubcategory} data-label="Subcategory">
-                  {item.subcategory ? (
-                    <span className={styles.subcategoryBadge}>{item.subcategory}</span>
-                  ) : (
-                    <span className={styles.subcategoryPlaceholder}>—</span>
-                  )}
-                </td>
-                <td className={styles.tableCellVotes} data-label="Votes">
-                  <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
-                    <span className={styles.voteNumber}>{item.votes}</span>
-                    <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
-                  </div>
-                </td>
-                <td className={styles.tableCellActions} data-label="Actions">
-                  {this._renderActionButtons(
-                    item,
-                    readOnly,
-                    hasVoted,
-                    disableVote,
-                    canMarkSuggestionAsDone,
-                    canDeleteSuggestion,
-                    styles.tableActions
-                  )}
-                </td>
-              </tr>
+              <React.Fragment key={item.id}>
+                <tr className={styles.suggestionRow}>
+                  <td className={styles.tableCellId} data-label="Entry">
+                    <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+                      #{item.id}
+                    </span>
+                  </td>
+                  <td className={styles.tableCellSuggestion} data-label="Suggestion">
+                    <h4 className={styles.suggestionTitle}>{item.title}</h4>
+                    {item.description && (
+                      <p className={styles.suggestionDescription}>{item.description}</p>
+                    )}
+                  </td>
+                  <td className={styles.tableCellCategory} data-label="Category">
+                    <span className={styles.categoryBadge}>{item.category}</span>
+                  </td>
+                  <td className={styles.tableCellSubcategory} data-label="Subcategory">
+                    {item.subcategory ? (
+                      <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                    ) : (
+                      <span className={styles.subcategoryPlaceholder}>—</span>
+                    )}
+                  </td>
+                  <td className={styles.tableCellVotes} data-label="Votes">
+                    <div
+                      className={styles.voteBadge}
+                      aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}
+                    >
+                      <span className={styles.voteNumber}>{item.votes}</span>
+                      <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+                    </div>
+                  </td>
+                  <td className={styles.tableCellActions} data-label="Actions">
+                    {this._renderActionButtons(
+                      item,
+                      readOnly,
+                      hasVoted,
+                      disableVote,
+                      canMarkSuggestionAsDone,
+                      canDeleteSuggestion,
+                      styles.tableActions
+                    )}
+                  </td>
+                </tr>
+                <tr className={styles.metaRow}>
+                  <td className={styles.metaCell} colSpan={6} data-label="Details">
+                    <div className={styles.metaContent}>
+                      {this._renderSuggestionTimestamps(item)}
+                      {this._renderCommentSection(item, {
+                        canAddComment,
+                        canDeleteComments
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              </React.Fragment>
             );
           })}
         </tbody>

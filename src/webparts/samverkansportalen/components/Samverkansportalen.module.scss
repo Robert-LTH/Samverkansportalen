@@ -169,8 +169,12 @@
     border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
   }
 
-  tbody tr + tr {
+  tbody tr {
     border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
+  }
+
+  tbody tr:first-child {
+    border-top: none;
   }
 }
 
@@ -220,6 +224,25 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: flex-end;
+}
+
+.suggestionRow {
+  background: "[theme:white, default: #ffffff]";
+}
+
+.metaRow {
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  border-top: none;
+}
+
+.metaCell {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.metaContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .suggestionCard {
