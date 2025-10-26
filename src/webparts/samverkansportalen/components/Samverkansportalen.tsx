@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import * as React from 'react';
 import {
   PrimaryButton,
@@ -20,7 +21,8 @@ import {
   type IGraphSuggestionItemFields,
   type IGraphVoteItem,
   type IGraphSubcategoryItem,
-  type IGraphCategoryItem
+  type IGraphCategoryItem,
+  type IGraphCommentItem
 } from '../services/GraphSuggestionsService';
 
 interface ISuggestionItem {
@@ -37,12 +39,20 @@ interface ISuggestionItem {
   lastModifiedDateTime?: string;
   completedDateTime?: string;
   voteEntries: IVoteEntry[];
+  comments: ISuggestionComment[];
 }
 
 interface IVoteEntry {
   id: number;
   username: string;
   votes: number;
+}
+
+interface ISuggestionComment {
+  id: number;
+  text: string;
+  author?: string;
+  createdDateTime?: string;
 }
 
 interface ISubcategoryDefinition {
@@ -98,6 +108,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _isMounted: boolean = false;
   private _currentListId?: string;
   private _currentVotesListId?: string;
+  private _currentCommentsListId?: string;
   private _currentSubcategoryListId?: string;
   private _currentCategoryListId?: string;
   private readonly _sectionIds: {
@@ -154,12 +165,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const listChanged: boolean = this._normalizeListTitle(prevProps.listTitle) !== this._listTitle;
     const voteListChanged: boolean =
       this._normalizeVoteListTitle(prevProps.voteListTitle, prevProps.listTitle) !== this._voteListTitle;
+    const commentListChanged: boolean =
+      this._normalizeCommentListTitle(prevProps.commentListTitle, prevProps.listTitle) !== this._commentListTitle;
     const subcategoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
     const categoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.categoryListTitle) !== this._categoryListTitle;
 
-    if (listChanged || voteListChanged || subcategoryListChanged || categoryListChanged) {
+    if (listChanged || voteListChanged || commentListChanged || subcategoryListChanged || categoryListChanged) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
     }
@@ -624,11 +637,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   )}
                   {this._renderSuggestionTimestamps(item)}
                 </div>
-                <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
-                  <span className={styles.voteNumber}>{item.votes}</span>
-                  <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
-                </div>
+              <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+                <span className={styles.voteNumber}>{item.votes}</span>
+                <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
               </div>
+            </div>
+              {this._renderComments(item.comments)}
               {this._renderActionButtons(
                 item,
                 readOnly,
@@ -686,6 +700,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     <p className={styles.suggestionDescription}>{item.description}</p>
                   )}
                   {this._renderSuggestionTimestamps(item)}
+                  {this._renderComments(item.comments)}
                 </td>
                 <td className={styles.tableCellCategory} data-label="Category">
                   <span className={styles.categoryBadge}>{item.category}</span>
@@ -791,6 +806,39 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </li>
         ))}
       </ul>
+    );
+  }
+
+  private _renderComments(comments: ISuggestionComment[]): React.ReactNode {
+    if (comments.length === 0) {
+      return undefined;
+    }
+
+    return (
+      <div className={styles.commentSection}>
+        <h5 className={styles.commentHeading}>Comments</h5>
+        <ul className={styles.commentList}>
+          {comments.map((comment) => {
+            const hasMeta: boolean = !!comment.author || !!comment.createdDateTime;
+
+            return (
+              <li key={comment.id} className={styles.commentItem}>
+                {hasMeta && (
+                  <div className={styles.commentMeta}>
+                    {comment.author && <span className={styles.commentAuthor}>{comment.author}</span>}
+                    {comment.createdDateTime && (
+                      <span className={styles.commentTimestamp}>
+                        {this._formatDateTime(comment.createdDateTime)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className={styles.commentText}>{comment.text}</p>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     );
   }
 
@@ -932,6 +980,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private async _initialize(): Promise<void> {
     this._currentListId = undefined;
     this._currentVotesListId = undefined;
+    this._currentCommentsListId = undefined;
     this._currentSubcategoryListId = undefined;
     this._currentCategoryListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
@@ -957,11 +1006,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private async _ensureLists(): Promise<void> {
     const listTitle: string = this._listTitle;
     const voteListTitle: string = this._voteListTitle;
+    const commentListTitle: string = this._commentListTitle;
     const result = await this.props.graphService.ensureList(listTitle);
     this._currentListId = result.id;
 
     const votesResult = await this.props.graphService.ensureVoteList(voteListTitle);
     this._currentVotesListId = votesResult.id;
+
+    const commentsResult = await this.props.graphService.ensureCommentList(commentListTitle);
+    this._currentCommentsListId = commentsResult.id;
   }
 
   private async _ensureCategoryList(): Promise<void> {
@@ -1328,29 +1381,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       orderBy: status === 'Done' ? 'fields/CompletedDateTime desc' : 'createdDateTime desc'
     });
 
+    const suggestionIds: number[] = response.items
+      .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
+      .filter((value): value is number => typeof value === 'number');
+
     let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
 
-    if (status === 'Active') {
+    if (status === 'Active' && suggestionIds.length > 0) {
       const voteListId: string = this._getResolvedVotesListId();
-      const suggestionIds: number[] = response.items
-        .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
-        .filter((value): value is number => typeof value === 'number');
-
-      if (suggestionIds.length > 0) {
-        const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
-          suggestionIds
-        });
-        votesBySuggestion = this._groupVotesBySuggestion(voteItems);
-      }
+      const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+        suggestionIds
+      });
+      votesBySuggestion = this._groupVotesBySuggestion(voteItems);
     }
 
-    const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(response.items, votesBySuggestion);
+    let commentsBySuggestion: Map<number, ISuggestionComment[]> = new Map();
+
+    if (suggestionIds.length > 0 && this._currentCommentsListId) {
+      const commentListId: string = this._getResolvedCommentsListId();
+      const commentItems: IGraphCommentItem[] = await this.props.graphService.getCommentItems(commentListId, {
+        suggestionIds
+      });
+      commentsBySuggestion = this._groupCommentsBySuggestion(commentItems);
+    }
+
+    const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
+      response.items,
+      votesBySuggestion,
+      commentsBySuggestion
+    );
     return { items, nextToken: response.nextToken };
   }
 
   private _mapGraphItemsToSuggestions(
     graphItems: IGraphSuggestionItem[],
-    votesBySuggestion: Map<number, IVoteEntry[]>
+    votesBySuggestion: Map<number, IVoteEntry[]>,
+    commentsBySuggestion: Map<number, ISuggestionComment[]>
   ): ISuggestionItem[] {
     return graphItems
       .map((entry) => {
@@ -1399,7 +1465,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           createdDateTime,
           lastModifiedDateTime,
           completedDateTime,
-          voteEntries
+          voteEntries,
+          comments: commentsBySuggestion.get(suggestionId) ?? []
         } as ISuggestionItem;
       })
       .filter((item): item is ISuggestionItem => !!item);
@@ -1433,6 +1500,70 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
 
     return votesBySuggestion;
+  }
+
+  private _groupCommentsBySuggestion(commentItems: IGraphCommentItem[]): Map<number, ISuggestionComment[]> {
+    const commentsBySuggestion: Map<number, ISuggestionComment[]> = new Map();
+
+    commentItems.forEach((entry) => {
+      const fields = entry.fields ?? {};
+      const suggestionId: number | undefined = this._parseNumericId(
+        (fields as { SuggestionId?: unknown }).SuggestionId
+      );
+      const rawComment: unknown =
+        (fields as { Comment?: unknown }).Comment ?? (fields as { Title?: unknown }).Title;
+      const commentText: string | undefined =
+        typeof rawComment === 'string' && rawComment.trim().length > 0 ? rawComment.trim() : undefined;
+
+      if (!suggestionId || !commentText) {
+        return;
+      }
+
+      const createdDateTime: string | undefined =
+        typeof entry.createdDateTime === 'string' && entry.createdDateTime.trim().length > 0
+          ? entry.createdDateTime.trim()
+          : undefined;
+
+      const displayName: string | undefined =
+        typeof entry.createdByUserDisplayName === 'string' && entry.createdByUserDisplayName.trim().length > 0
+          ? entry.createdByUserDisplayName.trim()
+          : undefined;
+      const principalName: string | undefined =
+        typeof entry.createdByUserPrincipalName === 'string' && entry.createdByUserPrincipalName.trim().length > 0
+          ? entry.createdByUserPrincipalName.trim()
+          : undefined;
+      const author: string | undefined = displayName ?? principalName;
+
+      const existing: ISuggestionComment[] = commentsBySuggestion.get(suggestionId) ?? [];
+      existing.push({
+        id: entry.id,
+        text: commentText,
+        author,
+        createdDateTime
+      });
+      commentsBySuggestion.set(suggestionId, existing);
+    });
+
+    commentsBySuggestion.forEach((comments, key) => {
+      const sorted: ISuggestionComment[] = [...comments].sort((a, b) => {
+        if (!a.createdDateTime && !b.createdDateTime) {
+          return a.id - b.id;
+        }
+
+        if (!a.createdDateTime) {
+          return -1;
+        }
+
+        if (!b.createdDateTime) {
+          return 1;
+        }
+
+        return new Date(a.createdDateTime).getTime() - new Date(b.createdDateTime).getTime();
+      });
+      commentsBySuggestion.set(key, sorted);
+    });
+
+    return commentsBySuggestion;
   }
 
   private async _loadAvailableVotes(): Promise<void> {
@@ -1777,11 +1908,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
+    const commentInput: string | null = window.prompt(
+      'Add a comment for this suggestion (optional). Leave blank to skip.',
+      ''
+    );
+
+    if (commentInput === null) {
+      return;
+    }
+
+    const commentText: string = commentInput.trim();
+
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
       const listId: string = this._getResolvedListId();
       const voteListId: string = this._getResolvedVotesListId();
+      const commentListId: string = this._getResolvedCommentsListId();
 
       await this.props.graphService.updateSuggestion(listId, item.id, {
         Status: 'Done',
@@ -1790,6 +1933,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
 
       await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
+
+      if (commentText.length > 0) {
+        const title: string = `Suggestion #${item.id}`;
+        await this.props.graphService.addCommentItem(commentListId, {
+          Title: title.length > 255 ? title.slice(0, 255) : title,
+          SuggestionId: item.id,
+          Comment: commentText
+        });
+      }
 
       await this._loadSuggestions();
 
@@ -1817,8 +1969,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     try {
       const listId: string = this._getResolvedListId();
+      const voteListId: string = this._getResolvedVotesListId();
+      const commentListId: string = this._getResolvedCommentsListId();
 
       await this.props.graphService.deleteSuggestion(listId, item.id);
+      await Promise.all([
+        this.props.graphService.deleteVotesForSuggestion(voteListId, item.id),
+        this.props.graphService.deleteCommentsForSuggestion(commentListId, item.id)
+      ]);
 
       if (item.status === 'Done') {
         await this._refreshCompletedSuggestions();
@@ -1851,6 +2009,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private get _voteListTitle(): string {
     return this._normalizeVoteListTitle(this.props.voteListTitle, this.props.listTitle);
+  }
+
+  private _normalizeCommentListTitle(value?: string, listTitle?: string): string {
+    const trimmed: string = (value ?? '').trim();
+    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.props.listTitle);
+    return trimmed.length > 0 ? trimmed : `${normalizedListTitle}Comments`;
+  }
+
+  private get _commentListTitle(): string {
+    return this._normalizeCommentListTitle(this.props.commentListTitle, this.props.listTitle);
   }
 
   private _normalizeOptionalListTitle(value?: string): string | undefined {
@@ -1917,6 +2085,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return this._currentVotesListId;
+  }
+
+  private _getResolvedCommentsListId(): string {
+    if (!this._currentCommentsListId) {
+      throw new Error('The comments list has not been initialized yet.');
+    }
+
+    return this._currentCommentsListId;
   }
 
   private _getResolvedCategoryListId(): string {

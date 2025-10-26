@@ -7,6 +7,7 @@ export interface IGraphListInfo {
 
 export const DEFAULT_CATEGORY_LIST_TITLE: string = 'Suggestion categories';
 export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories';
+export const DEFAULT_COMMENT_LIST_TITLE: string = 'Suggestion comments';
 
 export type SuggestionCategory = string;
 
@@ -59,6 +60,20 @@ export interface IGraphCategoryItem {
   fields: IGraphCategoryItemFields;
 }
 
+export interface IGraphCommentItemFields {
+  SuggestionId?: number | string;
+  Comment?: string;
+  Title?: string;
+}
+
+export interface IGraphCommentItem {
+  id: number;
+  fields: IGraphCommentItemFields;
+  createdByUserPrincipalName?: string;
+  createdByUserDisplayName?: string;
+  createdDateTime?: string;
+}
+
 interface IGraphListApiModel {
   id?: unknown;
   displayName?: unknown;
@@ -73,6 +88,7 @@ interface IGraphListItemApiModel {
   fields?: unknown;
   createdBy?: {
     user?: {
+      displayName?: unknown;
       userPrincipalName?: unknown;
       email?: unknown;
       mail?: unknown;
@@ -217,6 +233,31 @@ const SUBCATEGORY_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
   }
 ];
 
+const COMMENT_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
+  {
+    name: 'SuggestionId',
+    shouldBeIndexed: true,
+    createPayload: () => ({
+      name: 'SuggestionId',
+      displayName: 'SuggestionId',
+      indexed: true,
+      number: {
+        decimalPlaces: '0'
+      }
+    })
+  },
+  {
+    name: 'Comment',
+    createPayload: () => ({
+      name: 'Comment',
+      displayName: 'Comment',
+      text: {
+        allowMultipleLines: true
+      }
+    })
+  }
+];
+
 export class GraphSuggestionsService {
   private readonly _hostname: string;
   private readonly _sitePath?: string;
@@ -341,6 +382,25 @@ export class GraphSuggestionsService {
       'Defines suggestion categories for the Samverkansportalen web part.',
       []
     );
+    return { id: created.id, created: true };
+  }
+
+  public async ensureCommentList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const normalizedTitle: string =
+      listTitle.trim().length > 0 ? listTitle.trim() : DEFAULT_COMMENT_LIST_TITLE;
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(normalizedTitle);
+
+    if (existing) {
+      await this._ensureColumns(existing.id, COMMENT_COLUMN_DEFINITIONS);
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createListWithColumns(
+      normalizedTitle,
+      'Stores suggestion comments for the Samverkansportalen web part.',
+      COMMENT_COLUMN_DEFINITIONS
+    );
+    await this._ensureColumns(created.id, COMMENT_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
 
@@ -573,6 +633,132 @@ export class GraphSuggestionsService {
         } as IGraphCategoryItem;
       })
       .filter((item): item is IGraphCategoryItem => !!item);
+  }
+
+  public async getCommentItems(
+    listId: string,
+    options: { suggestionIds?: number[] } = {}
+  ): Promise<IGraphCommentItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    let request = client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id,createdBy,createdDateTime')
+      .expand('fields($select=Id,SuggestionId,Comment,Title)')
+      .expand('createdByUser($select=userPrincipalName,mail,email,displayName)');
+
+    const suggestionIds: number[] | undefined = options.suggestionIds?.filter((id) =>
+      typeof id === 'number' && Number.isFinite(id)
+    );
+
+    if (suggestionIds && suggestionIds.length > 0) {
+      const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
+      request = request.filter(`(${suggestionFilters.join(' or ')})`);
+    }
+
+    request = request.top(999);
+
+    const response: { value?: IGraphListItemApiModel[] } = await request.get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => {
+        const rawId: unknown = entry.id;
+        const fields: unknown = entry.fields;
+
+        let id: number | undefined;
+
+        if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+          id = rawId;
+        } else if (typeof rawId === 'string') {
+          const parsed: number = parseInt(rawId, 10);
+
+          if (Number.isFinite(parsed)) {
+            id = parsed;
+          }
+        }
+
+        if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+          return undefined;
+        }
+
+        let createdByUserPrincipalName: string | undefined;
+        let createdByUserDisplayName: string | undefined;
+
+        const createdByUser: unknown = entry.createdBy?.user;
+
+        if (createdByUser && typeof createdByUser === 'object') {
+          const {
+            userPrincipalName,
+            email,
+            mail,
+            displayName
+          } = createdByUser as {
+            userPrincipalName?: unknown;
+            email?: unknown;
+            mail?: unknown;
+            displayName?: unknown;
+          };
+
+          if (typeof displayName === 'string' && displayName.trim().length > 0) {
+            createdByUserDisplayName = displayName.trim();
+          }
+
+          if (typeof userPrincipalName === 'string' && userPrincipalName.trim().length > 0) {
+            createdByUserPrincipalName = userPrincipalName.trim();
+          } else if (typeof email === 'string' && email.trim().length > 0) {
+            createdByUserPrincipalName = email.trim();
+          } else if (typeof mail === 'string' && mail.trim().length > 0) {
+            createdByUserPrincipalName = mail.trim();
+          }
+        }
+
+        const createdDateTime: unknown = entry.createdDateTime;
+
+        return {
+          id,
+          fields: fields as IGraphCommentItemFields,
+          createdByUserPrincipalName,
+          createdByUserDisplayName,
+          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined
+        } as IGraphCommentItem;
+      })
+      .filter((item): item is IGraphCommentItem => !!item);
+  }
+
+  public async addCommentItem(listId: string, fields: IGraphCommentItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .post({ fields });
+  }
+
+  public async deleteCommentsForSuggestion(listId: string, suggestionId: number): Promise<void> {
+    const commentItems: IGraphCommentItem[] = await this.getCommentItems(listId, {
+      suggestionIds: [suggestionId]
+    });
+
+    if (commentItems.length === 0) {
+      return;
+    }
+
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await Promise.all(
+      commentItems.map(async (comment) => {
+        await client
+          .api(`/sites/${siteId}/lists/${listId}/items/${comment.id}`)
+          .version('v1.0')
+          .delete();
+      })
+    );
   }
 
   public async getSubcategoryItems(listId: string): Promise<IGraphSubcategoryItem[]> {

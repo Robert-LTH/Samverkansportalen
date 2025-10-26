@@ -24,10 +24,11 @@ import {
 } from './components/ISamverkansportalenProps';
 import GraphSuggestionsService, {
   DEFAULT_CATEGORY_LIST_TITLE,
+  DEFAULT_COMMENT_LIST_TITLE,
   DEFAULT_SUBCATEGORY_LIST_TITLE
 } from './services/GraphSuggestionsService';
 
-type ListCreationType = 'suggestions' | 'votes' | 'subcategories' | 'categories';
+type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories';
 
 export interface ISamverkansportalenWebPartProps {
   description: string;
@@ -36,6 +37,7 @@ export interface ISamverkansportalenWebPartProps {
   subcategoryListTitle?: string;
   categoryListTitle?: string;
   voteListTitle?: string;
+  commentListTitle?: string;
   selectedSubcategoryKey?: string;
   newSubcategoryTitle?: string;
   selectedCategoryKey?: string;
@@ -82,6 +84,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         graphService: this._getGraphService(),
         listTitle: this._selectedListTitle,
         voteListTitle: this._selectedVoteListTitle,
+        commentListTitle: this._selectedCommentListTitle,
         useTableLayout: this.properties.useTableLayout,
         subcategoryListTitle: this._selectedSubcategoryListTitle,
         categoryListTitle: this._selectedCategoryListTitle,
@@ -114,6 +117,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this.properties.listTitle = this._normalizeListTitle(this.properties.listTitle);
     this.properties.voteListTitle = this._normalizeVoteListTitle(
       this.properties.voteListTitle,
+      this.properties.listTitle
+    );
+    this.properties.commentListTitle = this._normalizeCommentListTitle(
+      this.properties.commentListTitle,
       this.properties.listTitle
     );
     this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
@@ -205,7 +212,13 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   ): void {
     super.onPropertyPaneFieldChanged(propertyPath, oldValue, newValue);
 
-    if (propertyPath === 'subcategoryListTitle') {
+    if (propertyPath === 'commentListTitle') {
+      this.properties.commentListTitle = this._normalizeCommentListTitle(
+        typeof newValue === 'string' ? newValue : undefined,
+        this.properties.listTitle
+      );
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'subcategoryListTitle') {
       this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(
         typeof newValue === 'string' ? newValue : undefined
       );
@@ -276,6 +289,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       }
       ensureOption(DEFAULT_CATEGORY_LIST_TITLE);
       ensureOption(this._selectedVoteListTitle);
+      ensureOption(this._selectedCommentListTitle);
+      ensureOption(DEFAULT_COMMENT_LIST_TITLE);
 
       options.sort((a, b) => a.text.localeCompare(b.text));
 
@@ -697,6 +712,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
   };
 
+  private _handleEnsureCommentListClick = (): void => {
+    this._ensureListFromPropertyPane('comments').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
+    });
+  };
+
   private _handleEnsureSubcategoryListClick = (): void => {
     this._ensureListFromPropertyPane('subcategories').catch(() => {
       // Errors are handled inside _ensureListFromPropertyPane.
@@ -743,6 +764,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
           const defaultVoteListTitle: string = this._getDefaultVoteListTitle(trimmed);
           this.properties.voteListTitle = defaultVoteListTitle;
           this._addListOption(defaultVoteListTitle);
+          const defaultCommentListTitle: string = this._getDefaultCommentListTitle(trimmed);
+          this.properties.commentListTitle = defaultCommentListTitle;
+          this._addListOption(defaultCommentListTitle);
         }
 
         this.render();
@@ -752,6 +776,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       } else if (type === 'votes') {
         const result: { created: boolean } = await service.ensureVoteList(trimmed);
         this.properties.voteListTitle = trimmed;
+        this._addListOption(trimmed);
+        this.render();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
+      } else if (type === 'comments') {
+        const result: { created: boolean } = await service.ensureCommentList(trimmed);
+        this.properties.commentListTitle = trimmed;
         this._addListOption(trimmed);
         this.render();
         message = result.created
@@ -797,6 +829,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     switch (type) {
       case 'votes':
         return strings.CreateListPromptVotesLabel;
+      case 'comments':
+        return strings.CreateListPromptCommentsLabel;
       case 'subcategories':
         return strings.CreateListPromptSubcategoryLabel;
       case 'categories':
@@ -810,6 +844,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     switch (type) {
       case 'votes':
         return this._selectedVoteListTitle;
+      case 'comments':
+        return this._selectedCommentListTitle;
       case 'subcategories':
         return this._selectedSubcategoryListTitle ?? DEFAULT_SUBCATEGORY_LIST_TITLE;
       case 'categories':
@@ -823,6 +859,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     switch (type) {
       case 'votes':
         return strings.CreateVotesListProgressMessage;
+      case 'comments':
+        return strings.CreateCommentsListProgressMessage;
       case 'subcategories':
         return strings.CreateSubcategoryListProgressMessage;
       case 'categories':
@@ -840,12 +878,14 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private async _extendConfiguredLists(): Promise<void> {
     const listTitle: string = this._selectedListTitle;
     const voteListTitle: string = this._selectedVoteListTitle;
+    const commentListTitle: string = this._selectedCommentListTitle;
     const subcategoryListTitle: string | undefined = this._selectedSubcategoryListTitle;
     const categoryListTitle: string | undefined = this._selectedCategoryListTitle;
 
     try {
       await this._getGraphService().ensureList(listTitle);
       await this._getGraphService().ensureVoteList(voteListTitle);
+      await this._getGraphService().ensureCommentList(commentListTitle);
       if (subcategoryListTitle) {
         await this._getGraphService().ensureSubcategoryList(subcategoryListTitle);
       }
@@ -879,6 +919,21 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private get _selectedVoteListTitle(): string {
     return this._normalizeVoteListTitle(this.properties.voteListTitle, this.properties.listTitle);
+  }
+
+  private _getDefaultCommentListTitle(listTitle: string): string {
+    const trimmed: string = listTitle.trim();
+    return `${trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE}Comments`;
+  }
+
+  private _normalizeCommentListTitle(value?: string, listTitle?: string): string {
+    const trimmed: string = (value ?? '').trim();
+    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.properties.listTitle);
+    return trimmed.length > 0 ? trimmed : this._getDefaultCommentListTitle(normalizedListTitle);
+  }
+
+  private get _selectedCommentListTitle(): string {
+    return this._normalizeCommentListTitle(this.properties.commentListTitle, this.properties.listTitle);
   }
 
   private _normalizeOptionalListTitle(value?: string): string | undefined {
@@ -974,6 +1029,18 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   text: strings.CreateVotesListButtonLabel,
                   buttonType: PropertyPaneButtonType.Primary,
                   onClick: this._handleEnsureVoteListClick,
+                  disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneDropdown('commentListTitle', {
+                  label: strings.CommentListFieldLabel,
+                  options: this._listOptions,
+                  selectedKey: this._selectedCommentListTitle,
+                  disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneButton('createCommentListButton', {
+                  text: strings.CreateCommentsListButtonLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleEnsureCommentListClick,
                   disabled: this._isListCreationInProgress
                 }),
                 PropertyPaneDropdown('categoryListTitle', {

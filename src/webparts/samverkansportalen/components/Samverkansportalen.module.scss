@@ -330,6 +330,59 @@
   color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
+.commentSection {
+  border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.commentHeading {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.commentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.commentItem {
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.commentMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  margin-bottom: 0.35rem;
+}
+
+.commentAuthor {
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.commentTimestamp {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.commentText {
+  margin: 0;
+  color: "[theme:neutralPrimary, default: #323130]";
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .voteBadge {
   align-self: flex-start;
   min-width: 5rem;
