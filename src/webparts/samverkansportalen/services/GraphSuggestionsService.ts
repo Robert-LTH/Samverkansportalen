@@ -11,7 +11,7 @@ export const DEFAULT_COMMENT_LIST_TITLE: string = 'Suggestion comments';
 
 export type SuggestionCategory = string;
 
-export interface IGraphSuggestionItemFields {
+export interface IGraphSuggestionItemFields extends Record<string, unknown> {
   id?: number | string;
   Title?: string;
   Details?: string;
@@ -30,7 +30,7 @@ export interface IGraphSuggestionItem {
   lastModifiedDateTime?: string;
 }
 
-export interface IGraphVoteItemFields {
+export interface IGraphVoteItemFields extends Record<string, unknown> {
   SuggestionId?: number | string;
   Username?: string;
   Votes?: number | string;
@@ -41,7 +41,7 @@ export interface IGraphVoteItem {
   fields: IGraphVoteItemFields;
 }
 
-export interface IGraphSubcategoryItemFields {
+export interface IGraphSubcategoryItemFields extends Record<string, unknown> {
   Title?: string;
   Category?: string;
 }
@@ -51,7 +51,7 @@ export interface IGraphSubcategoryItem {
   fields: IGraphSubcategoryItemFields;
 }
 
-export interface IGraphCategoryItemFields {
+export interface IGraphCategoryItemFields extends Record<string, unknown> {
   Title?: string;
 }
 
@@ -60,7 +60,7 @@ export interface IGraphCategoryItem {
   fields: IGraphCategoryItemFields;
 }
 
-export interface IGraphCommentItemFields {
+export interface IGraphCommentItemFields extends Record<string, unknown> {
   SuggestionId?: number | string;
   Comment?: string;
   Title?: string;
