@@ -2,6 +2,8 @@ declare interface ISamverkansportalenWebPartStrings {
   PropertyPaneDescription: string;
   BasicGroupName: string;
   DescriptionFieldLabel: string;
+  HeaderTitleFieldLabel: string;
+  HeaderSubtitleFieldLabel: string;
   ListFieldLabel: string;
   VoteListFieldLabel: string;
   CategoryListFieldLabel: string;

@@ -204,8 +204,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
         <header className={styles.header}>
           <div>
-            <h2 className={styles.title}>Suggestion board</h2>
-            <p className={styles.subtitle}>Share ideas, cast your votes and celebrate what has been delivered.</p>
+            <h2 className={styles.title}>{this.props.headerTitle}</h2>
+            <p className={styles.subtitle}>{this.props.headerSubtitle}</p>
           </div>
           <div className={styles.voteSummary} aria-live="polite">
             <span className={styles.voteLabel}>Votes remaining</span>

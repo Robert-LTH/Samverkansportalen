@@ -1,6 +1,8 @@
 import GraphSuggestionsService from '../services/GraphSuggestionsService';
 
 export const DEFAULT_SUGGESTIONS_LIST_TITLE: string = 'SamverkansportalenSuggestions';
+export const DEFAULT_SUGGESTIONS_HEADER_TITLE: string = 'Suggestion board';
+export const DEFAULT_SUGGESTIONS_HEADER_SUBTITLE: string = 'Share ideas, cast your votes and celebrate what has been delivered.';
 
 export interface ISamverkansportalenProps {
   description: string;
@@ -16,4 +18,6 @@ export interface ISamverkansportalenProps {
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
   categoryListTitle?: string;
+  headerTitle: string;
+  headerSubtitle: string;
 }
