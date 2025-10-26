@@ -837,6 +837,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
     const isLoadingComments: boolean = this.state.loadingCommentIds.indexOf(item.id) !== -1;
     const hasLoadedComments: boolean = item.areCommentsLoaded;
+    const resolvedCommentCount: number = hasLoadedComments ? item.comments.length : commentCount;
+    const renderedComments: ISuggestionComment[] = hasLoadedComments ? item.comments : [];
     const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
     const toggleId: string = `${regionId}-toggle`;
 
@@ -856,7 +858,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               className={styles.commentToggleIcon}
             />
             <span className={styles.commentHeading}>Comments</span>
-            <span className={styles.commentCount}>({commentCount})</span>
+            <span className={styles.commentCount}>({resolvedCommentCount})</span>
           </button>
           {canAddComment && (
             <DefaultButton
@@ -879,11 +881,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               <Spinner label="Loading comments..." size={SpinnerSize.small} />
             ) : !hasLoadedComments ? (
               null
-            ) : commentCount === 0 ? (
+            ) : renderedComments.length === 0 ? (
               <p className={styles.commentEmpty}>No comments yet.</p>
             ) : (
               <ul className={styles.commentList}>
-                {item.comments.map((comment) => {
+                {renderedComments.map((comment) => {
                   const hasMeta: boolean = !!comment.author || !!comment.createdDateTime;
 
                   return (
