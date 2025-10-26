@@ -1265,10 +1265,10 @@ export class GraphSuggestionsService {
   private _extractListItemWithFields<TFields extends Record<string, unknown>>(
     entry: IGraphListItemApiModel
   ): { id: number; fields: TFields } | undefined {
-    const id: number | undefined = this._normalizeIntegerId(entry.id);
+    const id: number | undefined = this._normalizeIntegerId(entry.id) ?? -1;
     const fields: unknown = entry.fields;
 
-    if (!fields || typeof fields !== 'object' || typeof id !== 'number') {
+    if (!fields && typeof fields !== 'object') {
       return undefined;
     }
 
