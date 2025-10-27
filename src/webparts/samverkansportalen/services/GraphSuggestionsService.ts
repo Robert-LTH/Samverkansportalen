@@ -519,53 +519,63 @@ export class GraphSuggestionsService {
       request = request.query({ $skiptoken: options.skipToken });
     }
 
-    const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
+    try {
+      const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
 
-    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+      const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
 
-    const mappedItems: IGraphSuggestionItem[] = items
-      .map((entry) => {
-        const fields: unknown = entry.fields;
+      const mappedItems: IGraphSuggestionItem[] = items
+        .map((entry) => {
+          const fields: unknown = entry.fields;
 
-        if (!fields || typeof fields !== 'object') {
-          return undefined;
-        }
+          if (!fields || typeof fields !== 'object') {
+            return undefined;
+          }
 
-        let createdByUserPrincipalName: string | undefined;
-        const createdBy: unknown = entry.createdBy;
+          let createdByUserPrincipalName: string | undefined;
+          const createdBy: unknown = entry.createdBy;
 
-        if (createdBy && typeof createdBy === 'object') {
-          const user: unknown = (createdBy as { user?: unknown }).user;
+          if (createdBy && typeof createdBy === 'object') {
+            const user: unknown = (createdBy as { user?: unknown }).user;
 
-          if (user && typeof user === 'object') {
-            const upn: unknown = (user as { userPrincipalName?: unknown }).userPrincipalName;
+            if (user && typeof user === 'object') {
+              const upn: unknown = (user as { userPrincipalName?: unknown }).userPrincipalName;
 
-            if (typeof upn === 'string' && upn.trim().length > 0) {
-              createdByUserPrincipalName = upn.trim();
-            } else {
-              const email: unknown = (user as { email?: unknown; mail?: unknown }).email ?? (user as { email?: unknown; mail?: unknown }).mail;
+              if (typeof upn === 'string' && upn.trim().length > 0) {
+                createdByUserPrincipalName = upn.trim();
+              } else {
+                const email: unknown =
+                  (user as { email?: unknown; mail?: unknown }).email ??
+                  (user as { email?: unknown; mail?: unknown }).mail;
 
-              if (typeof email === 'string' && email.trim().length > 0) {
-                createdByUserPrincipalName = email.trim();
+                if (typeof email === 'string' && email.trim().length > 0) {
+                  createdByUserPrincipalName = email.trim();
+                }
               }
             }
           }
-        }
-        const createdDateTime: unknown = entry.createdDateTime;
-        const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
+          const createdDateTime: unknown = entry.createdDateTime;
+          const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
 
-        return {
-          fields: fields as IGraphSuggestionItemFields,
-          createdByUserPrincipalName,
-          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
-          lastModifiedDateTime: typeof lastModifiedDateTime === 'string' ? lastModifiedDateTime : undefined
-        } as IGraphSuggestionItem;
-      })
-      .filter((item): item is IGraphSuggestionItem => !!item);
+          return {
+            fields: fields as IGraphSuggestionItemFields,
+            createdByUserPrincipalName,
+            createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
+            lastModifiedDateTime: typeof lastModifiedDateTime === 'string' ? lastModifiedDateTime : undefined
+          } as IGraphSuggestionItem;
+        })
+        .filter((item): item is IGraphSuggestionItem => !!item);
 
-    const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
+      const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
 
-    return { items: mappedItems, nextToken };
+      return { items: mappedItems, nextToken };
+    } catch (error) {
+      if (this._isItemNotFoundError(error)) {
+        return { items: [], nextToken: undefined };
+      }
+
+      throw error;
+    }
   }
 
   public async getVoteItems(
@@ -1229,6 +1239,31 @@ export class GraphSuggestionsService {
     }
 
     return undefined;
+  }
+
+  private _isItemNotFoundError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const code: unknown = (error as { code?: unknown }).code;
+
+    if (typeof code === 'string' && code.toLowerCase() === 'itemnotfound') {
+      return true;
+    }
+
+    const nestedError: unknown = (error as { error?: unknown }).error;
+
+    if (nestedError && typeof nestedError === 'object') {
+      const nestedCode: unknown = (nestedError as { code?: unknown }).code;
+
+      if (typeof nestedCode === 'string' && nestedCode.toLowerCase() === 'itemnotfound') {
+        return true;
+      }
+    }
+
+    const message: string | undefined = this._extractErrorMessage(error);
+    return typeof message === 'string' && message.toLowerCase().includes('item not found');
   }
 
   private _escapeFilterValue(value: string): string {
