@@ -364,33 +364,26 @@
   color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
-.timestampList {
+.timestampRow {
   margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.625rem;
   color: "[theme:neutralTertiary, default: #a19f9d]";
   width: 100%;
 }
 
-.timestampItem {
-  display: flex;
+.timestampEntry {
+  display: inline-flex;
   align-items: baseline;
-  gap: 0.5rem;
-  width: 100%;
+  gap: 0.25rem;
 }
 
 .timestampLabel,
 .timestampValue {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.timestampValue {
-  text-align: right;
+  white-space: nowrap;
 }
 
 .timestampLabel {
