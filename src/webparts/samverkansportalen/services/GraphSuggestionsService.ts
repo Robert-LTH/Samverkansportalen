@@ -1,5 +1,7 @@
 import { MSGraphClientFactory, type MSGraphClientV3 } from '@microsoft/sp-http';
 
+type GraphRequest = ReturnType<MSGraphClientV3['api']>;
+
 export interface IGraphListInfo {
   id: string;
   displayName: string;
@@ -10,6 +12,8 @@ export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories'
 export const DEFAULT_COMMENT_LIST_TITLE: string = 'Suggestion comments';
 
 export type SuggestionCategory = string;
+
+const CLIENT_PAGINATION_TOKEN_PREFIX: string = 'offset:';
 
 export interface IGraphSuggestionItemFields extends Record<string, unknown> {
   id?: number | string;
@@ -421,12 +425,15 @@ export class GraphSuggestionsService {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
-    let request = client
-      .api(`/sites/${siteId}/lists/${listId}/items`)
-      .version('v1.0')
-      .select('createdBy,createdDateTime,lastModifiedDateTime')
-      .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes,CompletedDateTime)')
-      .expand('createdByUser($select=userPrincipalName,mail,email)');
+    const createBaseRequest = (): GraphRequest =>
+      client
+        .api(`/sites/${siteId}/lists/${listId}/items`)
+        .version('v1.0')
+        .select('createdBy,createdDateTime,lastModifiedDateTime')
+        .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes,CompletedDateTime)')
+        .expand('createdByUser($select=userPrincipalName,mail,email)');
+
+    let request = createBaseRequest();
 
     const filterParts: string[] = [];
 
@@ -445,7 +452,7 @@ export class GraphSuggestionsService {
       filterParts.push(`fields/Subcategory eq '${escapedSubcategory}'`);
     }
 
-    const searchClauses: string[] = [];
+    const searchFilters: { field: 'Title' | 'Details'; term: string }[] = [];
     const seenSearchTerms: Set<string> = new Set();
 
     const addSearchClause = (field: 'Title' | 'Details', value: string | undefined): void => {
@@ -475,15 +482,14 @@ export class GraphSuggestionsService {
       }
 
       candidateTerms.forEach((term) => {
-        const escapedQuery: string = this._escapeFilterValue(term);
-        const key: string = `${field}:${escapedQuery}`;
+        const key: string = `${field}:${term}`;
 
         if (seenSearchTerms.has(key)) {
           return;
         }
 
         seenSearchTerms.add(key);
-        searchClauses.push(`contains(tolower(fields/${field}),'${escapedQuery}')`);
+        searchFilters.push({ field, term });
       });
     };
 
@@ -493,12 +499,6 @@ export class GraphSuggestionsService {
     if (options.searchQuery) {
       addSearchClause('Title', options.searchQuery);
       addSearchClause('Details', options.searchQuery);
-    }
-
-    if (searchClauses.length === 1) {
-      filterParts.push(searchClauses[0]);
-    } else if (searchClauses.length > 1) {
-      filterParts.push(`(${searchClauses.join(' or ')})`);
     }
 
     if (filterParts.length > 0) {
@@ -511,64 +511,60 @@ export class GraphSuggestionsService {
       request = request.orderby('createdDateTime desc');
     }
 
-    if (options.top && Number.isFinite(options.top)) {
-      request = request.top(options.top);
-    }
+    const hasSearchFilters: boolean = searchFilters.length > 0;
 
-    if (options.skipToken) {
-      request = request.query({ $skiptoken: options.skipToken });
+    if (!hasSearchFilters) {
+      if (options.top && Number.isFinite(options.top)) {
+        request = request.top(options.top);
+      }
+
+      if (options.skipToken) {
+        request = request.query({ $skiptoken: options.skipToken });
+      }
+
+      try {
+        const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
+
+        const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+        const mappedItems: IGraphSuggestionItem[] = this._mapSuggestionItems(items);
+
+        const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
+
+        return { items: mappedItems, nextToken };
+      } catch (error) {
+        if (this._isItemNotFoundError(error)) {
+          return { items: [], nextToken: undefined };
+        }
+
+        throw error;
+      }
     }
 
     try {
-      const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
+      const allItems: IGraphSuggestionItem[] = await this._getAllSuggestionItems(
+        createBaseRequest,
+        filterParts,
+        options.orderBy
+      );
 
-      const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+      const filteredItems: IGraphSuggestionItem[] = allItems.filter((item) =>
+        this._matchesSearchFilters(item, searchFilters)
+      );
 
-      const mappedItems: IGraphSuggestionItem[] = items
-        .map((entry) => {
-          const fields: unknown = entry.fields;
+      const offset: number = this._parsePaginationToken(options.skipToken);
+      const pageSize: number =
+        options.top && Number.isFinite(options.top) && options.top > 0
+          ? Math.floor(options.top)
+          : filteredItems.length;
 
-          if (!fields || typeof fields !== 'object') {
-            return undefined;
-          }
+      const paginatedItems: IGraphSuggestionItem[] = filteredItems.slice(offset, offset + pageSize);
 
-          let createdByUserPrincipalName: string | undefined;
-          const createdBy: unknown = entry.createdBy;
+      const nextOffset: number = offset + pageSize;
+      const nextToken: string | undefined =
+        nextOffset < filteredItems.length ? this._formatPaginationToken(nextOffset) : undefined;
 
-          if (createdBy && typeof createdBy === 'object') {
-            const user: unknown = (createdBy as { user?: unknown }).user;
-
-            if (user && typeof user === 'object') {
-              const upn: unknown = (user as { userPrincipalName?: unknown }).userPrincipalName;
-
-              if (typeof upn === 'string' && upn.trim().length > 0) {
-                createdByUserPrincipalName = upn.trim();
-              } else {
-                const email: unknown =
-                  (user as { email?: unknown; mail?: unknown }).email ??
-                  (user as { email?: unknown; mail?: unknown }).mail;
-
-                if (typeof email === 'string' && email.trim().length > 0) {
-                  createdByUserPrincipalName = email.trim();
-                }
-              }
-            }
-          }
-          const createdDateTime: unknown = entry.createdDateTime;
-          const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
-
-          return {
-            fields: fields as IGraphSuggestionItemFields,
-            createdByUserPrincipalName,
-            createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
-            lastModifiedDateTime: typeof lastModifiedDateTime === 'string' ? lastModifiedDateTime : undefined
-          } as IGraphSuggestionItem;
-        })
-        .filter((item): item is IGraphSuggestionItem => !!item);
-
-      const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
-
-      return { items: mappedItems, nextToken };
+      return { items: paginatedItems, nextToken };
     } catch (error) {
       if (this._isItemNotFoundError(error)) {
         return { items: [], nextToken: undefined };
@@ -1264,6 +1260,144 @@ export class GraphSuggestionsService {
 
     const message: string | undefined = this._extractErrorMessage(error);
     return typeof message === 'string' && message.toLowerCase().includes('item not found');
+  }
+
+  private _mapSuggestionItems(entries: IGraphListItemApiModel[]): IGraphSuggestionItem[] {
+    return entries
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return undefined;
+        }
+
+        const fields: unknown = entry.fields;
+
+        if (!fields || typeof fields !== 'object') {
+          return undefined;
+        }
+
+        let createdByUserPrincipalName: string | undefined;
+        const createdBy: unknown = entry.createdBy;
+
+        if (createdBy && typeof createdBy === 'object') {
+          const user: unknown = (createdBy as { user?: unknown }).user;
+
+          if (user && typeof user === 'object') {
+            const upn: unknown = (user as { userPrincipalName?: unknown }).userPrincipalName;
+
+            if (typeof upn === 'string' && upn.trim().length > 0) {
+              createdByUserPrincipalName = upn.trim();
+            } else {
+              const email: unknown =
+                (user as { email?: unknown; mail?: unknown }).email ??
+                (user as { email?: unknown; mail?: unknown }).mail;
+
+              if (typeof email === 'string' && email.trim().length > 0) {
+                createdByUserPrincipalName = email.trim();
+              }
+            }
+          }
+        }
+
+        const createdDateTime: unknown = entry.createdDateTime;
+        const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
+
+        return {
+          fields: fields as IGraphSuggestionItemFields,
+          createdByUserPrincipalName,
+          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
+          lastModifiedDateTime: typeof lastModifiedDateTime === 'string' ? lastModifiedDateTime : undefined
+        } as IGraphSuggestionItem;
+      })
+      .filter((item): item is IGraphSuggestionItem => !!item);
+  }
+
+  private async _getAllSuggestionItems(
+    createBaseRequest: () => GraphRequest,
+    filterParts: string[],
+    orderBy?: string
+  ): Promise<IGraphSuggestionItem[]> {
+    const aggregated: IGraphSuggestionItem[] = [];
+    let skipToken: string | undefined;
+    const maxIterations: number = 100;
+    const pageSize: number = 999;
+
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      let request = createBaseRequest();
+
+      if (filterParts.length > 0) {
+        request = request.filter(filterParts.join(' and '));
+      }
+
+      if (orderBy) {
+        request = request.orderby(orderBy);
+      } else {
+        request = request.orderby('createdDateTime desc');
+      }
+
+      request = request.top(pageSize);
+
+      if (skipToken) {
+        request = request.query({ $skiptoken: skipToken });
+      }
+
+      const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
+
+      const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+      const mapped: IGraphSuggestionItem[] = this._mapSuggestionItems(items);
+      aggregated.push(...mapped);
+
+      const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
+
+      if (!nextToken) {
+        break;
+      }
+
+      skipToken = nextToken;
+    }
+
+    return aggregated;
+  }
+
+  private _matchesSearchFilters(
+    item: IGraphSuggestionItem,
+    filters: { field: 'Title' | 'Details'; term: string }[]
+  ): boolean {
+    if (filters.length === 0) {
+      return true;
+    }
+
+    return filters.some(({ field, term }) => {
+      const rawValue: unknown = (item.fields ?? {})[field];
+
+      if (typeof rawValue !== 'string') {
+        return false;
+      }
+
+      return rawValue.toLowerCase().includes(term);
+    });
+  }
+
+  private _parsePaginationToken(token: string | undefined): number {
+    if (typeof token !== 'string' || token.length === 0) {
+      return 0;
+    }
+
+    if (!token.startsWith(CLIENT_PAGINATION_TOKEN_PREFIX)) {
+      return 0;
+    }
+
+    const rawOffset: string = token.substring(CLIENT_PAGINATION_TOKEN_PREFIX.length);
+    const parsed: number = Number.parseInt(rawOffset, 10);
+
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return 0;
+    }
+
+    return parsed;
+  }
+
+  private _formatPaginationToken(offset: number): string {
+    return `${CLIENT_PAGINATION_TOKEN_PREFIX}${offset}`;
   }
 
   private _escapeFilterValue(value: string): string {
