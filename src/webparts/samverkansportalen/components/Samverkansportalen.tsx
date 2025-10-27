@@ -65,6 +65,11 @@ interface ISubcategoryDefinition {
   category?: SuggestionCategory;
 }
 
+interface ISimilarSuggestionsQuery {
+  title: string;
+  description: string;
+}
+
 interface ISamverkansportalenState {
   activeSuggestions: IPaginatedSuggestionsState;
   completedSuggestions: IPaginatedSuggestionsState;
@@ -82,7 +87,7 @@ interface ISamverkansportalenState {
   completedFilter: IFilterState;
   similarSuggestions: ISuggestionItem[];
   isSimilarSuggestionsLoading: boolean;
-  similarSuggestionsQuery: string;
+  similarSuggestionsQuery: ISimilarSuggestionsQuery;
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -115,6 +120,7 @@ const SUGGESTIONS_PAGE_SIZE: number = 5;
 const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
 const MIN_SIMILAR_SUGGESTION_QUERY_LENGTH: number = 3;
 const MAX_SIMILAR_SUGGESTIONS: number = 5;
+const EMPTY_SIMILAR_SUGGESTIONS_QUERY: ISimilarSuggestionsQuery = { title: '', description: '' };
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -144,7 +150,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
     };
     this._commentSectionPrefix = `${uniquePrefix}-comment`;
-    this._debouncedSimilarSuggestionsSearch = debounce((query: string) => {
+    this._debouncedSimilarSuggestionsSearch = debounce((query: ISimilarSuggestionsQuery) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._searchSimilarSuggestions(query);
     }, SIMILAR_SUGGESTIONS_DEBOUNCE_MS);
@@ -166,7 +172,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
       similarSuggestions: [],
       isSimilarSuggestionsLoading: false,
-      similarSuggestionsQuery: '',
+      similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
@@ -487,8 +493,41 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _renderSimilarSuggestions(): React.ReactNode {
     const { similarSuggestions, isSimilarSuggestionsLoading, similarSuggestionsQuery } = this.state;
 
-    if (!similarSuggestionsQuery) {
+    const hasTitleQuery: boolean = similarSuggestionsQuery.title.length > 0;
+    const hasDescriptionQuery: boolean = similarSuggestionsQuery.description.length > 0;
+
+    if (!hasTitleQuery && !hasDescriptionQuery) {
       return null;
+    }
+
+    const querySegments: { key: string; content: React.ReactNode }[] = [];
+
+    if (hasTitleQuery) {
+      querySegments.push({
+        key: 'title',
+        content: (
+          <>
+            title{' '}
+            <span className={styles.similarSuggestionsQueryValue}>
+              “{similarSuggestionsQuery.title}”
+            </span>
+          </>
+        )
+      });
+    }
+
+    if (hasDescriptionQuery) {
+      querySegments.push({
+        key: 'description',
+        content: (
+          <>
+            description{' '}
+            <span className={styles.similarSuggestionsQueryValue}>
+              “{similarSuggestionsQuery.description}”
+            </span>
+          </>
+        )
+      });
     }
 
     return (
@@ -504,7 +543,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           )}
         </div>
         <p className={styles.similarSuggestionsQuery}>
-          Showing results for <span className={styles.similarSuggestionsQueryValue}>“{similarSuggestionsQuery}”</span>
+          Showing results for{' '}
+          {querySegments.map((segment, index) => (
+            <React.Fragment key={segment.key}>
+              {index > 0 ? ' and ' : null}
+              {segment.content}
+            </React.Fragment>
+          ))}
         </p>
         {isSimilarSuggestionsLoading ? (
           <Spinner label="Searching..." size={SpinnerSize.small} />
@@ -1782,18 +1827,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
   };
 
-  private _handleSimilarSuggestionsInput(title: string, description: string): void {
-    const normalizedTitle: string = (title ?? '').trim();
-    const normalizedDescription: string = (description ?? '').trim();
-    const combinedQuery: string = `${normalizedTitle} ${normalizedDescription}`
-      .replace(/\s+/g, ' ')
-      .trim();
+  private _areSimilarSuggestionQueriesEqual(
+    left: ISimilarSuggestionsQuery,
+    right: ISimilarSuggestionsQuery
+  ): boolean {
+    return left.title === right.title && left.description === right.description;
+  }
 
-    if (combinedQuery.length < MIN_SIMILAR_SUGGESTION_QUERY_LENGTH) {
+  private _handleSimilarSuggestionsInput(title: string, description: string): void {
+    const normalizedTitle: string = (title ?? '').replace(/\s+/g, ' ').trim();
+    const normalizedDescription: string = (description ?? '').replace(/\s+/g, ' ').trim();
+    const hasTitleQuery: boolean = normalizedTitle.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH;
+    const hasDescriptionQuery: boolean =
+      normalizedDescription.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH;
+
+    if (!hasTitleQuery && !hasDescriptionQuery) {
       this._debouncedSimilarSuggestionsSearch.cancel();
       this._updateState({
         similarSuggestions: [],
-        similarSuggestionsQuery: '',
+        similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
         isSimilarSuggestionsLoading: false
       });
       return;
@@ -1803,18 +1855,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
+    const nextQuery: ISimilarSuggestionsQuery = {
+      title: hasTitleQuery ? normalizedTitle : '',
+      description: hasDescriptionQuery ? normalizedDescription : ''
+    };
+
     if (
-      combinedQuery === this.state.similarSuggestionsQuery &&
+      this._areSimilarSuggestionQueriesEqual(nextQuery, this.state.similarSuggestionsQuery) &&
       !this.state.isSimilarSuggestionsLoading &&
       this.state.similarSuggestions.length > 0
     ) {
       return;
     }
 
-    this._debouncedSimilarSuggestionsSearch(combinedQuery);
+    this._debouncedSimilarSuggestionsSearch(nextQuery);
   }
 
-  private async _searchSimilarSuggestions(query: string): Promise<void> {
+  private async _searchSimilarSuggestions(query: ISimilarSuggestionsQuery): Promise<void> {
     if (!this._isMounted) {
       return;
     }
@@ -1825,19 +1882,28 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
-    const normalizedQuery: string = query.replace(/\s+/g, ' ').trim();
+    const normalizedTitle: string = (query.title ?? '').replace(/\s+/g, ' ').trim();
+    const normalizedDescription: string = (query.description ?? '').replace(/\s+/g, ' ').trim();
+    const effectiveQuery: ISimilarSuggestionsQuery = {
+      title:
+        normalizedTitle.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH ? normalizedTitle : '',
+      description:
+        normalizedDescription.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH
+          ? normalizedDescription
+          : ''
+    };
 
-    if (!normalizedQuery) {
+    if (!effectiveQuery.title && !effectiveQuery.description) {
       this._updateState({
         similarSuggestions: [],
-        similarSuggestionsQuery: '',
+        similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
         isSimilarSuggestionsLoading: false
       });
       return;
     }
 
     this._updateState({
-      similarSuggestionsQuery: normalizedQuery,
+      similarSuggestionsQuery: { ...effectiveQuery },
       isSimilarSuggestionsLoading: true
     });
 
@@ -1845,7 +1911,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const response = await this.props.graphService.getSuggestionItems(listId, {
         status: 'Active',
         top: MAX_SIMILAR_SUGGESTIONS,
-        searchQuery: normalizedQuery,
+        titleSearchQuery: effectiveQuery.title || undefined,
+        descriptionSearchQuery: effectiveQuery.description || undefined,
         orderBy: 'createdDateTime desc'
       });
 
@@ -1855,7 +1922,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         new Map<number, number>()
       );
 
-      if (this.state.similarSuggestionsQuery !== normalizedQuery) {
+      if (
+        !this._areSimilarSuggestionQueriesEqual(this.state.similarSuggestionsQuery, effectiveQuery)
+      ) {
         return;
       }
 
@@ -1868,7 +1937,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       console.error('Failed to load similar suggestions.', error);
 
-      if (this.state.similarSuggestionsQuery !== normalizedQuery) {
+      if (
+        !this._areSimilarSuggestionQueriesEqual(this.state.similarSuggestionsQuery, effectiveQuery)
+      ) {
         return;
       }
 
@@ -2108,7 +2179,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         ),
         similarSuggestions: [],
         isSimilarSuggestionsLoading: false,
-        similarSuggestionsQuery: ''
+        similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY }
       });
 
       await this._loadSuggestions();

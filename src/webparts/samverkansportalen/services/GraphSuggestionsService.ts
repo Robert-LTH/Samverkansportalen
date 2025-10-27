@@ -413,6 +413,8 @@ export class GraphSuggestionsService {
       category?: SuggestionCategory;
       subcategory?: string;
       searchQuery?: string;
+      titleSearchQuery?: string;
+      descriptionSearchQuery?: string;
       orderBy?: string;
     } = {}
   ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> {
@@ -443,15 +445,39 @@ export class GraphSuggestionsService {
       filterParts.push(`fields/Subcategory eq '${escapedSubcategory}'`);
     }
 
-    if (options.searchQuery) {
-      const trimmedQuery: string = options.searchQuery.trim();
+    const searchClauses: string[] = [];
+    const seenSearchTerms: Set<string> = new Set();
 
-      if (trimmedQuery.length > 0) {
-        const escapedQuery: string = this._escapeFilterValue(trimmedQuery);
-        filterParts.push(
-          `(contains(fields/Title,'${escapedQuery}') or contains(fields/Details,'${escapedQuery}'))`
-        );
+    const addSearchClause = (field: 'Title' | 'Details', value: string | undefined): void => {
+      const trimmed: string | undefined = value?.trim();
+
+      if (!trimmed) {
+        return;
       }
+
+      const escapedQuery: string = this._escapeFilterValue(trimmed);
+      const key: string = `${field}:${escapedQuery}`;
+
+      if (seenSearchTerms.has(key)) {
+        return;
+      }
+
+      seenSearchTerms.add(key);
+      searchClauses.push(`contains(fields/${field},'${escapedQuery}')`);
+    };
+
+    addSearchClause('Title', options.titleSearchQuery);
+    addSearchClause('Details', options.descriptionSearchQuery);
+
+    if (options.searchQuery) {
+      addSearchClause('Title', options.searchQuery);
+      addSearchClause('Details', options.searchQuery);
+    }
+
+    if (searchClauses.length === 1) {
+      filterParts.push(searchClauses[0]);
+    } else if (searchClauses.length > 1) {
+      filterParts.push(`(${searchClauses.join(' or ')})`);
     }
 
     if (filterParts.length > 0) {
