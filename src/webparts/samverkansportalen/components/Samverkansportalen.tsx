@@ -368,7 +368,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     label="Search"
                     value={activeFilter.searchQuery}
                     onChange={this._onActiveSearchChange}
-                    disabled={isLoading || isActiveSuggestionsLoading}
+                    disabled={isLoading}
                     placeholder="Search by title or details"
                     className={styles.filterSearch}
                   />
@@ -440,7 +440,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     label="Search"
                     value={completedFilter.searchQuery}
                     onChange={this._onCompletedSearchChange}
-                    disabled={isLoading || isCompletedSuggestionsLoading}
+                    disabled={isLoading}
                     placeholder="Search by title or details"
                     className={styles.filterSearch}
                   />
