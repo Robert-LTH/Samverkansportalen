@@ -138,6 +138,102 @@
   gap: 1rem;
 }
 
+.similarSuggestions {
+  padding: 1rem;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.5rem;
+  background: var(--accentColorLightest);
+}
+
+.similarSuggestionsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.similarSuggestionsTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.similarSuggestionsSummary {
+  font-size: 0.85rem;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.similarSuggestionsQuery {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.similarSuggestionsQueryValue {
+  font-weight: 600;
+  color: var(--accentColor);
+}
+
+.similarSuggestionsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.similarSuggestionsItem {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: "[theme:white, default: #ffffff]";
+  border: 1px solid "[theme:neutralLighter, default: #f3f2f1]";
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.similarSuggestionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.similarSuggestionId {
+  font-weight: 600;
+  color: var(--accentColor);
+}
+
+.similarSuggestionMeta {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.similarSuggestionVotes {
+  margin-left: auto;
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.similarSuggestionHeading {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.similarSuggestionDescription {
+  margin: 0;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  font-size: 0.95rem;
+}
+
+.noSimilarSuggestions {
+  margin: 0;
+  font-size: 0.9rem;
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  font-style: italic;
+}
+
 .filters {
   margin-top: 2rem;
   padding: 1.5rem;

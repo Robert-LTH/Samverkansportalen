@@ -14,6 +14,7 @@ import {
   Dropdown,
   type IDropdownOption
 } from '@fluentui/react';
+import { debounce } from '@microsoft/sp-lodash-subset';
 import styles from './Samverkansportalen.module.scss';
 import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
 import {
@@ -79,6 +80,9 @@ interface ISamverkansportalenState {
   availableVotes: number;
   activeFilter: IFilterState;
   completedFilter: IFilterState;
+  similarSuggestions: ISuggestionItem[];
+  isSimilarSuggestionsLoading: boolean;
+  similarSuggestionsQuery: string;
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -108,6 +112,9 @@ const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
 const SUGGESTIONS_PAGE_SIZE: number = 5;
+const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
+const MIN_SIMILAR_SUGGESTION_QUERY_LENGTH: number = 3;
+const MAX_SIMILAR_SUGGESTIONS: number = 5;
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -122,6 +129,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     completed: { title: string; content: string };
   };
   private readonly _commentSectionPrefix: string;
+  private readonly _debouncedSimilarSuggestionsSearch: ReturnType<typeof debounce>;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -136,6 +144,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
     };
     this._commentSectionPrefix = `${uniquePrefix}-comment`;
+    this._debouncedSimilarSuggestionsSearch = debounce((query: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      this._searchSimilarSuggestions(query);
+    }, SIMILAR_SUGGESTIONS_DEBOUNCE_MS);
 
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
@@ -152,6 +164,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       availableVotes: MAX_VOTES_PER_USER,
       activeFilter: { searchQuery: '', category: undefined, subcategory: undefined },
       completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
+      similarSuggestions: [],
+      isSimilarSuggestionsLoading: false,
+      similarSuggestionsQuery: '',
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
@@ -168,6 +183,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   public componentWillUnmount(): void {
     this._isMounted = false;
+    this._debouncedSimilarSuggestionsSearch.cancel();
   }
 
   public componentDidUpdate(prevProps: ISamverkansportalenProps): void {
@@ -291,6 +307,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   onChange={this._onDescriptionChange}
                   disabled={isLoading}
                 />
+                {this._renderSimilarSuggestions()}
                 <Dropdown
                   label="Category"
                   options={categoryOptions}
@@ -464,6 +481,58 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </div>
         </div>
       </section>
+    );
+  }
+
+  private _renderSimilarSuggestions(): React.ReactNode {
+    const { similarSuggestions, isSimilarSuggestionsLoading, similarSuggestionsQuery } = this.state;
+
+    if (!similarSuggestionsQuery) {
+      return null;
+    }
+
+    return (
+      <div className={styles.similarSuggestions} aria-live="polite">
+        <div className={styles.similarSuggestionsHeader}>
+          <h4 className={styles.similarSuggestionsTitle}>Similar suggestions</h4>
+          {!isSimilarSuggestionsLoading && similarSuggestions.length > 0 && (
+            <span className={styles.similarSuggestionsSummary}>
+              {similarSuggestions.length === 1
+                ? '1 matching suggestion'
+                : `${similarSuggestions.length} matching suggestions`}
+            </span>
+          )}
+        </div>
+        <p className={styles.similarSuggestionsQuery}>
+          Showing results for <span className={styles.similarSuggestionsQueryValue}>“{similarSuggestionsQuery}”</span>
+        </p>
+        {isSimilarSuggestionsLoading ? (
+          <Spinner label="Searching..." size={SpinnerSize.small} />
+        ) : similarSuggestions.length > 0 ? (
+          <ul className={styles.similarSuggestionsList}>
+            {similarSuggestions.map((item) => (
+              <li key={item.id} className={styles.similarSuggestionsItem}>
+                <div className={styles.similarSuggestionHeader}>
+                  <span className={styles.similarSuggestionId}>#{item.id}</span>
+                  <span className={styles.similarSuggestionMeta}>
+                    {item.category}
+                    {item.subcategory ? ` · ${item.subcategory}` : ''}
+                  </span>
+                  <span className={styles.similarSuggestionVotes}>
+                    {item.votes} {item.votes === 1 ? 'vote' : 'votes'}
+                  </span>
+                </div>
+                <h5 className={styles.similarSuggestionHeading}>{item.title}</h5>
+                {item.description && (
+                  <p className={styles.similarSuggestionDescription}>{item.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
+        )}
+      </div>
     );
   }
 
@@ -965,25 +1034,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const canAddComment: boolean = !readOnly && item.status !== 'Done';
 
     return { hasVoted, disableVote, canAddComment, canMarkSuggestionAsDone, canDeleteSuggestion };
-  }
-
-  private _areDateTimesEqual(first: string, second: string): boolean {
-    if (first === second) {
-      return true;
-    }
-
-    try {
-      const firstDate: Date = new Date(first);
-      const secondDate: Date = new Date(second);
-
-      if (!Number.isNaN(firstDate.getTime()) && !Number.isNaN(secondDate.getTime())) {
-        return firstDate.getTime() === secondDate.getTime();
-      }
-    } catch (error) {
-      console.warn('Failed to parse date while comparing values.', error);
-    }
-
-    return false;
   }
 
   private _formatDateTime(value: string): string {
@@ -1714,16 +1764,120 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ availableVotes });
   }
 
-  private _onTitleChange = (_event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string): void => {
-    this._updateState({ newTitle: newValue ?? '' });
+  private _onTitleChange = (
+    _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue?: string
+  ): void => {
+    this._updateState({ newTitle: newValue ?? '' }, () => {
+      this._handleSimilarSuggestionsInput(this.state.newTitle, this.state.newDescription);
+    });
   };
 
   private _onDescriptionChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue?: string
   ): void => {
-    this._updateState({ newDescription: newValue ?? '' });
+    this._updateState({ newDescription: newValue ?? '' }, () => {
+      this._handleSimilarSuggestionsInput(this.state.newTitle, this.state.newDescription);
+    });
   };
+
+  private _handleSimilarSuggestionsInput(title: string, description: string): void {
+    const normalizedTitle: string = (title ?? '').trim();
+    const normalizedDescription: string = (description ?? '').trim();
+    const combinedQuery: string = `${normalizedTitle} ${normalizedDescription}`
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (combinedQuery.length < MIN_SIMILAR_SUGGESTION_QUERY_LENGTH) {
+      this._debouncedSimilarSuggestionsSearch.cancel();
+      this._updateState({
+        similarSuggestions: [],
+        similarSuggestionsQuery: '',
+        isSimilarSuggestionsLoading: false
+      });
+      return;
+    }
+
+    if (!this._currentListId) {
+      return;
+    }
+
+    if (
+      combinedQuery === this.state.similarSuggestionsQuery &&
+      !this.state.isSimilarSuggestionsLoading &&
+      this.state.similarSuggestions.length > 0
+    ) {
+      return;
+    }
+
+    this._debouncedSimilarSuggestionsSearch(combinedQuery);
+  }
+
+  private async _searchSimilarSuggestions(query: string): Promise<void> {
+    if (!this._isMounted) {
+      return;
+    }
+
+    const listId: string | undefined = this._currentListId;
+
+    if (!listId) {
+      return;
+    }
+
+    const normalizedQuery: string = query.replace(/\s+/g, ' ').trim();
+
+    if (!normalizedQuery) {
+      this._updateState({
+        similarSuggestions: [],
+        similarSuggestionsQuery: '',
+        isSimilarSuggestionsLoading: false
+      });
+      return;
+    }
+
+    this._updateState({
+      similarSuggestionsQuery: normalizedQuery,
+      isSimilarSuggestionsLoading: true
+    });
+
+    try {
+      const response = await this.props.graphService.getSuggestionItems(listId, {
+        status: 'Active',
+        top: MAX_SIMILAR_SUGGESTIONS,
+        searchQuery: normalizedQuery,
+        orderBy: 'createdDateTime desc'
+      });
+
+      const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
+        response.items,
+        new Map<number, IVoteEntry[]>(),
+        new Map<number, number>()
+      );
+
+      if (this.state.similarSuggestionsQuery !== normalizedQuery) {
+        return;
+      }
+
+      const limited: ISuggestionItem[] = items.slice(0, MAX_SIMILAR_SUGGESTIONS);
+
+      this._updateState({
+        similarSuggestions: limited,
+        isSimilarSuggestionsLoading: false
+      });
+    } catch (error) {
+      console.error('Failed to load similar suggestions.', error);
+
+      if (this.state.similarSuggestionsQuery !== normalizedQuery) {
+        return;
+      }
+
+      this._updateState({
+        similarSuggestions: [],
+        isSimilarSuggestionsLoading: false
+      });
+    }
+  }
 
   private _onActiveSearchChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -1942,6 +2096,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       await this.props.graphService.addSuggestion(listId, payload);
 
       const defaultCategory: SuggestionCategory = this._getDefaultCategory(this.state.categories);
+      this._debouncedSimilarSuggestionsSearch.cancel();
 
       this._updateState({
         newTitle: '',
@@ -1950,7 +2105,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         newSubcategoryKey: this._getValidSubcategoryKeyForCategory(
           defaultCategory,
           undefined
-        )
+        ),
+        similarSuggestions: [],
+        isSimilarSuggestionsLoading: false,
+        similarSuggestionsQuery: ''
       });
 
       await this._loadSuggestions();
@@ -2466,12 +2624,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }));
   };
 
-  private _updateState(state: Partial<ISamverkansportalenState>): void {
+  private _updateState(
+    state: Partial<ISamverkansportalenState>,
+    callback?: () => void
+  ): void {
     if (!this._isMounted) {
       return;
     }
 
-    this.setState(state as Pick<ISamverkansportalenState, keyof ISamverkansportalenState>);
+    this.setState(
+      state as Pick<ISamverkansportalenState, keyof ISamverkansportalenState>,
+      callback
+    );
   }
 
   private _parseNumericId(value: unknown): number | undefined {
