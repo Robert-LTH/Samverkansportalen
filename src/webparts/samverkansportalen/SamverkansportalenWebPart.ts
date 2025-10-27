@@ -175,13 +175,21 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     this._isDarkTheme = !!currentTheme.isInverted;
     const {
-      semanticColors
+      semanticColors,
+      palette
     } = currentTheme;
 
     if (semanticColors) {
       this.domElement.style.setProperty('--bodyText', semanticColors.bodyText || null);
       this.domElement.style.setProperty('--link', semanticColors.link || null);
       this.domElement.style.setProperty('--linkHovered', semanticColors.linkHovered || null);
+    }
+
+    if (palette) {
+      this.domElement.style.setProperty('--accentColor', palette.themePrimary || null);
+      this.domElement.style.setProperty('--accentColorTint', palette.themeLighter || null);
+      this.domElement.style.setProperty('--accentColorLightest', palette.themeLighterAlt || null);
+      this.domElement.style.setProperty('--accentColorDark', palette.themeDarkAlt || null);
     }
 
   }

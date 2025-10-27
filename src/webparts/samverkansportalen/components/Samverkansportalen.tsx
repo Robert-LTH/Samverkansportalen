@@ -237,6 +237,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
         {error && (
           <MessageBar
+            className={styles.messageBar}
             messageBarType={MessageBarType.error}
             isMultiline={false}
             onDismiss={this._dismissError}
@@ -247,6 +248,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
         {success && (
           <MessageBar
+            className={styles.messageBar}
             messageBarType={MessageBarType.success}
             isMultiline={false}
             onDismiss={this._dismissSuccess}

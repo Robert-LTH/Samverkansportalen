@@ -1,6 +1,10 @@
 @import '~@fluentui/react/dist/sass/References.scss';
 
 .samverkansportalen {
+  --accentColor: "[theme:themePrimary, default: #0078d4]";
+  --accentColorTint: "[theme:themeLighter, default: #d0e7f5]";
+  --accentColorLightest: "[theme:themeLighterAlt, default: #eff6fc]";
+  --accentColorDark: "[theme:themeDarkAlt, default: #106ebe]";
   padding: 1.5rem;
   background: "[theme:white, default: #ffffff]";
   background: var(--bodyBackground, #ffffff);
@@ -31,11 +35,44 @@
   color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
+.messageBar {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--accentColorLightest);
+  border: 1px solid var(--accentColorTint);
+  border-left: 4px solid var(--accentColor);
+  color: var(--bodyText);
+}
+
+.messageBar :global(.ms-MessageBar-content) {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.messageBar :global(.ms-MessageBar-icon) {
+  color: var(--accentColor);
+}
+
+.messageBar :global(.ms-MessageBar-text) {
+  color: inherit;
+}
+
+.messageBar :global(.ms-Link) {
+  color: var(--accentColor);
+}
+
+.messageBar :global(.ms-Link:hover),
+.messageBar :global(.ms-Link:focus) {
+  color: var(--accentColorDark);
+}
+
 .voteSummary {
   min-width: 12rem;
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
-  background: "[theme:themeLighter, default: #d0e7f5]";
+  background: var(--accentColorTint);
   text-align: right;
 }
 
@@ -292,8 +329,8 @@
   align-items: center;
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
-  background: "[theme:themeLighterAlt, default: #eff6fc]";
-  color: "[theme:themePrimary, default: #0078d4]";
+  background: var(--accentColorLightest);
+  color: var(--accentColor);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -395,11 +432,11 @@
 }
 
 .commentToggleButton:hover {
-  color: "[theme:themePrimary, default: #0078d4]";
+  color: var(--accentColor);
 }
 
 .commentToggleButton:focus-visible {
-  outline: 2px solid "[theme:themePrimary, default: #0078d4]";
+  outline: 2px solid var(--accentColor);
   outline-offset: 2px;
 }
 
@@ -492,7 +529,7 @@
 
 .commentDeleteButton:hover,
 .commentDeleteButton:focus {
-  color: "[theme:themePrimary, default: #0078d4]";
+  color: var(--accentColor);
 }
 
 .commentText {
@@ -507,7 +544,7 @@
   min-width: 5rem;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
-  background: "[theme:themeLighterAlt, default: #eff6fc]";
+  background: var(--accentColorLightest);
   text-align: center;
 }
 
