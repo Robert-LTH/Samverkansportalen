@@ -513,6 +513,32 @@ export class GraphSuggestionsService {
 
     const hasSearchFilters: boolean = searchFilters.length > 0;
 
+    const executeManualSearch = async (): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> => {
+      const allItems: IGraphSuggestionItem[] = await this._getAllSuggestionItems(
+        createBaseRequest,
+        filterParts,
+        options.orderBy
+      );
+
+      const filteredItems: IGraphSuggestionItem[] = hasSearchFilters
+        ? allItems.filter((item) => this._matchesSearchFilters(item, searchFilters))
+        : allItems;
+
+      const offset: number = this._parsePaginationToken(options.skipToken);
+      const pageSize: number =
+        options.top && Number.isFinite(options.top) && options.top > 0
+          ? Math.floor(options.top)
+          : filteredItems.length;
+
+      const paginatedItems: IGraphSuggestionItem[] = filteredItems.slice(offset, offset + pageSize);
+
+      const nextOffset: number = offset + pageSize;
+      const nextToken: string | undefined =
+        nextOffset < filteredItems.length ? this._formatPaginationToken(nextOffset) : undefined;
+
+      return { items: paginatedItems, nextToken };
+    };
+
     if (!hasSearchFilters) {
       if (options.top && Number.isFinite(options.top)) {
         request = request.top(options.top);
@@ -537,34 +563,16 @@ export class GraphSuggestionsService {
           return { items: [], nextToken: undefined };
         }
 
+        if (this._isContainsNotSupportedError(error)) {
+          return executeManualSearch();
+        }
+
         throw error;
       }
     }
 
     try {
-      const allItems: IGraphSuggestionItem[] = await this._getAllSuggestionItems(
-        createBaseRequest,
-        filterParts,
-        options.orderBy
-      );
-
-      const filteredItems: IGraphSuggestionItem[] = allItems.filter((item) =>
-        this._matchesSearchFilters(item, searchFilters)
-      );
-
-      const offset: number = this._parsePaginationToken(options.skipToken);
-      const pageSize: number =
-        options.top && Number.isFinite(options.top) && options.top > 0
-          ? Math.floor(options.top)
-          : filteredItems.length;
-
-      const paginatedItems: IGraphSuggestionItem[] = filteredItems.slice(offset, offset + pageSize);
-
-      const nextOffset: number = offset + pageSize;
-      const nextToken: string | undefined =
-        nextOffset < filteredItems.length ? this._formatPaginationToken(nextOffset) : undefined;
-
-      return { items: paginatedItems, nextToken };
+      return await executeManualSearch();
     } catch (error) {
       if (this._isItemNotFoundError(error)) {
         return { items: [], nextToken: undefined };
@@ -1260,6 +1268,17 @@ export class GraphSuggestionsService {
 
     const message: string | undefined = this._extractErrorMessage(error);
     return typeof message === 'string' && message.toLowerCase().includes('item not found');
+  }
+
+  private _isContainsNotSupportedError(error: unknown): boolean {
+    const message: string | undefined = this._extractErrorMessage(error);
+
+    if (!message) {
+      return false;
+    }
+
+    const normalized: string = message.toLowerCase();
+    return normalized.includes("function 'contains'") && normalized.includes('not supported for lists');
   }
 
   private _mapSuggestionItems(entries: IGraphListItemApiModel[]): IGraphSuggestionItem[] {
