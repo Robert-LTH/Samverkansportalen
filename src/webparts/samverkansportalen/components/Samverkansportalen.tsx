@@ -643,10 +643,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     )}
                   </div>
                   <h4 className={styles.suggestionTitle}>{item.title}</h4>
+                  {this._renderSuggestionTimestamps(item)}
                   {item.description && (
                     <p className={styles.suggestionDescription}>{item.description}</p>
                   )}
-                  {this._renderSuggestionTimestamps(item)}
                 </div>
               <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
                 <span className={styles.voteNumber}>{item.votes}</span>
@@ -713,6 +713,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   </td>
                   <td className={styles.tableCellSuggestion} data-label="Suggestion">
                     <h4 className={styles.suggestionTitle}>{item.title}</h4>
+                    {this._renderSuggestionTimestamps(item)}
                     {item.description && (
                       <p className={styles.suggestionDescription}>{item.description}</p>
                     )}
@@ -828,14 +829,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return (
-      <ul className={styles.timestampList}>
+      <div className={styles.timestampRow}>
         {entries.map((entry) => (
-          <li key={entry.label} className={styles.timestampItem}>
+          <span key={entry.label} className={styles.timestampEntry}>
             <span className={styles.timestampLabel}>{entry.label}:</span>
             <span className={styles.timestampValue}>{this._formatDateTime(entry.value)}</span>
-          </li>
+          </span>
         ))}
-      </ul>
+      </div>
     );
   }
 
