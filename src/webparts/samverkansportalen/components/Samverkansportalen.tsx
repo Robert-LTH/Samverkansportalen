@@ -813,17 +813,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private _renderSuggestionTimestamps(item: ISuggestionItem): React.ReactNode {
     const entries: { label: string; value: string }[] = [];
+    const { createdDateTime, lastModifiedDateTime, completedDateTime } = item;
 
-    if (item.createdDateTime) {
-      entries.push({ label: 'Created', value: item.createdDateTime });
+    if (createdDateTime) {
+      entries.push({ label: 'Created', value: createdDateTime });
     }
 
-    if (item.lastModifiedDateTime) {
-      entries.push({ label: 'Last modified', value: item.lastModifiedDateTime });
+    const shouldShowLastModified: boolean =
+      !!lastModifiedDateTime &&
+      (!completedDateTime || !this._areDateTimesEqual(lastModifiedDateTime, completedDateTime));
+
+    if (shouldShowLastModified && lastModifiedDateTime) {
+      entries.push({ label: 'Last modified', value: lastModifiedDateTime });
     }
 
-    if (item.completedDateTime) {
-      entries.push({ label: 'Completed', value: item.completedDateTime });
+    if (completedDateTime) {
+      entries.push({ label: 'Completed', value: completedDateTime });
     }
 
     if (entries.length === 0) {
@@ -962,6 +967,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const canAddComment: boolean = !readOnly && item.status !== 'Done';
 
     return { hasVoted, disableVote, canAddComment, canMarkSuggestionAsDone, canDeleteSuggestion };
+  }
+
+  private _areDateTimesEqual(first: string, second: string): boolean {
+    if (first === second) {
+      return true;
+    }
+
+    try {
+      const firstDate: Date = new Date(first);
+      const secondDate: Date = new Date(second);
+
+      if (!Number.isNaN(firstDate.getTime()) && !Number.isNaN(secondDate.getTime())) {
+        return firstDate.getTime() === secondDate.getTime();
+      }
+    } catch (error) {
+      console.warn('Failed to parse date while comparing values.', error);
+    }
+
+    return false;
   }
 
   private _formatDateTime(value: string): string {
