@@ -819,9 +819,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       entries.push({ label: 'Created', value: createdDateTime });
     }
 
-    const shouldShowLastModified: boolean =
-      !!lastModifiedDateTime &&
-      (!completedDateTime || !this._areDateTimesEqual(lastModifiedDateTime, completedDateTime));
+    const shouldShowLastModified: boolean = !!lastModifiedDateTime && !completedDateTime;
 
     if (shouldShowLastModified && lastModifiedDateTime) {
       entries.push({ label: 'Last modified', value: lastModifiedDateTime });
