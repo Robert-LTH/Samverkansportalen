@@ -449,21 +449,42 @@ export class GraphSuggestionsService {
     const seenSearchTerms: Set<string> = new Set();
 
     const addSearchClause = (field: 'Title' | 'Details', value: string | undefined): void => {
-      const trimmed: string | undefined = value?.trim();
+      const sanitized: string | undefined = value?.replace(/\s+/g, ' ').trim();
 
-      if (!trimmed) {
+      if (!sanitized) {
         return;
       }
 
-      const escapedQuery: string = this._escapeFilterValue(trimmed);
-      const key: string = `${field}:${escapedQuery}`;
+      const normalized: string = sanitized.toLowerCase();
+      const candidateTerms: string[] = [];
+      const maxSegments: number = 5;
 
-      if (seenSearchTerms.has(key)) {
-        return;
+      candidateTerms.push(normalized);
+
+      const segments: string[] = normalized.split(' ');
+      for (const segment of segments) {
+        if (!segment || candidateTerms.indexOf(segment) !== -1) {
+          continue;
+        }
+
+        candidateTerms.push(segment);
+
+        if (candidateTerms.length >= maxSegments) {
+          break;
+        }
       }
 
-      seenSearchTerms.add(key);
-      searchClauses.push(`contains(fields/${field},'${escapedQuery}')`);
+      candidateTerms.forEach((term) => {
+        const escapedQuery: string = this._escapeFilterValue(term);
+        const key: string = `${field}:${escapedQuery}`;
+
+        if (seenSearchTerms.has(key)) {
+          return;
+        }
+
+        seenSearchTerms.add(key);
+        searchClauses.push(`contains(tolower(fields/${field}),'${escapedQuery}')`);
+      });
     };
 
     addSearchClause('Title', options.titleSearchQuery);

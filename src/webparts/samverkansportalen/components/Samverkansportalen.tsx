@@ -136,6 +136,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   };
   private readonly _commentSectionPrefix: string;
   private readonly _debouncedSimilarSuggestionsSearch: ReturnType<typeof debounce>;
+  private _pendingSimilarSuggestionsQuery?: ISimilarSuggestionsQuery;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -1228,6 +1229,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const commentListTitle: string = this._commentListTitle;
     const result = await this.props.graphService.ensureList(listTitle);
     this._currentListId = result.id;
+    this._flushPendingSimilarSuggestionsSearch();
 
     const votesResult = await this.props.graphService.ensureVoteList(voteListTitle);
     this._currentVotesListId = votesResult.id;
@@ -1848,10 +1850,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
         isSimilarSuggestionsLoading: false
       });
-      return;
-    }
-
-    if (!this._currentListId) {
+      this._pendingSimilarSuggestionsQuery = undefined;
       return;
     }
 
@@ -1868,6 +1867,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
+    this._pendingSimilarSuggestionsQuery = nextQuery;
+
+    if (!this._currentListId) {
+      return;
+    }
+
+    this._pendingSimilarSuggestionsQuery = undefined;
     this._debouncedSimilarSuggestionsSearch(nextQuery);
   }
 
@@ -1881,6 +1887,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     if (!listId) {
       return;
     }
+
+    this._pendingSimilarSuggestionsQuery = undefined;
 
     const normalizedTitle: string = (query.title ?? '').replace(/\s+/g, ' ').trim();
     const normalizedDescription: string = (query.description ?? '').replace(/\s+/g, ' ').trim();
@@ -1909,7 +1917,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     try {
       const response = await this.props.graphService.getSuggestionItems(listId, {
-        status: 'Active',
         top: MAX_SIMILAR_SUGGESTIONS,
         titleSearchQuery: effectiveQuery.title || undefined,
         descriptionSearchQuery: effectiveQuery.description || undefined,
@@ -2694,6 +2701,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isCompletedSuggestionsExpanded: !prevState.isCompletedSuggestionsExpanded
     }));
   };
+
+  private _flushPendingSimilarSuggestionsSearch(): void {
+    if (!this._pendingSimilarSuggestionsQuery || !this._currentListId) {
+      return;
+    }
+
+    const pendingQuery: ISimilarSuggestionsQuery = this._pendingSimilarSuggestionsQuery;
+    this._pendingSimilarSuggestionsQuery = undefined;
+    this._debouncedSimilarSuggestionsSearch(pendingQuery);
+  }
 
   private _updateState(
     state: Partial<ISamverkansportalenState>,
