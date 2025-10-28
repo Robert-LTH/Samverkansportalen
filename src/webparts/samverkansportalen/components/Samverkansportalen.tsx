@@ -574,100 +574,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         {isSimilarSuggestionsLoading ? (
           <Spinner label="Searching..." size={SpinnerSize.small} />
         ) : similarSuggestions.length > 0 ? (
-          <ul className={styles.similarSuggestionsList}>
-            {similarSuggestions.map((item) => (
-              <li key={item.id} className={styles.similarSuggestionsItem}>
-                <button
-                  type="button"
-                  className={styles.similarSuggestionButton}
-                  onClick={() => this._onSimilarSuggestionClick(item)}
-                  aria-label={`Show suggestion #${item.id}`}
-                >
-                  <div className={styles.similarSuggestionHeader}>
-                    <span className={styles.similarSuggestionId}>#{item.id}</span>
-                    <span className={styles.similarSuggestionMeta}>
-                      {item.category}
-                      {item.subcategory ? ` · ${item.subcategory}` : ''}
-                    </span>
-                    <span className={styles.similarSuggestionVotes}>
-                      {item.votes} {item.votes === 1 ? 'vote' : 'votes'}
-                    </span>
-                  </div>
-                  <h5 className={styles.similarSuggestionHeading}>{item.title}</h5>
-                  {item.description && (
-                    <p className={styles.similarSuggestionDescription}>{item.description}</p>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className={styles.similarSuggestionsResults}>
+            {this._renderSuggestionList(similarSuggestions, true)}
+          </div>
         ) : (
           <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
         )}
-        {this._renderSelectedSimilarSuggestion()}
       </div>
     );
   }
-
-  private _renderSelectedSimilarSuggestion(): React.ReactNode {
-    const { selectedSimilarSuggestion, isSelectedSimilarSuggestionLoading } = this.state;
-
-    if (!selectedSimilarSuggestion) {
-      return undefined;
-    }
-
-    return (
-      <div className={styles.similarSuggestionPreview}>
-        <div className={styles.similarSuggestionPreviewHeader}>
-          <h5 className={styles.similarSuggestionPreviewTitle}>Selected suggestion</h5>
-          <IconButton
-            className={styles.similarSuggestionPreviewDismiss}
-            iconProps={{ iconName: 'Clear' }}
-            title="Clear selected suggestion"
-            ariaLabel="Clear selected suggestion"
-            onClick={this._clearSelectedSimilarSuggestion}
-            disabled={isSelectedSimilarSuggestionLoading}
-          />
-        </div>
-        {isSelectedSimilarSuggestionLoading ? (
-          <Spinner label="Loading suggestion..." size={SpinnerSize.small} />
-        ) : (
-          this._renderSuggestionList(
-            [selectedSimilarSuggestion],
-            selectedSimilarSuggestion.status === 'Done'
-          )
-        )}
-      </div>
-    );
-  }
-
-  private _onSimilarSuggestionClick = (item: ISuggestionItem): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    const suggestionId: number = item.id;
-
-    this.setState(
-      (prevState) => ({
-        expandedCommentIds: [
-          ...prevState.expandedCommentIds.filter((id) => id !== suggestionId),
-          suggestionId
-        ],
-        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId),
-        selectedSimilarSuggestion: {
-          ...item,
-          comments: [],
-          areCommentsLoaded: item.commentCount === 0
-        },
-        isSelectedSimilarSuggestionLoading: true
-      }),
-      () => {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        this._loadSelectedSimilarSuggestion(suggestionId, item.status);
-      }
-    );
-  };
 
   private _renderSectionHeader(
     title: string,
@@ -2191,27 +2106,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
     }
   }
-
-  private _clearSelectedSimilarSuggestion = (): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    this.setState((prevState) => {
-      const selectedId: number | undefined = prevState.selectedSimilarSuggestion?.id;
-
-      if (!selectedId) {
-        return null;
-      }
-
-      return {
-        selectedSimilarSuggestion: undefined,
-        isSelectedSimilarSuggestionLoading: false,
-        expandedCommentIds: prevState.expandedCommentIds.filter((id) => id !== selectedId),
-        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== selectedId)
-      };
-    });
-  };
 
   private _onActiveSearchChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
