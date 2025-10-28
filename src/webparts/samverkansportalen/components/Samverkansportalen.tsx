@@ -88,6 +88,8 @@ interface ISamverkansportalenState {
   similarSuggestions: ISuggestionItem[];
   isSimilarSuggestionsLoading: boolean;
   similarSuggestionsQuery: ISimilarSuggestionsQuery;
+  selectedSimilarSuggestion?: ISuggestionItem;
+  isSelectedSimilarSuggestionLoading: boolean;
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -185,6 +187,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       similarSuggestions: [],
       isSimilarSuggestionsLoading: false,
       similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
+      selectedSimilarSuggestion: undefined,
+      isSelectedSimilarSuggestionLoading: false,
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
@@ -503,7 +507,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _renderSimilarSuggestions(): React.ReactNode {
-    const { similarSuggestions, isSimilarSuggestionsLoading, similarSuggestionsQuery } = this.state;
+    const {
+      similarSuggestions,
+      isSimilarSuggestionsLoading,
+      similarSuggestionsQuery
+    } = this.state;
 
     const hasTitleQuery: boolean = similarSuggestionsQuery.title.length > 0;
     const hasDescriptionQuery: boolean = similarSuggestionsQuery.description.length > 0;
@@ -596,28 +604,56 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         ) : (
           <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
         )}
+        {this._renderSelectedSimilarSuggestion()}
+      </div>
+    );
+  }
+
+  private _renderSelectedSimilarSuggestion(): React.ReactNode {
+    const { selectedSimilarSuggestion, isSelectedSimilarSuggestionLoading } = this.state;
+
+    if (!selectedSimilarSuggestion) {
+      return undefined;
+    }
+
+    return (
+      <div className={styles.similarSuggestionPreview}>
+        <h5 className={styles.similarSuggestionPreviewTitle}>Selected suggestion</h5>
+        {isSelectedSimilarSuggestionLoading ? (
+          <Spinner label="Loading suggestion..." size={SpinnerSize.small} />
+        ) : (
+          this._renderSuggestionList(
+            [selectedSimilarSuggestion],
+            selectedSimilarSuggestion.status === 'Done'
+          )
+        )}
       </div>
     );
   }
 
   private _onSimilarSuggestionClick = (item: ISuggestionItem): void => {
-    const filter: IFilterState = {
-      searchQuery: '',
-      category: undefined,
-      subcategory: undefined,
-      suggestionId: item.id
-    };
-
-    if (item.status === 'Done') {
-      this._updateState({ isCompletedSuggestionsExpanded: true }, () => {
-        this._applyCompletedFilter(filter);
-      });
+    if (!this._isMounted) {
       return;
     }
 
-    this._updateState({ isActiveSuggestionsExpanded: true }, () => {
-      this._applyActiveFilter(filter);
-    });
+    const suggestionId: number = item.id;
+
+    this.setState(
+      (prevState) => ({
+        expandedCommentIds: prevState.expandedCommentIds.filter((id) => id !== suggestionId),
+        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId),
+        selectedSimilarSuggestion: {
+          ...item,
+          comments: [],
+          areCommentsLoaded: item.commentCount === 0
+        },
+        isSelectedSimilarSuggestionLoading: true
+      }),
+      () => {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this._loadSelectedSimilarSuggestion(suggestionId, item.status);
+      }
+    );
   };
 
   private _renderSectionHeader(
@@ -1897,10 +1933,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     if (!hasTitleQuery && !hasDescriptionQuery) {
       this._debouncedSimilarSuggestionsSearch.cancel();
+      const previousSelectedId: number | undefined = this.state.selectedSimilarSuggestion?.id;
+      const nextExpandedCommentIds: number[] =
+        typeof previousSelectedId === 'number'
+          ? this.state.expandedCommentIds.filter((id) => id !== previousSelectedId)
+          : this.state.expandedCommentIds;
+      const nextLoadingCommentIds: number[] =
+        typeof previousSelectedId === 'number'
+          ? this.state.loadingCommentIds.filter((id) => id !== previousSelectedId)
+          : this.state.loadingCommentIds;
       this._updateState({
         similarSuggestions: [],
         similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
-        isSimilarSuggestionsLoading: false
+        isSimilarSuggestionsLoading: false,
+        selectedSimilarSuggestion: undefined,
+        isSelectedSimilarSuggestionLoading: false,
+        expandedCommentIds: nextExpandedCommentIds,
+        loadingCommentIds: nextLoadingCommentIds
       });
       this._pendingSimilarSuggestionsQuery = undefined;
       return;
@@ -1989,9 +2038,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       const limited: ISuggestionItem[] = items.slice(0, MAX_SIMILAR_SUGGESTIONS);
 
+      const currentSelectedId: number | undefined = this.state.selectedSimilarSuggestion?.id;
+      const shouldKeepSelection: boolean =
+        typeof currentSelectedId === 'number' &&
+        limited.some((entry) => entry.id === currentSelectedId);
+      const nextExpandedCommentIds: number[] =
+        !shouldKeepSelection && typeof currentSelectedId === 'number'
+          ? this.state.expandedCommentIds.filter((id) => id !== currentSelectedId)
+          : this.state.expandedCommentIds;
+      const nextLoadingCommentIds: number[] =
+        !shouldKeepSelection && typeof currentSelectedId === 'number'
+          ? this.state.loadingCommentIds.filter((id) => id !== currentSelectedId)
+          : this.state.loadingCommentIds;
+
       this._updateState({
         similarSuggestions: limited,
-        isSimilarSuggestionsLoading: false
+        isSimilarSuggestionsLoading: false,
+        selectedSimilarSuggestion: shouldKeepSelection ? this.state.selectedSimilarSuggestion : undefined,
+        isSelectedSimilarSuggestionLoading: shouldKeepSelection ? this.state.isSelectedSimilarSuggestionLoading : false,
+        expandedCommentIds: nextExpandedCommentIds,
+        loadingCommentIds: nextLoadingCommentIds
       });
     } catch (error) {
       console.error('Failed to load similar suggestions.', error);
@@ -2002,9 +2068,83 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
+      const staleSelectedId: number | undefined = this.state.selectedSimilarSuggestion?.id;
+      const nextExpandedCommentIds: number[] =
+        typeof staleSelectedId === 'number'
+          ? this.state.expandedCommentIds.filter((id) => id !== staleSelectedId)
+          : this.state.expandedCommentIds;
+      const nextLoadingCommentIds: number[] =
+        typeof staleSelectedId === 'number'
+          ? this.state.loadingCommentIds.filter((id) => id !== staleSelectedId)
+          : this.state.loadingCommentIds;
+
       this._updateState({
         similarSuggestions: [],
-        isSimilarSuggestionsLoading: false
+        isSimilarSuggestionsLoading: false,
+        selectedSimilarSuggestion: undefined,
+        isSelectedSimilarSuggestionLoading: false,
+        expandedCommentIds: nextExpandedCommentIds,
+        loadingCommentIds: nextLoadingCommentIds
+      });
+    }
+  }
+
+  private async _loadSelectedSimilarSuggestion(
+    suggestionId: number,
+    status: 'Active' | 'Done'
+  ): Promise<void> {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this._updateState({ isSelectedSimilarSuggestionLoading: true });
+
+    try {
+      const { items } = await this._getSuggestionsPage(status, undefined, {
+        searchQuery: '',
+        category: undefined,
+        subcategory: undefined,
+        suggestionId
+      });
+
+      if (!this._isMounted || this.state.selectedSimilarSuggestion?.id !== suggestionId) {
+        return;
+      }
+
+      const nextSuggestion: ISuggestionItem | undefined = items.find((entry) => entry.id === suggestionId);
+
+      if (!nextSuggestion) {
+        const nextExpanded: number[] = this.state.expandedCommentIds.filter((id) => id !== suggestionId);
+        const nextLoading: number[] = this.state.loadingCommentIds.filter((id) => id !== suggestionId);
+
+        this._updateState({
+          selectedSimilarSuggestion: undefined,
+          isSelectedSimilarSuggestionLoading: false,
+          expandedCommentIds: nextExpanded,
+          loadingCommentIds: nextLoading
+        });
+        return;
+      }
+
+      this._updateState({
+        selectedSimilarSuggestion: nextSuggestion,
+        isSelectedSimilarSuggestionLoading: false
+      });
+    } catch (error) {
+      if (!this._isMounted || this.state.selectedSimilarSuggestion?.id !== suggestionId) {
+        return;
+      }
+
+      this._handleError('We could not load the selected suggestion. Please try again.', error);
+
+      const nextExpanded: number[] = this.state.expandedCommentIds.filter((id) => id !== suggestionId);
+      const nextLoading: number[] = this.state.loadingCommentIds.filter((id) => id !== suggestionId);
+
+      this._updateState({
+        selectedSimilarSuggestion: undefined,
+        isSelectedSimilarSuggestionLoading: false,
+        expandedCommentIds: nextExpanded,
+        loadingCommentIds: nextLoading
       });
     }
   }
@@ -2298,6 +2438,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
 
+      if (this.state.selectedSimilarSuggestion?.id === item.id) {
+        await this._loadSelectedSimilarSuggestion(item.id, item.status);
+      }
+
       this._updateState({ success: hasVoted ? 'Your vote has been removed.' : 'Thanks for voting!' });
     } catch (error) {
       this._handleError('We could not update your vote. Please try again.', error);
@@ -2421,7 +2565,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           comments,
           commentCount: comments.length,
           areCommentsLoaded: true
-        })
+        }),
+        selectedSimilarSuggestion:
+          prevState.selectedSimilarSuggestion && prevState.selectedSimilarSuggestion.id === suggestionId
+            ? {
+                ...prevState.selectedSimilarSuggestion,
+                comments,
+                commentCount: comments.length,
+                areCommentsLoaded: true
+              }
+            : prevState.selectedSimilarSuggestion
       }));
     } catch (error) {
       this._handleError('We could not load the comments. Please try again.', error);
@@ -2432,10 +2585,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _findSuggestionById(suggestionId: number): ISuggestionItem | undefined {
-    const { activeSuggestions, completedSuggestions } = this.state;
+    const { activeSuggestions, completedSuggestions, selectedSimilarSuggestion } = this.state;
     return (
       activeSuggestions.items.find((item) => item.id === suggestionId) ??
-      completedSuggestions.items.find((item) => item.id === suggestionId)
+      completedSuggestions.items.find((item) => item.id === suggestionId) ??
+      (selectedSimilarSuggestion && selectedSimilarSuggestion.id === suggestionId
+        ? selectedSimilarSuggestion
+        : undefined)
     );
   }
 
@@ -2480,6 +2636,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       await this._refreshActiveSuggestions();
       this._ensureCommentSectionExpanded(item.id);
 
+      if (this.state.selectedSimilarSuggestion?.id === item.id) {
+        await this._loadSelectedSimilarSuggestion(item.id, item.status);
+        this._ensureCommentSectionExpanded(item.id);
+      }
+
       this._updateState({ success: 'Your comment has been added.' });
     } catch (error) {
       this._handleError('We could not add your comment. Please try again.', error);
@@ -2516,6 +2677,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
 
       this._ensureCommentSectionExpanded(item.id);
+
+      if (this.state.selectedSimilarSuggestion?.id === item.id) {
+        await this._loadSelectedSimilarSuggestion(item.id, item.status);
+        this._ensureCommentSectionExpanded(item.id);
+      }
       this._updateState({ success: 'The comment has been removed.' });
     } catch (error) {
       this._handleError('We could not remove the comment. Please try again.', error);
@@ -2567,6 +2733,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       await this._loadSuggestions();
 
+      if (this.state.selectedSimilarSuggestion?.id === item.id) {
+        await this._loadSelectedSimilarSuggestion(item.id, 'Done');
+      }
+
       this._updateState({ success: 'The suggestion has been marked as done.' });
     } catch (error) {
       this._handleError('We could not mark this suggestion as done. Please try again.', error);
@@ -2604,6 +2774,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         await this._refreshCompletedSuggestions();
       } else {
         await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
+      }
+
+      if (this.state.selectedSimilarSuggestion?.id === item.id && this._isMounted) {
+        this.setState((prevState) => ({
+          selectedSimilarSuggestion: undefined,
+          isSelectedSimilarSuggestionLoading: false,
+          expandedCommentIds: prevState.expandedCommentIds.filter((id) => id !== item.id),
+          loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== item.id)
+        }));
       }
 
       this._updateState({ success: 'The suggestion has been removed.' });
