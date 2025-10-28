@@ -101,6 +101,7 @@ interface IFilterState {
   searchQuery: string;
   category?: SuggestionCategory;
   subcategory?: string;
+  suggestionId?: number;
 }
 
 interface IPaginatedSuggestionsState {
@@ -169,8 +170,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       subcategories: [],
       categories: [...FALLBACK_CATEGORIES],
       availableVotes: MAX_VOTES_PER_USER,
-      activeFilter: { searchQuery: '', category: undefined, subcategory: undefined },
-      completedFilter: { searchQuery: '', category: undefined, subcategory: undefined },
+      activeFilter: {
+        searchQuery: '',
+        category: undefined,
+        subcategory: undefined,
+        suggestionId: undefined
+      },
+      completedFilter: {
+        searchQuery: '',
+        category: undefined,
+        subcategory: undefined,
+        suggestionId: undefined
+      },
       similarSuggestions: [],
       isSimilarSuggestionsLoading: false,
       similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
@@ -558,20 +569,27 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           <ul className={styles.similarSuggestionsList}>
             {similarSuggestions.map((item) => (
               <li key={item.id} className={styles.similarSuggestionsItem}>
-                <div className={styles.similarSuggestionHeader}>
-                  <span className={styles.similarSuggestionId}>#{item.id}</span>
-                  <span className={styles.similarSuggestionMeta}>
-                    {item.category}
-                    {item.subcategory ? ` · ${item.subcategory}` : ''}
-                  </span>
-                  <span className={styles.similarSuggestionVotes}>
-                    {item.votes} {item.votes === 1 ? 'vote' : 'votes'}
-                  </span>
-                </div>
-                <h5 className={styles.similarSuggestionHeading}>{item.title}</h5>
-                {item.description && (
-                  <p className={styles.similarSuggestionDescription}>{item.description}</p>
-                )}
+                <button
+                  type="button"
+                  className={styles.similarSuggestionButton}
+                  onClick={() => this._onSimilarSuggestionClick(item)}
+                  aria-label={`Show suggestion #${item.id}`}
+                >
+                  <div className={styles.similarSuggestionHeader}>
+                    <span className={styles.similarSuggestionId}>#{item.id}</span>
+                    <span className={styles.similarSuggestionMeta}>
+                      {item.category}
+                      {item.subcategory ? ` · ${item.subcategory}` : ''}
+                    </span>
+                    <span className={styles.similarSuggestionVotes}>
+                      {item.votes} {item.votes === 1 ? 'vote' : 'votes'}
+                    </span>
+                  </div>
+                  <h5 className={styles.similarSuggestionHeading}>{item.title}</h5>
+                  {item.description && (
+                    <p className={styles.similarSuggestionDescription}>{item.description}</p>
+                  )}
+                </button>
               </li>
             ))}
           </ul>
@@ -581,6 +599,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       </div>
     );
   }
+
+  private _onSimilarSuggestionClick = (item: ISuggestionItem): void => {
+    const filter: IFilterState = {
+      searchQuery: '',
+      category: undefined,
+      subcategory: undefined,
+      suggestionId: item.id
+    };
+
+    if (item.status === 'Done') {
+      this._updateState({ isCompletedSuggestionsExpanded: true }, () => {
+        this._applyCompletedFilter(filter);
+      });
+      return;
+    }
+
+    this._updateState({ isActiveSuggestionsExpanded: true }, () => {
+      this._applyActiveFilter(filter);
+    });
+  };
 
   private _renderSectionHeader(
     title: string,
@@ -1489,10 +1527,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     filter?: IFilterState;
   }): Promise<void> {
     const filter: IFilterState = options.filter ?? this.state.activeFilter;
-    const { items, nextToken } = await this._getSuggestionsPage('Active', options.skipToken, filter);
+    const hasSpecificSuggestion: boolean = typeof filter.suggestionId === 'number';
+    const effectiveSkipToken: string | undefined = hasSpecificSuggestion ? undefined : options.skipToken;
+    const effectivePreviousTokens: (string | undefined)[] = hasSpecificSuggestion
+      ? []
+      : options.previousTokens;
 
-    if (items.length === 0 && options.previousTokens.length > 0) {
-      const tokens: (string | undefined)[] = [...options.previousTokens];
+    const { items, nextToken } = await this._getSuggestionsPage('Active', effectiveSkipToken, filter);
+
+    if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
+      const tokens: (string | undefined)[] = [...effectivePreviousTokens];
       const previousToken: string | undefined = tokens.pop();
 
       await this._fetchActiveSuggestions({
@@ -1507,10 +1551,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({
       activeSuggestions: {
         items,
-        page: options.page,
-        currentToken: options.skipToken,
-        nextToken,
-        previousTokens: options.previousTokens
+        page: hasSpecificSuggestion ? 1 : options.page,
+        currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
+        nextToken: hasSpecificSuggestion ? undefined : nextToken,
+        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens
       },
       activeFilter: filter,
       isActiveSuggestionsLoading: false
@@ -1524,10 +1568,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     filter?: IFilterState;
   }): Promise<void> {
     const filter: IFilterState = options.filter ?? this.state.completedFilter;
-    const { items, nextToken } = await this._getSuggestionsPage('Done', options.skipToken, filter);
+    const hasSpecificSuggestion: boolean = typeof filter.suggestionId === 'number';
+    const effectiveSkipToken: string | undefined = hasSpecificSuggestion ? undefined : options.skipToken;
+    const effectivePreviousTokens: (string | undefined)[] = hasSpecificSuggestion
+      ? []
+      : options.previousTokens;
 
-    if (items.length === 0 && options.previousTokens.length > 0) {
-      const tokens: (string | undefined)[] = [...options.previousTokens];
+    const { items, nextToken } = await this._getSuggestionsPage('Done', effectiveSkipToken, filter);
+
+    if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
+      const tokens: (string | undefined)[] = [...effectivePreviousTokens];
       const previousToken: string | undefined = tokens.pop();
 
       await this._fetchCompletedSuggestions({
@@ -1542,10 +1592,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({
       completedSuggestions: {
         items,
-        page: options.page,
-        currentToken: options.skipToken,
-        nextToken,
-        previousTokens: options.previousTokens
+        page: hasSpecificSuggestion ? 1 : options.page,
+        currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
+        nextToken: hasSpecificSuggestion ? undefined : nextToken,
+        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens
       },
       completedFilter: filter,
       isCompletedSuggestionsLoading: false
@@ -1599,6 +1649,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       category: filter.category,
       subcategory: filter.subcategory,
       searchQuery: filter.searchQuery,
+      suggestionIds:
+        typeof filter.suggestionId === 'number' ? [filter.suggestionId] : undefined,
       orderBy: status === 'Done' ? 'fields/CompletedDateTime desc' : 'createdDateTime desc'
     });
 
@@ -1961,7 +2013,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue?: string
   ): void => {
-    const nextFilter: IFilterState = { ...this.state.activeFilter, searchQuery: newValue ?? '' };
+    const nextFilter: IFilterState = {
+      ...this.state.activeFilter,
+      searchQuery: newValue ?? '',
+      suggestionId: undefined
+    };
     this._applyActiveFilter(nextFilter);
   };
 
@@ -2024,7 +2080,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const nextFilter: IFilterState = {
       ...this.state.activeFilter,
       category: nextCategory,
-      subcategory: this._normalizeFilterSubcategory(nextCategory, this.state.activeFilter.subcategory, this.state.subcategories)
+      subcategory: this._normalizeFilterSubcategory(
+        nextCategory,
+        this.state.activeFilter.subcategory,
+        this.state.subcategories
+      ),
+      suggestionId: undefined
     };
 
     this._applyActiveFilter(nextFilter);
@@ -2041,8 +2102,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const key: string = String(option.key);
     const nextFilter: IFilterState =
       key === ALL_SUBCATEGORY_FILTER_KEY
-        ? { ...this.state.activeFilter, subcategory: undefined }
-        : { ...this.state.activeFilter, subcategory: key };
+        ? { ...this.state.activeFilter, subcategory: undefined, suggestionId: undefined }
+        : { ...this.state.activeFilter, subcategory: key, suggestionId: undefined };
 
     this._applyActiveFilter(nextFilter);
   };
@@ -2051,7 +2112,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue?: string
   ): void => {
-    const nextFilter: IFilterState = { ...this.state.completedFilter, searchQuery: newValue ?? '' };
+    const nextFilter: IFilterState = {
+      ...this.state.completedFilter,
+      searchQuery: newValue ?? '',
+      suggestionId: undefined
+    };
     this._applyCompletedFilter(nextFilter);
   };
 
@@ -2078,7 +2143,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         nextCategory,
         this.state.completedFilter.subcategory,
         this.state.subcategories
-      )
+      ),
+      suggestionId: undefined
     };
 
     this._applyCompletedFilter(nextFilter);
@@ -2095,8 +2161,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const key: string = String(option.key);
     const nextFilter: IFilterState =
       key === ALL_SUBCATEGORY_FILTER_KEY
-        ? { ...this.state.completedFilter, subcategory: undefined }
-        : { ...this.state.completedFilter, subcategory: key };
+        ? { ...this.state.completedFilter, subcategory: undefined, suggestionId: undefined }
+        : { ...this.state.completedFilter, subcategory: key, suggestionId: undefined };
 
     this._applyCompletedFilter(nextFilter);
   };
