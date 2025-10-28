@@ -457,11 +457,6 @@ export class GraphSuggestionsService {
       filterParts.push(`fields/Subcategory eq '${escapedSubcategory}'`);
     }
 
-    if (hasSuggestionIdFilter) {
-      const idFilters: string[] = normalizedSuggestionIds.map((id) => `fields/Id eq ${id}`);
-      filterParts.push(`(${idFilters.join(' or ')})`);
-    }
-
     const searchFilters: { field: 'Title' | 'Details'; term: string }[] = [];
     const seenSearchTerms: Set<string> = new Set();
 
@@ -521,13 +516,21 @@ export class GraphSuggestionsService {
       request = request.orderby('createdDateTime desc');
     }
 
-    const hasSearchFilters: boolean = searchFilters.length > 0;
+    const hasSearchFilters: boolean = searchFilters.length > 0 || hasSuggestionIdFilter;
+
+    const shouldStopEarly = hasSuggestionIdFilter
+      ? (items: IGraphSuggestionItem[]): boolean =>
+          normalizedSuggestionIds.every((id) =>
+            items.some((item) => this._matchesSuggestionIds(item, [id]))
+          )
+      : undefined;
 
     const executeManualSearch = async (): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> => {
       const allItems: IGraphSuggestionItem[] = await this._getAllSuggestionItems(
         createBaseRequest,
         filterParts,
-        options.orderBy
+        options.orderBy,
+        shouldStopEarly
       );
 
       const filteredItems: IGraphSuggestionItem[] = hasSearchFilters
@@ -1356,7 +1359,8 @@ export class GraphSuggestionsService {
   private async _getAllSuggestionItems(
     createBaseRequest: () => GraphRequest,
     filterParts: string[],
-    orderBy?: string
+    orderBy?: string,
+    shouldStopEarly?: (items: IGraphSuggestionItem[]) => boolean
   ): Promise<IGraphSuggestionItem[]> {
     const aggregated: IGraphSuggestionItem[] = [];
     let skipToken: string | undefined;
@@ -1387,6 +1391,10 @@ export class GraphSuggestionsService {
       const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
       const mapped: IGraphSuggestionItem[] = this._mapSuggestionItems(items);
       aggregated.push(...mapped);
+
+      if (shouldStopEarly && shouldStopEarly(aggregated)) {
+        break;
+      }
 
       const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
 
