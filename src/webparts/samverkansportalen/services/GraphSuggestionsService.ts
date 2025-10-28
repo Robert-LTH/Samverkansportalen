@@ -419,6 +419,7 @@ export class GraphSuggestionsService {
       searchQuery?: string;
       titleSearchQuery?: string;
       descriptionSearchQuery?: string;
+      suggestionIds?: number[];
       orderBy?: string;
     } = {}
   ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> {
@@ -436,6 +437,10 @@ export class GraphSuggestionsService {
     let request = createBaseRequest();
 
     const filterParts: string[] = [];
+    const normalizedSuggestionIds: number[] = (options.suggestionIds ?? [])
+      .map((id) => this._normalizeIntegerId(id))
+      .filter((id): id is number => typeof id === 'number');
+    const hasSuggestionIdFilter: boolean = normalizedSuggestionIds.length > 0;
 
     if (options.status) {
       const normalizedStatus: string = options.status === 'Done' ? 'Done' : 'Active';
@@ -450,6 +455,11 @@ export class GraphSuggestionsService {
     if (options.subcategory) {
       const escapedSubcategory: string = this._escapeFilterValue(options.subcategory);
       filterParts.push(`fields/Subcategory eq '${escapedSubcategory}'`);
+    }
+
+    if (hasSuggestionIdFilter) {
+      const idFilters: string[] = normalizedSuggestionIds.map((id) => `fields/Id eq ${id}`);
+      filterParts.push(`(${idFilters.join(' or ')})`);
     }
 
     const searchFilters: { field: 'Title' | 'Details'; term: string }[] = [];
@@ -524,17 +534,25 @@ export class GraphSuggestionsService {
         ? allItems.filter((item) => this._matchesSearchFilters(item, searchFilters))
         : allItems;
 
+      const suggestionFiltered: IGraphSuggestionItem[] = hasSuggestionIdFilter
+        ? filteredItems.filter((item) => this._matchesSuggestionIds(item, normalizedSuggestionIds))
+        : filteredItems;
+
+      if (hasSuggestionIdFilter) {
+        return { items: suggestionFiltered, nextToken: undefined };
+      }
+
       const offset: number = this._parsePaginationToken(options.skipToken);
       const pageSize: number =
         options.top && Number.isFinite(options.top) && options.top > 0
           ? Math.floor(options.top)
-          : filteredItems.length;
+          : suggestionFiltered.length;
 
-      const paginatedItems: IGraphSuggestionItem[] = filteredItems.slice(offset, offset + pageSize);
+      const paginatedItems: IGraphSuggestionItem[] = suggestionFiltered.slice(offset, offset + pageSize);
 
       const nextOffset: number = offset + pageSize;
       const nextToken: string | undefined =
-        nextOffset < filteredItems.length ? this._formatPaginationToken(nextOffset) : undefined;
+        nextOffset < suggestionFiltered.length ? this._formatPaginationToken(nextOffset) : undefined;
 
       return { items: paginatedItems, nextToken };
     };
@@ -544,7 +562,7 @@ export class GraphSuggestionsService {
         request = request.top(options.top);
       }
 
-      if (options.skipToken) {
+      if (options.skipToken && !hasSuggestionIdFilter) {
         request = request.query({ $skiptoken: options.skipToken });
       }
 
@@ -554,10 +572,15 @@ export class GraphSuggestionsService {
         const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
 
         const mappedItems: IGraphSuggestionItem[] = this._mapSuggestionItems(items);
+        const filteredMappedItems: IGraphSuggestionItem[] = hasSuggestionIdFilter
+          ? mappedItems.filter((item) => this._matchesSuggestionIds(item, normalizedSuggestionIds))
+          : mappedItems;
 
-        const nextToken: string | undefined = this._extractSkipToken(response['@odata.nextLink']);
+        const nextToken: string | undefined = hasSuggestionIdFilter
+          ? undefined
+          : this._extractSkipToken(response['@odata.nextLink']);
 
-        return { items: mappedItems, nextToken };
+        return { items: filteredMappedItems, nextToken };
       } catch (error) {
         if (this._isItemNotFoundError(error)) {
           return { items: [], nextToken: undefined };
@@ -1375,6 +1398,29 @@ export class GraphSuggestionsService {
     }
 
     return aggregated;
+  }
+
+  private _matchesSuggestionIds(item: IGraphSuggestionItem, ids: number[]): boolean {
+    if (ids.length === 0) {
+      return true;
+    }
+
+    const fields: IGraphSuggestionItemFields = item.fields ?? {};
+    const candidates: number[] = [];
+
+    const primaryId: number | undefined = this._normalizeIntegerId((fields as { Id?: unknown }).Id);
+
+    if (typeof primaryId === 'number') {
+      candidates.push(primaryId);
+    }
+
+    const secondaryId: number | undefined = this._normalizeIntegerId((fields as { id?: unknown }).id);
+
+    if (typeof secondaryId === 'number' && candidates.indexOf(secondaryId) === -1) {
+      candidates.push(secondaryId);
+    }
+
+    return candidates.some((candidate) => ids.indexOf(candidate) !== -1);
   }
 
   private _matchesSearchFilters(
