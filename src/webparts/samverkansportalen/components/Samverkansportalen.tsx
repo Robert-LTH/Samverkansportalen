@@ -585,7 +585,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         ) : hasResults ? (
           <>
             <div className={styles.similarSuggestionsResults}>
-              {this._renderSuggestionList(suggestionItems, true)}
+              {this._renderSuggestionList(suggestionItems, true, { allowVoting: true })}
             </div>
             {this._renderPaginationControls(
               similarSuggestions.page,
@@ -627,17 +627,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
   }
 
-  private _renderSuggestionList(items: ISuggestionItem[], readOnly: boolean): React.ReactNode {
+  private _renderSuggestionList(
+    items: ISuggestionItem[],
+    readOnly: boolean,
+    options: { allowVoting?: boolean } = {}
+  ): React.ReactNode {
     if (items.length === 0) {
       return <p className={styles.emptyState}>There are no suggestions in this section yet.</p>;
     }
 
     const noVotesRemaining: boolean = this.state.availableVotes <= 0;
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
+    const allowVoting: boolean = options.allowVoting === true;
 
     return this.props.useTableLayout
-      ? this._renderSuggestionTable(items, readOnly, normalizedUser, noVotesRemaining)
-      : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining);
+      ? this._renderSuggestionTable(items, readOnly, normalizedUser, noVotesRemaining, allowVoting)
+      : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining, allowVoting);
   }
 
   private _goToPreviousActivePage = async (): Promise<void> => {
@@ -790,7 +795,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     items: ISuggestionItem[],
     readOnly: boolean,
     normalizedUser: string | undefined,
-    noVotesRemaining: boolean
+    noVotesRemaining: boolean,
+    allowVoting: boolean
   ): React.ReactNode {
     return (
       <ul className={styles.suggestionList}>
@@ -800,8 +806,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             disableVote,
             canAddComment,
             canMarkSuggestionAsDone,
-            canDeleteSuggestion
-          } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
+            canDeleteSuggestion,
+            isVotingAllowed
+          } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining, allowVoting);
           const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
 
           return (
@@ -835,7 +842,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 disableVote,
                 canMarkSuggestionAsDone,
                 canDeleteSuggestion,
-                styles.cardActions
+                styles.cardActions,
+                isVotingAllowed
               )}
               {this._renderCommentSection(item, {
                 canAddComment,
@@ -852,7 +860,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     items: ISuggestionItem[],
     readOnly: boolean,
     normalizedUser: string | undefined,
-    noVotesRemaining: boolean
+    noVotesRemaining: boolean,
+    allowVoting: boolean
   ): React.ReactNode {
     return (
       <div className={styles.tableWrapper}>
@@ -874,8 +883,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               disableVote,
               canAddComment,
               canMarkSuggestionAsDone,
-              canDeleteSuggestion
-            } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining);
+              canDeleteSuggestion,
+              isVotingAllowed
+            } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining, allowVoting);
             const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
 
             return (
@@ -920,7 +930,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                       disableVote,
                       canMarkSuggestionAsDone,
                       canDeleteSuggestion,
-                      styles.tableActions
+                      styles.tableActions,
+                      isVotingAllowed
                     )}
                   </td>
                 </tr>
@@ -951,18 +962,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     disableVote: boolean,
     canMarkSuggestionAsDone: boolean,
     canDeleteSuggestion: boolean,
-    containerClassName: string
+    containerClassName: string,
+    isVotingAllowed: boolean
   ): React.ReactNode {
     return (
       <div className={containerClassName}>
-        {readOnly ? (
-          <DefaultButton text="Votes closed" disabled />
-        ) : (
+        {isVotingAllowed ? (
           <PrimaryButton
             text={hasVoted ? 'Remove vote' : 'Vote'}
             onClick={() => this._toggleVote(item)}
             disabled={disableVote}
           />
+        ) : (
+          <DefaultButton text="Votes closed" disabled />
         )}
         {canMarkSuggestionAsDone && (
           <DefaultButton
@@ -1122,22 +1134,32 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     item: ISuggestionItem,
     readOnly: boolean,
     normalizedUser: string | undefined,
-    noVotesRemaining: boolean
+    noVotesRemaining: boolean,
+    allowVoting: boolean
   ): {
     hasVoted: boolean;
     disableVote: boolean;
     canAddComment: boolean;
     canMarkSuggestionAsDone: boolean;
     canDeleteSuggestion: boolean;
+    isVotingAllowed: boolean;
   } {
     const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
+    const isVotingAllowed: boolean = allowVoting || !readOnly;
     const disableVote: boolean =
-      this.state.isLoading || readOnly || item.status === 'Done' || (!hasVoted && noVotesRemaining);
+      this.state.isLoading || !isVotingAllowed || item.status === 'Done' || (!hasVoted && noVotesRemaining);
     const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
     const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
     const canAddComment: boolean = !readOnly && item.status !== 'Done';
 
-    return { hasVoted, disableVote, canAddComment, canMarkSuggestionAsDone, canDeleteSuggestion };
+    return {
+      hasVoted,
+      disableVote,
+      canAddComment,
+      canMarkSuggestionAsDone,
+      canDeleteSuggestion,
+      isVotingAllowed
+    };
   }
 
   private _formatDateTime(value: string): string {
