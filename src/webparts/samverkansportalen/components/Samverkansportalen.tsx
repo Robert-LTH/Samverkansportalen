@@ -618,7 +618,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     return (
       <div className={styles.similarSuggestionPreview}>
-        <h5 className={styles.similarSuggestionPreviewTitle}>Selected suggestion</h5>
+        <div className={styles.similarSuggestionPreviewHeader}>
+          <h5 className={styles.similarSuggestionPreviewTitle}>Selected suggestion</h5>
+          <IconButton
+            className={styles.similarSuggestionPreviewDismiss}
+            iconProps={{ iconName: 'Clear' }}
+            title="Clear selected suggestion"
+            ariaLabel="Clear selected suggestion"
+            onClick={this._clearSelectedSimilarSuggestion}
+            disabled={isSelectedSimilarSuggestionLoading}
+          />
+        </div>
         {isSelectedSimilarSuggestionLoading ? (
           <Spinner label="Loading suggestion..." size={SpinnerSize.small} />
         ) : (
@@ -640,7 +650,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this.setState(
       (prevState) => ({
-        expandedCommentIds: prevState.expandedCommentIds.filter((id) => id !== suggestionId),
+        expandedCommentIds: [
+          ...prevState.expandedCommentIds.filter((id) => id !== suggestionId),
+          suggestionId
+        ],
         loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId),
         selectedSimilarSuggestion: {
           ...item,
@@ -2126,10 +2139,40 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      this._updateState({
-        selectedSimilarSuggestion: nextSuggestion,
-        isSelectedSimilarSuggestionLoading: false
-      });
+      let comments: ISuggestionComment[] = [];
+      let areCommentsLoaded: boolean = nextSuggestion.commentCount === 0;
+      let commentCount: number = nextSuggestion.commentCount;
+
+      if (nextSuggestion.commentCount > 0) {
+        const commentListId: string = this._getResolvedCommentsListId();
+        const commentItems: IGraphCommentItem[] = await this.props.graphService.getCommentItems(
+          commentListId,
+          {
+            suggestionIds: [suggestionId]
+          }
+        );
+        const commentsBySuggestion: Map<number, ISuggestionComment[]> = this._groupCommentsBySuggestion(
+          commentItems
+        );
+        comments = commentsBySuggestion.get(suggestionId) ?? [];
+        commentCount = comments.length;
+        areCommentsLoaded = true;
+      }
+
+      this._updateState(
+        {
+          selectedSimilarSuggestion: {
+            ...nextSuggestion,
+            comments,
+            commentCount,
+            areCommentsLoaded
+          },
+          isSelectedSimilarSuggestionLoading: false
+        },
+        () => {
+          this._ensureCommentSectionExpanded(suggestionId);
+        }
+      );
     } catch (error) {
       if (!this._isMounted || this.state.selectedSimilarSuggestion?.id !== suggestionId) {
         return;
@@ -2148,6 +2191,27 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
     }
   }
+
+  private _clearSelectedSimilarSuggestion = (): void => {
+    if (!this._isMounted) {
+      return;
+    }
+
+    this.setState((prevState) => {
+      const selectedId: number | undefined = prevState.selectedSimilarSuggestion?.id;
+
+      if (!selectedId) {
+        return null;
+      }
+
+      return {
+        selectedSimilarSuggestion: undefined,
+        isSelectedSimilarSuggestionLoading: false,
+        expandedCommentIds: prevState.expandedCommentIds.filter((id) => id !== selectedId),
+        loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== selectedId)
+      };
+    });
+  };
 
   private _onActiveSearchChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
