@@ -85,7 +85,7 @@ interface ISamverkansportalenState {
   availableVotes: number;
   activeFilter: IFilterState;
   completedFilter: IFilterState;
-  similarSuggestions: ISuggestionItem[];
+  similarSuggestions: IPaginatedSuggestionsState;
   isSimilarSuggestionsLoading: boolean;
   similarSuggestionsQuery: ISimilarSuggestionsQuery;
   selectedSimilarSuggestion?: ISuggestionItem;
@@ -184,7 +184,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         subcategory: undefined,
         suggestionId: undefined
       },
-      similarSuggestions: [],
+      similarSuggestions: {
+        items: [],
+        page: 1,
+        currentToken: undefined,
+        nextToken: undefined,
+        previousTokens: []
+      },
       isSimilarSuggestionsLoading: false,
       similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
       selectedSimilarSuggestion: undefined,
@@ -516,6 +522,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const hasTitleQuery: boolean = similarSuggestionsQuery.title.length > 0;
     const hasDescriptionQuery: boolean = similarSuggestionsQuery.description.length > 0;
 
+    const suggestionItems: ISuggestionItem[] = similarSuggestions.items;
+    const hasResults: boolean = suggestionItems.length > 0;
+
     if (!hasTitleQuery && !hasDescriptionQuery) {
       return null;
     }
@@ -554,11 +563,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       <div className={styles.similarSuggestions} aria-live="polite">
         <div className={styles.similarSuggestionsHeader}>
           <h4 className={styles.similarSuggestionsTitle}>Similar suggestions</h4>
-          {!isSimilarSuggestionsLoading && similarSuggestions.length > 0 && (
+          {!isSimilarSuggestionsLoading && hasResults && (
             <span className={styles.similarSuggestionsSummary}>
-              {similarSuggestions.length === 1
+              {suggestionItems.length === 1
                 ? '1 matching suggestion'
-                : `${similarSuggestions.length} matching suggestions`}
+                : `${suggestionItems.length} matching suggestions`}
             </span>
           )}
         </div>
@@ -573,10 +582,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         </p>
         {isSimilarSuggestionsLoading ? (
           <Spinner label="Searching..." size={SpinnerSize.small} />
-        ) : similarSuggestions.length > 0 ? (
-          <div className={styles.similarSuggestionsResults}>
-            {this._renderSuggestionList(similarSuggestions, true)}
-          </div>
+        ) : hasResults ? (
+          <>
+            <div className={styles.similarSuggestionsResults}>
+              {this._renderSuggestionList(suggestionItems, true)}
+            </div>
+            {this._renderPaginationControls(
+              similarSuggestions.page,
+              similarSuggestions.previousTokens.length > 0,
+              !!similarSuggestions.nextToken,
+              this._goToPreviousSimilarPage,
+              this._goToNextSimilarPage
+            )}
+          </>
         ) : (
           <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
         )}
@@ -728,6 +746,44 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } finally {
       this._updateState({ isCompletedSuggestionsLoading: false });
     }
+  };
+
+  private _goToPreviousSimilarPage = async (): Promise<void> => {
+    const { similarSuggestions, similarSuggestionsQuery } = this.state;
+
+    if (similarSuggestions.previousTokens.length === 0) {
+      return;
+    }
+
+    const tokens: (string | undefined)[] = [...similarSuggestions.previousTokens];
+    const previousToken: string | undefined = tokens.pop();
+
+    await this._fetchSimilarSuggestions({
+      page: Math.max(similarSuggestions.page - 1, 1),
+      previousTokens: tokens,
+      skipToken: previousToken,
+      query: { ...similarSuggestionsQuery }
+    });
+  };
+
+  private _goToNextSimilarPage = async (): Promise<void> => {
+    const { similarSuggestions, similarSuggestionsQuery } = this.state;
+
+    if (!similarSuggestions.nextToken) {
+      return;
+    }
+
+    const tokens: (string | undefined)[] = [
+      ...similarSuggestions.previousTokens,
+      similarSuggestions.currentToken
+    ];
+
+    await this._fetchSimilarSuggestions({
+      page: similarSuggestions.page + 1,
+      previousTokens: tokens,
+      skipToken: similarSuggestions.nextToken,
+      query: { ...similarSuggestionsQuery }
+    });
   };
 
   private _renderSuggestionCards(
@@ -1871,7 +1927,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           ? this.state.loadingCommentIds.filter((id) => id !== previousSelectedId)
           : this.state.loadingCommentIds;
       this._updateState({
-        similarSuggestions: [],
+        similarSuggestions: {
+          items: [],
+          page: 1,
+          currentToken: undefined,
+          nextToken: undefined,
+          previousTokens: []
+        },
         similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
         isSimilarSuggestionsLoading: false,
         selectedSimilarSuggestion: undefined,
@@ -1891,7 +1953,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     if (
       this._areSimilarSuggestionQueriesEqual(nextQuery, this.state.similarSuggestionsQuery) &&
       !this.state.isSimilarSuggestionsLoading &&
-      this.state.similarSuggestions.length > 0
+      this.state.similarSuggestions.items.length > 0
     ) {
       return;
     }
@@ -1911,12 +1973,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
-    const listId: string | undefined = this._currentListId;
-
-    if (!listId) {
-      return;
-    }
-
     this._pendingSimilarSuggestionsQuery = undefined;
 
     const normalizedTitle: string = (query.title ?? '').replace(/\s+/g, ' ').trim();
@@ -1932,7 +1988,59 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     if (!effectiveQuery.title && !effectiveQuery.description) {
       this._updateState({
-        similarSuggestions: [],
+        similarSuggestions: {
+          items: [],
+          page: 1,
+          currentToken: undefined,
+          nextToken: undefined,
+          previousTokens: []
+        },
+        similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
+        isSimilarSuggestionsLoading: false
+      });
+      return;
+    }
+
+    await this._fetchSimilarSuggestions({
+      page: 1,
+      previousTokens: [],
+      skipToken: undefined,
+      query: effectiveQuery
+    });
+  }
+
+  private async _fetchSimilarSuggestions(options: {
+    page: number;
+    previousTokens: (string | undefined)[];
+    skipToken?: string;
+    query: ISimilarSuggestionsQuery;
+  }): Promise<void> {
+    if (!this._isMounted) {
+      return;
+    }
+
+    const listId: string | undefined = this._currentListId;
+
+    if (!listId) {
+      return;
+    }
+
+    const normalizedTitle: string = (options.query.title ?? '').replace(/\s+/g, ' ').trim();
+    const normalizedDescription: string = (options.query.description ?? '').replace(/\s+/g, ' ').trim();
+    const effectiveQuery: ISimilarSuggestionsQuery = {
+      title: normalizedTitle,
+      description: normalizedDescription
+    };
+
+    if (!effectiveQuery.title && !effectiveQuery.description) {
+      this._updateState({
+        similarSuggestions: {
+          items: [],
+          page: 1,
+          currentToken: undefined,
+          nextToken: undefined,
+          previousTokens: []
+        },
         similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
         isSimilarSuggestionsLoading: false
       });
@@ -1947,16 +2055,55 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     try {
       const response = await this.props.graphService.getSuggestionItems(listId, {
         top: MAX_SIMILAR_SUGGESTIONS,
+        skipToken: options.skipToken,
         titleSearchQuery: effectiveQuery.title || undefined,
         descriptionSearchQuery: effectiveQuery.description || undefined,
         orderBy: 'createdDateTime desc'
       });
 
-      const items: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
+      const suggestionIds: number[] = response.items
+        .map((entry) => {
+          const fields: IGraphSuggestionItemFields = entry.fields;
+          const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
+          return this._parseNumericId(rawId);
+        })
+        .filter((value): value is number => typeof value === 'number');
+
+      let commentCounts: Map<number, number> = new Map();
+      let commentsBySuggestion: Map<number, ISuggestionComment[]> = new Map();
+
+      if (suggestionIds.length > 0 && this._currentCommentsListId) {
+        const commentListId: string = this._getResolvedCommentsListId();
+        const [counts, commentItems] = await Promise.all([
+          this.props.graphService.getCommentCounts(commentListId, { suggestionIds }),
+          this.props.graphService.getCommentItems(commentListId, { suggestionIds })
+        ]);
+        commentCounts = counts;
+        commentsBySuggestion = this._groupCommentsBySuggestion(commentItems);
+      }
+
+      const baseItems: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
         response.items,
         new Map<number, IVoteEntry[]>(),
-        new Map<number, number>()
+        commentCounts
       );
+
+      const enrichedItems: ISuggestionItem[] = this._currentCommentsListId
+        ? baseItems.map((item) => {
+            const loadedComments: ISuggestionComment[] = commentsBySuggestion.get(item.id) ?? [];
+            const mappedCount: number = Math.max(
+              loadedComments.length,
+              commentCounts.get(item.id) ?? 0
+            );
+
+            return {
+              ...item,
+              comments: loadedComments,
+              commentCount: mappedCount,
+              areCommentsLoaded: true
+            };
+          })
+        : baseItems;
 
       if (
         !this._areSimilarSuggestionQueriesEqual(this.state.similarSuggestionsQuery, effectiveQuery)
@@ -1964,7 +2111,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      const limited: ISuggestionItem[] = items.slice(0, MAX_SIMILAR_SUGGESTIONS);
+      const limited: ISuggestionItem[] = enrichedItems.slice(0, MAX_SIMILAR_SUGGESTIONS);
 
       const currentSelectedId: number | undefined = this.state.selectedSimilarSuggestion?.id;
       const shouldKeepSelection: boolean =
@@ -1979,11 +2126,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           ? this.state.loadingCommentIds.filter((id) => id !== currentSelectedId)
           : this.state.loadingCommentIds;
 
+      const nextSelectedSimilarSuggestion: ISuggestionItem | undefined = shouldKeepSelection
+        ? limited.find((entry) => entry.id === currentSelectedId) ?? this.state.selectedSimilarSuggestion
+        : undefined;
+
+      const nextIsSelectedSimilarSuggestionLoading: boolean = shouldKeepSelection
+        ? this.state.isSelectedSimilarSuggestionLoading
+        : false;
+
       this._updateState({
-        similarSuggestions: limited,
+        similarSuggestions: {
+          items: limited,
+          page: options.page,
+          currentToken: options.skipToken,
+          nextToken: response.nextToken,
+          previousTokens: options.previousTokens
+        },
         isSimilarSuggestionsLoading: false,
-        selectedSimilarSuggestion: shouldKeepSelection ? this.state.selectedSimilarSuggestion : undefined,
-        isSelectedSimilarSuggestionLoading: shouldKeepSelection ? this.state.isSelectedSimilarSuggestionLoading : false,
+        selectedSimilarSuggestion: nextSelectedSimilarSuggestion,
+        isSelectedSimilarSuggestionLoading: nextIsSelectedSimilarSuggestionLoading,
         expandedCommentIds: nextExpandedCommentIds,
         loadingCommentIds: nextLoadingCommentIds
       });
@@ -2007,7 +2168,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           : this.state.loadingCommentIds;
 
       this._updateState({
-        similarSuggestions: [],
+        similarSuggestions: {
+          items: [],
+          page: 1,
+          currentToken: undefined,
+          nextToken: undefined,
+          previousTokens: []
+        },
         isSimilarSuggestionsLoading: false,
         selectedSimilarSuggestion: undefined,
         isSelectedSimilarSuggestionLoading: false,
@@ -2348,7 +2515,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           defaultCategory,
           undefined
         ),
-        similarSuggestions: [],
+        similarSuggestions: {
+          items: [],
+          page: 1,
+          currentToken: undefined,
+          nextToken: undefined,
+          previousTokens: []
+        },
         isSimilarSuggestionsLoading: false,
         similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY }
       });
