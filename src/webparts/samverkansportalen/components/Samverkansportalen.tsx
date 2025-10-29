@@ -26,6 +26,7 @@ import {
   type IGraphCategoryItem,
   type IGraphCommentItem
 } from '../services/GraphSuggestionsService';
+import * as strings from 'SamverkansportalenWebPartStrings';
 
 interface ISuggestionItem {
   id: number;
@@ -164,7 +165,7 @@ const SectionHeader: React.FC<ISectionHeaderProps> = ({ title, titleId, contentI
       aria-expanded={isExpanded}
       aria-controls={contentId}
     >
-      {isExpanded ? 'Hide section' : 'Show section'}
+      {isExpanded ? strings.HideSectionLabel : strings.ShowSectionLabel}
     </ActionButton>
   </div>
 );
@@ -190,11 +191,11 @@ const PaginationControls: React.FC<IPaginationControlsProps> = ({
 
   return (
     <div className={styles.paginationControls}>
-      <DefaultButton text="Previous" onClick={onPrevious} disabled={!hasPrevious} />
+      <DefaultButton text={strings.PreviousButtonText} onClick={onPrevious} disabled={!hasPrevious} />
       <span className={styles.paginationInfo} aria-live="polite">
-        Page {page}
+        {strings.PaginationPageLabel.replace('{0}', page.toString())}
       </span>
-      <DefaultButton text="Next" onClick={onNext} disabled={!hasNext} />
+      <DefaultButton text={strings.NextButtonText} onClick={onNext} disabled={!hasNext} />
     </div>
   );
 };
@@ -209,17 +210,17 @@ const SuggestionTimestamps: React.FC<ISuggestionTimestampsProps> = ({ item, form
   const { createdDateTime, lastModifiedDateTime, completedDateTime } = item;
 
   if (createdDateTime) {
-    entries.push({ label: 'Created', value: createdDateTime });
+    entries.push({ label: strings.CreatedLabel, value: createdDateTime });
   }
 
   const shouldShowLastModified: boolean = !!lastModifiedDateTime && !completedDateTime;
 
   if (shouldShowLastModified && lastModifiedDateTime) {
-    entries.push({ label: 'Last modified', value: lastModifiedDateTime });
+    entries.push({ label: strings.LastModifiedLabel, value: lastModifiedDateTime });
   }
 
   if (completedDateTime) {
-    entries.push({ label: 'Completed', value: completedDateTime });
+    entries.push({ label: strings.CompletedLabel, value: completedDateTime });
   }
 
   if (entries.length === 0) {
@@ -257,12 +258,16 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
 }) => (
   <div className={containerClassName}>
     {interaction.isVotingAllowed ? (
-      <PrimaryButton text={interaction.hasVoted ? 'Remove vote' : 'Vote'} onClick={onToggleVote} disabled={interaction.disableVote} />
+      <PrimaryButton
+        text={interaction.hasVoted ? 'Remove vote' : strings.VoteButtonText}
+        onClick={onToggleVote}
+        disabled={interaction.disableVote}
+      />
     ) : (
-      <DefaultButton text="Votes closed" disabled />
+      <DefaultButton text={strings.VotesClosedText} disabled />
     )}
     {interaction.canMarkSuggestionAsDone && (
-      <DefaultButton text="Mark as done" onClick={onMarkSuggestionAsDone} disabled={isLoading} />
+      <DefaultButton text={strings.MarkAsDoneButtonText} onClick={onMarkSuggestionAsDone} disabled={isLoading} />
     )}
     {interaction.canDeleteSuggestion && (
       <IconButton
@@ -306,13 +311,13 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
         aria-controls={comment.regionId}
       >
         <Icon iconName={comment.isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'} className={styles.commentToggleIcon} />
-        <span className={styles.commentHeading}>Comments</span>
+        <span className={styles.commentHeading}>{strings.CommentsLabel}</span>
         <span className={styles.commentCount}>({comment.resolvedCount})</span>
       </button>
       {comment.canAddComment && (
         <DefaultButton
           className={styles.commentAddButton}
-          text="Add comment"
+          text={strings.AddCommentButtonText}
           onClick={onAddComment}
           disabled={isLoading}
         />
@@ -411,9 +416,12 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
             <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
             {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
           </div>
-          <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+          <div
+            className={styles.voteBadge}
+            aria-label={`${item.votes} ${item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}`}
+          >
             <span className={styles.voteNumber}>{item.votes}</span>
-            <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+            <span className={styles.voteText}>{item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}</span>
           </div>
         </div>
         <ActionButtons
@@ -472,13 +480,13 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
             Suggestion
           </th>
           <th scope="col" className={styles.tableHeaderCategory}>
-            Category
+            {strings.CategoryLabel}
           </th>
           <th scope="col" className={styles.tableHeaderSubcategory}>
-            Subcategory
+            {strings.SubcategoryLabel}
           </th>
           <th scope="col" className={styles.tableHeaderVotes}>
-            Votes
+            {strings.VotesLabel}
           </th>
           <th scope="col" className={styles.tableHeaderActions}>
             Actions
@@ -499,20 +507,25 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
                 {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
               </td>
-              <td className={styles.tableCellCategory} data-label="Category">
+              <td className={styles.tableCellCategory} data-label={strings.CategoryLabel}>
                 <span className={styles.categoryBadge}>{item.category}</span>
               </td>
-              <td className={styles.tableCellSubcategory} data-label="Subcategory">
+              <td className={styles.tableCellSubcategory} data-label={strings.SubcategoryLabel}>
                 {item.subcategory ? (
                   <span className={styles.subcategoryBadge}>{item.subcategory}</span>
                 ) : (
                   <span className={styles.subcategoryPlaceholder}>—</span>
                 )}
               </td>
-              <td className={styles.tableCellVotes} data-label="Votes">
-                <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+              <td className={styles.tableCellVotes} data-label={strings.VotesLabel}>
+                <div
+                  className={styles.voteBadge}
+                  aria-label={`${item.votes} ${item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}`}
+                >
                   <span className={styles.voteNumber}>{item.votes}</span>
-                  <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+                  <span className={styles.voteText}>
+                    {item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}
+                  </span>
                 </div>
               </td>
               <td className={styles.tableCellActions} data-label="Actions">
@@ -696,15 +709,15 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
         <>
           <div className={styles.filterControls}>
             <TextField
-              label="Search"
+              label={strings.SearchLabel}
               value={searchValue}
               onChange={onSearchChange}
               disabled={isLoading}
-              placeholder="Search by title or details"
+              placeholder={strings.SearchPlaceholder}
               className={styles.filterSearch}
             />
             <Dropdown
-              label="Category"
+              label={strings.CategoryLabel}
               options={categoryOptions}
               selectedKey={selectedCategoryKey}
               onChange={onCategoryChange}
@@ -712,7 +725,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
               className={styles.filterDropdown}
             />
             <Dropdown
-              label="Subcategory"
+              label={strings.SubcategoryLabel}
               options={subcategoryOptions}
               selectedKey={selectedSubcategoryKey}
               onChange={onSubcategoryChange}
@@ -827,10 +840,12 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   return (
     <div className={styles.similarSuggestions} aria-live="polite">
       <div className={styles.similarSuggestionsHeader}>
-        <h4 className={styles.similarSuggestionsTitle}>Similar suggestions</h4>
+        <h4 className={styles.similarSuggestionsTitle}>{strings.SimilarSuggestionsTitle}</h4>
         {!isLoading && hasResults && (
           <span className={styles.similarSuggestionsSummary}>
-            {viewModels.length === 1 ? '1 matching suggestion' : `${viewModels.length} matching suggestions`}
+            {viewModels.length === 1
+              ? strings.SingleMatchingSuggestionLabel
+              : strings.MultipleMatchingSuggestionsLabel.replace('{0}', viewModels.length.toString())}
           </span>
         )}
       </div>
@@ -1063,7 +1078,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             <p className={styles.subtitle}>{this.props.headerSubtitle}</p>
           </div>
           <div className={styles.voteSummary} aria-live="polite">
-            <span className={styles.voteLabel}>Votes remaining</span>
+            <span className={styles.voteLabel}>{strings.VotesRemainingLabel}</span>
             <span className={styles.voteValue}>{availableVotes} / {MAX_VOTES_PER_USER}</span>
           </div>
         </header>
@@ -1092,7 +1107,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
         <div className={styles.addSuggestion}>
           <SectionHeader
-            title="Add a suggestion"
+            title={strings.AddSuggestionSectionTitle}
             titleId={this._sectionIds.add.title}
             contentId={this._sectionIds.add.content}
             isExpanded={isAddSuggestionExpanded}
@@ -1143,14 +1158,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   isProcessing={isLoading}
                 />
                 <Dropdown
-                  label="Category"
+                  label={strings.CategoryLabel}
                   options={categoryOptions}
                   selectedKey={newCategory}
                   onChange={this._onCategoryChange}
                   disabled={isLoading || categoryOptions.length === 0}
                 />
                 <Dropdown
-                  label="Subcategory"
+                  label={strings.SubcategoryLabel}
                   options={subcategoryOptions}
                   selectedKey={newSubcategoryKey}
                   onChange={this._onSubcategoryChange}
@@ -1162,7 +1177,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   }
                 />
                 <PrimaryButton
-                  text="Submit suggestion"
+                  text={strings.SubmitSuggestionButtonText}
                   onClick={this._addSuggestion}
                   disabled={isLoading || newTitle.trim().length === 0}
                 />
@@ -1500,7 +1515,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       })
     );
 
-    return [{ key: ALL_SUBCATEGORY_FILTER_KEY, text: 'All subcategories' }, ...options];
+    return [{ key: ALL_SUBCATEGORY_FILTER_KEY, text: strings.AllSubcategoriesOptionLabel }, ...options];
   }
 
   private _getCategoryOptions(categories: SuggestionCategory[]): IDropdownOption[] {
@@ -1508,7 +1523,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _getFilterCategoryOptions(categories: SuggestionCategory[]): IDropdownOption[] {
-    return [{ key: ALL_CATEGORY_FILTER_KEY, text: 'All categories' }, ...this._getCategoryOptions(categories)];
+    return [{ key: ALL_CATEGORY_FILTER_KEY, text: strings.AllCategoriesOptionLabel }, ...this._getCategoryOptions(categories)];
   }
 
   private _getSubcategoriesForCategory(
