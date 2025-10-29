@@ -769,7 +769,6 @@ interface ISimilarSuggestionsProps {
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isProcessing: boolean;
-  useTableLayout: boolean;
 }
 
 const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
@@ -788,8 +787,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   onDeleteComment,
   onToggleComments,
   formatDateTime,
-  isProcessing,
-  useTableLayout
+  isProcessing
 }) => {
   const hasTitleQuery: boolean = query.title.length > 0;
   const hasDescriptionQuery: boolean = query.description.length > 0;
@@ -852,7 +850,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
           <div className={styles.similarSuggestionsResults}>
             <SuggestionList
               viewModels={viewModels}
-              useTableLayout={useTableLayout}
+              useTableLayout={false}
               isLoading={isProcessing}
               onToggleVote={onToggleVote}
               onMarkSuggestionAsDone={onMarkSuggestionAsDone}
@@ -1143,7 +1141,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   onToggleComments={(id) => this._toggleCommentsSection(id)}
                   formatDateTime={(value) => this._formatDateTime(value)}
                   isProcessing={isLoading}
-                  useTableLayout={this.props.useTableLayout === true}
                 />
                 <Dropdown
                   label="Category"
