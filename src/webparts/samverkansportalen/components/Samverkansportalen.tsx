@@ -259,7 +259,7 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
   <div className={containerClassName}>
     {interaction.isVotingAllowed ? (
       <PrimaryButton
-        text={interaction.hasVoted ? 'Remove vote' : strings.VoteButtonText}
+        text={interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText}
         onClick={onToggleVote}
         disabled={interaction.disableVote}
       />
@@ -272,8 +272,8 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
     {interaction.canDeleteSuggestion && (
       <IconButton
         iconProps={{ iconName: 'Delete' }}
-        title="Remove suggestion"
-        ariaLabel="Remove suggestion"
+        title={strings.RemoveSuggestionButtonLabel}
+        ariaLabel={strings.RemoveSuggestionButtonLabel}
         onClick={onDeleteSuggestion}
         disabled={isLoading}
       />
@@ -332,9 +332,9 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
     >
       {comment.isExpanded && (
         comment.isLoading ? (
-          <Spinner label="Loading comments..." size={SpinnerSize.small} />
+          <Spinner label={strings.LoadingCommentsLabel} size={SpinnerSize.small} />
         ) : !comment.hasLoaded ? null : comment.comments.length === 0 ? (
-          <p className={styles.commentEmpty}>No comments yet.</p>
+          <p className={styles.commentEmpty}>{strings.NoCommentsLabel}</p>
         ) : (
           <ul className={styles.commentList}>
             {comment.comments.map((commentItem) => {
@@ -358,8 +358,8 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
                         <IconButton
                           className={styles.commentDeleteButton}
                           iconProps={{ iconName: 'Delete' }}
-                          title="Delete comment"
-                          ariaLabel="Delete comment"
+                          title={strings.DeleteCommentButtonLabel}
+                          ariaLabel={strings.DeleteCommentButtonLabel}
                           onClick={() => onDeleteComment(commentItem)}
                           disabled={isLoading}
                         />
@@ -406,7 +406,10 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
         <div className={styles.cardHeader}>
           <div className={styles.cardText}>
             <div className={styles.cardMeta}>
-              <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+              <span
+                className={styles.entryId}
+                aria-label={strings.EntryAriaLabel.replace('{0}', item.id.toString())}
+              >
                 #{item.id}
               </span>
               <span className={styles.categoryBadge}>{item.category}</span>
@@ -477,7 +480,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
             #
           </th>
           <th scope="col" className={styles.tableHeaderSuggestion}>
-            Suggestion
+            {strings.SuggestionTableSuggestionColumnLabel}
           </th>
           <th scope="col" className={styles.tableHeaderCategory}>
             {strings.CategoryLabel}
@@ -489,7 +492,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
             {strings.VotesLabel}
           </th>
           <th scope="col" className={styles.tableHeaderActions}>
-            Actions
+            {strings.SuggestionTableActionsColumnLabel}
           </th>
         </tr>
       </thead>
@@ -497,12 +500,18 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
         {viewModels.map(({ item, interaction, comment }) => (
           <React.Fragment key={item.id}>
             <tr className={styles.suggestionRow}>
-              <td className={styles.tableCellId} data-label="Entry">
-                <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+              <td className={styles.tableCellId} data-label={strings.SuggestionTableEntryColumnLabel}>
+                <span
+                  className={styles.entryId}
+                  aria-label={strings.EntryAriaLabel.replace('{0}', item.id.toString())}
+                >
                   #{item.id}
                 </span>
               </td>
-              <td className={styles.tableCellSuggestion} data-label="Suggestion">
+              <td
+                className={styles.tableCellSuggestion}
+                data-label={strings.SuggestionTableSuggestionColumnLabel}
+              >
                 <h4 className={styles.suggestionTitle}>{item.title}</h4>
                 <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
                 {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
@@ -528,7 +537,10 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   </span>
                 </div>
               </td>
-              <td className={styles.tableCellActions} data-label="Actions">
+              <td
+                className={styles.tableCellActions}
+                data-label={strings.SuggestionTableActionsColumnLabel}
+              >
                 <ActionButtons
                   interaction={interaction}
                   containerClassName={styles.tableActions}
@@ -540,7 +552,11 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
               </td>
             </tr>
             <tr className={styles.metaRow}>
-              <td className={styles.metaCell} colSpan={6} data-label="Details">
+              <td
+                className={styles.metaCell}
+                colSpan={6}
+                data-label={strings.SuggestionTableDetailsColumnLabel}
+              >
                 <div className={styles.metaContent}>
                   <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
                   <CommentSection
@@ -588,7 +604,7 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
   formatDateTime
 }) => {
   if (viewModels.length === 0) {
-    return <p className={styles.emptyState}>There are no suggestions in this section yet.</p>;
+    return <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>;
   }
 
   return useTableLayout ? (
@@ -735,7 +751,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
             />
           </div>
           {isLoading || isSectionLoading ? (
-            <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
+            <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
           ) : (
             <>
               <SuggestionList
@@ -816,7 +832,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
       key: 'title',
       content: (
         <>
-          title{' '}
+          {strings.SimilarSuggestionsQueryTitleLabel}{' '}
           <span className={styles.similarSuggestionsQueryValue}>“{query.title}”</span>
         </>
       )
@@ -828,7 +844,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
       key: 'description',
       content: (
         <>
-          description{' '}
+          {strings.SimilarSuggestionsQueryDescriptionLabel}{' '}
           <span className={styles.similarSuggestionsQueryValue}>“{query.description}”</span>
         </>
       )
@@ -850,16 +866,22 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
         )}
       </div>
       <p className={styles.similarSuggestionsQuery}>
-        Showing results for{' '}
+        {strings.SimilarSuggestionsQueryPrefix}{' '}
         {querySegments.map((segment, index) => (
           <React.Fragment key={segment.key}>
-            {index > 0 ? ' and ' : null}
+            {index > 0 && (
+              <>
+                {' '}
+                {strings.SimilarSuggestionsQuerySeparator}
+                {' '}
+              </>
+            )}
             {segment.content}
           </React.Fragment>
         ))}
       </p>
       {isLoading ? (
-        <Spinner label="Searching..." size={SpinnerSize.small} />
+        <Spinner label={strings.SimilarSuggestionsLoadingLabel} size={SpinnerSize.small} />
       ) : hasResults ? (
         <>
           <div className={styles.similarSuggestionsResults}>
@@ -885,14 +907,18 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
           />
         </>
       ) : (
-        <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
+        <p className={styles.noSimilarSuggestions}>{strings.NoSimilarSuggestionsLabel}</p>
       )}
     </div>
   );
 };
 
 const MAX_VOTES_PER_USER: number = 5;
-const FALLBACK_CATEGORIES: SuggestionCategory[] = ['Change request', 'Webbinar', 'Article'];
+const FALLBACK_CATEGORIES: SuggestionCategory[] = [
+  strings.DefaultCategoryChangeRequest,
+  strings.DefaultCategoryWebinar,
+  strings.DefaultCategoryArticle
+];
 const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
@@ -1050,11 +1076,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const isActiveFilterSubcategoryLimited: boolean = activeFilterSubcategoryOptions.length <= 1;
     const isCompletedFilterSubcategoryLimited: boolean = completedFilterSubcategoryOptions.length <= 1;
     const activeFilterSubcategoryPlaceholder: string = isActiveFilterSubcategoryLimited
-      ? 'No subcategories available'
-      : 'Select a subcategory';
+      ? strings.NoSubcategoriesAvailablePlaceholder
+      : strings.SelectSubcategoryPlaceholder;
     const completedFilterSubcategoryPlaceholder: string = isCompletedFilterSubcategoryLimited
-      ? 'No subcategories available'
-      : 'Select a subcategory';
+      ? strings.NoSubcategoriesAvailablePlaceholder
+      : strings.SelectSubcategoryPlaceholder;
 
     const activeSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
       activeSuggestions.items,
@@ -1125,14 +1151,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             {isAddSuggestionExpanded && (
               <div className={styles.addForm}>
                 <TextField
-                  label="Title"
+                  label={strings.AddSuggestionTitleLabel}
                   required
                   value={newTitle}
                   onChange={this._onTitleChange}
                   disabled={isLoading}
                 />
                 <TextField
-                  label="Details"
+                  label={strings.AddSuggestionDetailsLabel}
                   multiline
                   rows={3}
                   value={newDescription}
@@ -1172,8 +1198,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   disabled={isLoading || subcategoryOptions.length === 0}
                   placeholder={
                     subcategoryOptions.length === 0
-                      ? 'No subcategories available'
-                      : 'Select a subcategory'
+                      ? strings.NoSubcategoriesAvailablePlaceholder
+                      : strings.SelectSubcategoryPlaceholder
                   }
                 />
                 <PrimaryButton
@@ -1187,7 +1213,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         </div>
 
         <SuggestionSection
-          title="Active suggestions"
+          title={strings.ActiveSuggestionsSectionTitle}
           titleId={this._sectionIds.active.title}
           contentId={this._sectionIds.active.content}
           isExpanded={isActiveSuggestionsExpanded}
@@ -1222,7 +1248,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         />
 
         <SuggestionSection
-          title="Completed suggestions"
+          title={strings.CompletedSuggestionsSectionTitle}
           titleId={this._sectionIds.completed.title}
           contentId={this._sectionIds.completed.content}
           isExpanded={isCompletedSuggestionsExpanded}
