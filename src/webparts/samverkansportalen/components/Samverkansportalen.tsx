@@ -2375,22 +2375,34 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         })
         .filter((value): value is number => typeof value === 'number');
 
+      let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
       let commentCounts: Map<number, number> = new Map();
       let commentsBySuggestion: Map<number, ISuggestionComment[]> = new Map();
 
-      if (suggestionIds.length > 0 && this._currentCommentsListId) {
-        const commentListId: string = this._getResolvedCommentsListId();
-        const [counts, commentItems] = await Promise.all([
-          this.props.graphService.getCommentCounts(commentListId, { suggestionIds }),
-          this.props.graphService.getCommentItems(commentListId, { suggestionIds })
-        ]);
-        commentCounts = counts;
-        commentsBySuggestion = this._groupCommentsBySuggestion(commentItems);
+      if (suggestionIds.length > 0) {
+        if (this._currentVotesListId) {
+          const voteListId: string = this._getResolvedVotesListId();
+          const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(
+            voteListId,
+            { suggestionIds }
+          );
+          votesBySuggestion = this._groupVotesBySuggestion(voteItems);
+        }
+
+        if (this._currentCommentsListId) {
+          const commentListId: string = this._getResolvedCommentsListId();
+          const [counts, commentItems] = await Promise.all([
+            this.props.graphService.getCommentCounts(commentListId, { suggestionIds }),
+            this.props.graphService.getCommentItems(commentListId, { suggestionIds })
+          ]);
+          commentCounts = counts;
+          commentsBySuggestion = this._groupCommentsBySuggestion(commentItems);
+        }
       }
 
       const baseItems: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
         response.items,
-        new Map<number, IVoteEntry[]>(),
+        votesBySuggestion,
         commentCounts
       );
 
