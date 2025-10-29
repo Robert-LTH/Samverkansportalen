@@ -114,6 +114,770 @@ interface IPaginatedSuggestionsState {
   previousTokens: (string | undefined)[];
 }
 
+interface ISuggestionInteractionState {
+  hasVoted: boolean;
+  disableVote: boolean;
+  canAddComment: boolean;
+  canMarkSuggestionAsDone: boolean;
+  canDeleteSuggestion: boolean;
+  isVotingAllowed: boolean;
+}
+
+interface ISuggestionCommentState {
+  isExpanded: boolean;
+  isLoading: boolean;
+  hasLoaded: boolean;
+  resolvedCount: number;
+  comments: ISuggestionComment[];
+  canAddComment: boolean;
+  canDeleteComments: boolean;
+  regionId: string;
+  toggleId: string;
+}
+
+interface ISuggestionViewModel {
+  item: ISuggestionItem;
+  interaction: ISuggestionInteractionState;
+  comment: ISuggestionCommentState;
+}
+
+type SuggestionAction = (item: ISuggestionItem) => void | Promise<void>;
+type CommentAction = (item: ISuggestionItem, comment: ISuggestionComment) => void | Promise<void>;
+
+interface ISectionHeaderProps {
+  title: string;
+  titleId: string;
+  contentId: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+const SectionHeader: React.FC<ISectionHeaderProps> = ({ title, titleId, contentId, isExpanded, onToggle }) => (
+  <div className={styles.sectionHeader}>
+    <h3 id={titleId} className={styles.sectionTitle}>
+      {title}
+    </h3>
+    <ActionButton
+      className={styles.sectionToggleButton}
+      iconProps={{ iconName: isExpanded ? 'ChevronUpSmall' : 'ChevronDownSmall' }}
+      onClick={onToggle}
+      aria-expanded={isExpanded}
+      aria-controls={contentId}
+    >
+      {isExpanded ? 'Hide section' : 'Show section'}
+    </ActionButton>
+  </div>
+);
+
+interface IPaginationControlsProps {
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+const PaginationControls: React.FC<IPaginationControlsProps> = ({
+  page,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext
+}) => {
+  if (!hasPrevious && !hasNext && page <= 1) {
+    return null;
+  }
+
+  return (
+    <div className={styles.paginationControls}>
+      <DefaultButton text="Previous" onClick={onPrevious} disabled={!hasPrevious} />
+      <span className={styles.paginationInfo} aria-live="polite">
+        Page {page}
+      </span>
+      <DefaultButton text="Next" onClick={onNext} disabled={!hasNext} />
+    </div>
+  );
+};
+
+interface ISuggestionTimestampsProps {
+  item: ISuggestionItem;
+  formatDateTime: (value: string) => string;
+}
+
+const SuggestionTimestamps: React.FC<ISuggestionTimestampsProps> = ({ item, formatDateTime }) => {
+  const entries: { label: string; value: string }[] = [];
+  const { createdDateTime, lastModifiedDateTime, completedDateTime } = item;
+
+  if (createdDateTime) {
+    entries.push({ label: 'Created', value: createdDateTime });
+  }
+
+  const shouldShowLastModified: boolean = !!lastModifiedDateTime && !completedDateTime;
+
+  if (shouldShowLastModified && lastModifiedDateTime) {
+    entries.push({ label: 'Last modified', value: lastModifiedDateTime });
+  }
+
+  if (completedDateTime) {
+    entries.push({ label: 'Completed', value: completedDateTime });
+  }
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.timestampRow}>
+      {entries.map((entry) => (
+        <span key={entry.label} className={styles.timestampEntry}>
+          <span className={styles.timestampLabel}>{entry.label}:</span>
+          <span className={styles.timestampValue}>{formatDateTime(entry.value)}</span>
+        </span>
+      ))}
+    </div>
+  );
+};
+
+interface IActionButtonsProps {
+  interaction: ISuggestionInteractionState;
+  containerClassName: string;
+  isLoading: boolean;
+  onToggleVote: () => void;
+  onMarkSuggestionAsDone: () => void;
+  onDeleteSuggestion: () => void;
+}
+
+const ActionButtons: React.FC<IActionButtonsProps> = ({
+  interaction,
+  containerClassName,
+  isLoading,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion
+}) => (
+  <div className={containerClassName}>
+    {interaction.isVotingAllowed ? (
+      <PrimaryButton text={interaction.hasVoted ? 'Remove vote' : 'Vote'} onClick={onToggleVote} disabled={interaction.disableVote} />
+    ) : (
+      <DefaultButton text="Votes closed" disabled />
+    )}
+    {interaction.canMarkSuggestionAsDone && (
+      <DefaultButton text="Mark as done" onClick={onMarkSuggestionAsDone} disabled={isLoading} />
+    )}
+    {interaction.canDeleteSuggestion && (
+      <IconButton
+        iconProps={{ iconName: 'Delete' }}
+        title="Remove suggestion"
+        ariaLabel="Remove suggestion"
+        onClick={onDeleteSuggestion}
+        disabled={isLoading}
+      />
+    )}
+  </div>
+);
+
+interface ICommentSectionProps {
+  item: ISuggestionItem;
+  comment: ISuggestionCommentState;
+  onToggle: () => void;
+  onAddComment: () => void;
+  onDeleteComment: (comment: ISuggestionComment) => void;
+  formatDateTime: (value: string) => string;
+  isLoading: boolean;
+}
+
+const CommentSection: React.FC<ICommentSectionProps> = ({
+  item,
+  comment,
+  onToggle,
+  onAddComment,
+  onDeleteComment,
+  formatDateTime,
+  isLoading
+}) => (
+  <div className={styles.commentSection}>
+    <div className={styles.commentHeader}>
+      <button
+        type="button"
+        id={comment.toggleId}
+        className={styles.commentToggleButton}
+        onClick={onToggle}
+        aria-expanded={comment.isExpanded}
+        aria-controls={comment.regionId}
+      >
+        <Icon iconName={comment.isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'} className={styles.commentToggleIcon} />
+        <span className={styles.commentHeading}>Comments</span>
+        <span className={styles.commentCount}>({comment.resolvedCount})</span>
+      </button>
+      {comment.canAddComment && (
+        <DefaultButton
+          className={styles.commentAddButton}
+          text="Add comment"
+          onClick={onAddComment}
+          disabled={isLoading}
+        />
+      )}
+    </div>
+    <div
+      id={comment.regionId}
+      role="region"
+      aria-labelledby={comment.toggleId}
+      className={`${styles.commentContent} ${comment.isExpanded ? '' : styles.commentContentCollapsed}`}
+      hidden={!comment.isExpanded}
+    >
+      {comment.isExpanded && (
+        comment.isLoading ? (
+          <Spinner label="Loading comments..." size={SpinnerSize.small} />
+        ) : !comment.hasLoaded ? null : comment.comments.length === 0 ? (
+          <p className={styles.commentEmpty}>No comments yet.</p>
+        ) : (
+          <ul className={styles.commentList}>
+            {comment.comments.map((commentItem) => {
+              const hasMeta: boolean = !!commentItem.author || !!commentItem.createdDateTime;
+
+              return (
+                <li key={commentItem.id} className={styles.commentItem}>
+                  {(hasMeta || comment.canDeleteComments) && (
+                    <div className={styles.commentItemTopRow}>
+                      {hasMeta ? (
+                        <div className={styles.commentMeta}>
+                          {commentItem.author && <span className={styles.commentAuthor}>{commentItem.author}</span>}
+                          {commentItem.createdDateTime && (
+                            <span className={styles.commentTimestamp}>{formatDateTime(commentItem.createdDateTime)}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className={styles.commentMetaPlaceholder} aria-hidden={true} />
+                      )}
+                      {comment.canDeleteComments && (
+                        <IconButton
+                          className={styles.commentDeleteButton}
+                          iconProps={{ iconName: 'Delete' }}
+                          title="Delete comment"
+                          ariaLabel="Delete comment"
+                          onClick={() => onDeleteComment(commentItem)}
+                          disabled={isLoading}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <p className={styles.commentText}>{commentItem.text}</p>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      )}
+    </div>
+  </div>
+);
+
+interface ISuggestionCardsProps {
+  viewModels: ISuggestionViewModel[];
+  onToggleVote: SuggestionAction;
+  onMarkSuggestionAsDone: SuggestionAction;
+  onDeleteSuggestion: SuggestionAction;
+  onAddComment: SuggestionAction;
+  onDeleteComment: CommentAction;
+  onToggleComments: (itemId: number) => void;
+  formatDateTime: (value: string) => string;
+  isLoading: boolean;
+}
+
+const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
+  viewModels,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion,
+  onAddComment,
+  onDeleteComment,
+  onToggleComments,
+  formatDateTime,
+  isLoading
+}) => (
+  <ul className={styles.suggestionList}>
+    {viewModels.map(({ item, interaction, comment }) => (
+      <li key={item.id} className={styles.suggestionCard}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardText}>
+            <div className={styles.cardMeta}>
+              <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+                #{item.id}
+              </span>
+              <span className={styles.categoryBadge}>{item.category}</span>
+              {item.subcategory && <span className={styles.subcategoryBadge}>{item.subcategory}</span>}
+            </div>
+            <h4 className={styles.suggestionTitle}>{item.title}</h4>
+            <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
+            {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
+          </div>
+          <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+            <span className={styles.voteNumber}>{item.votes}</span>
+            <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+          </div>
+        </div>
+        <ActionButtons
+          interaction={interaction}
+          containerClassName={styles.cardActions}
+          isLoading={isLoading}
+          onToggleVote={() => onToggleVote(item)}
+          onMarkSuggestionAsDone={() => onMarkSuggestionAsDone(item)}
+          onDeleteSuggestion={() => onDeleteSuggestion(item)}
+        />
+        <CommentSection
+          item={item}
+          comment={comment}
+          onToggle={() => onToggleComments(item.id)}
+          onAddComment={() => onAddComment(item)}
+          onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
+          formatDateTime={formatDateTime}
+          isLoading={isLoading}
+        />
+      </li>
+    ))}
+  </ul>
+);
+
+interface ISuggestionTableProps {
+  viewModels: ISuggestionViewModel[];
+  onToggleVote: SuggestionAction;
+  onMarkSuggestionAsDone: SuggestionAction;
+  onDeleteSuggestion: SuggestionAction;
+  onAddComment: SuggestionAction;
+  onDeleteComment: CommentAction;
+  onToggleComments: (itemId: number) => void;
+  formatDateTime: (value: string) => string;
+  isLoading: boolean;
+}
+
+const SuggestionTable: React.FC<ISuggestionTableProps> = ({
+  viewModels,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion,
+  onAddComment,
+  onDeleteComment,
+  onToggleComments,
+  formatDateTime,
+  isLoading
+}) => (
+  <div className={styles.tableWrapper}>
+    <table className={styles.suggestionTable}>
+      <thead>
+        <tr>
+          <th scope="col" className={styles.tableHeaderId}>
+            #
+          </th>
+          <th scope="col" className={styles.tableHeaderSuggestion}>
+            Suggestion
+          </th>
+          <th scope="col" className={styles.tableHeaderCategory}>
+            Category
+          </th>
+          <th scope="col" className={styles.tableHeaderSubcategory}>
+            Subcategory
+          </th>
+          <th scope="col" className={styles.tableHeaderVotes}>
+            Votes
+          </th>
+          <th scope="col" className={styles.tableHeaderActions}>
+            Actions
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {viewModels.map(({ item, interaction, comment }) => (
+          <React.Fragment key={item.id}>
+            <tr className={styles.suggestionRow}>
+              <td className={styles.tableCellId} data-label="Entry">
+                <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
+                  #{item.id}
+                </span>
+              </td>
+              <td className={styles.tableCellSuggestion} data-label="Suggestion">
+                <h4 className={styles.suggestionTitle}>{item.title}</h4>
+                <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
+                {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
+              </td>
+              <td className={styles.tableCellCategory} data-label="Category">
+                <span className={styles.categoryBadge}>{item.category}</span>
+              </td>
+              <td className={styles.tableCellSubcategory} data-label="Subcategory">
+                {item.subcategory ? (
+                  <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                ) : (
+                  <span className={styles.subcategoryPlaceholder}>—</span>
+                )}
+              </td>
+              <td className={styles.tableCellVotes} data-label="Votes">
+                <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
+                  <span className={styles.voteNumber}>{item.votes}</span>
+                  <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
+                </div>
+              </td>
+              <td className={styles.tableCellActions} data-label="Actions">
+                <ActionButtons
+                  interaction={interaction}
+                  containerClassName={styles.tableActions}
+                  isLoading={isLoading}
+                  onToggleVote={() => onToggleVote(item)}
+                  onMarkSuggestionAsDone={() => onMarkSuggestionAsDone(item)}
+                  onDeleteSuggestion={() => onDeleteSuggestion(item)}
+                />
+              </td>
+            </tr>
+            <tr className={styles.metaRow}>
+              <td className={styles.metaCell} colSpan={6} data-label="Details">
+                <div className={styles.metaContent}>
+                  <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
+                  <CommentSection
+                    item={item}
+                    comment={comment}
+                    onToggle={() => onToggleComments(item.id)}
+                    onAddComment={() => onAddComment(item)}
+                    onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
+                    formatDateTime={formatDateTime}
+                    isLoading={isLoading}
+                  />
+                </div>
+              </td>
+            </tr>
+          </React.Fragment>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+interface ISuggestionListProps {
+  viewModels: ISuggestionViewModel[];
+  useTableLayout: boolean;
+  isLoading: boolean;
+  onToggleVote: SuggestionAction;
+  onMarkSuggestionAsDone: SuggestionAction;
+  onDeleteSuggestion: SuggestionAction;
+  onAddComment: SuggestionAction;
+  onDeleteComment: CommentAction;
+  onToggleComments: (itemId: number) => void;
+  formatDateTime: (value: string) => string;
+}
+
+const SuggestionList: React.FC<ISuggestionListProps> = ({
+  viewModels,
+  useTableLayout,
+  isLoading,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion,
+  onAddComment,
+  onDeleteComment,
+  onToggleComments,
+  formatDateTime
+}) => {
+  if (viewModels.length === 0) {
+    return <p className={styles.emptyState}>There are no suggestions in this section yet.</p>;
+  }
+
+  return useTableLayout ? (
+    <SuggestionTable
+      viewModels={viewModels}
+      onToggleVote={onToggleVote}
+      onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+      onDeleteSuggestion={onDeleteSuggestion}
+      onAddComment={onAddComment}
+      onDeleteComment={onDeleteComment}
+      onToggleComments={onToggleComments}
+      formatDateTime={formatDateTime}
+      isLoading={isLoading}
+    />
+  ) : (
+    <SuggestionCards
+      viewModels={viewModels}
+      onToggleVote={onToggleVote}
+      onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+      onDeleteSuggestion={onDeleteSuggestion}
+      onAddComment={onAddComment}
+      onDeleteComment={onDeleteComment}
+      onToggleComments={onToggleComments}
+      formatDateTime={formatDateTime}
+      isLoading={isLoading}
+    />
+  );
+};
+
+interface ISuggestionSectionProps {
+  title: string;
+  titleId: string;
+  contentId: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  isLoading: boolean;
+  isSectionLoading: boolean;
+  searchValue: string;
+  onSearchChange: (
+    event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue?: string
+  ) => void;
+  categoryOptions: IDropdownOption[];
+  selectedCategoryKey: IDropdownOption['key'] | undefined;
+  onCategoryChange: (event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption) => void;
+  disableCategoryDropdown: boolean;
+  subcategoryOptions: IDropdownOption[];
+  selectedSubcategoryKey: IDropdownOption['key'] | undefined;
+  onSubcategoryChange: (event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption) => void;
+  disableSubcategoryDropdown: boolean;
+  subcategoryPlaceholder: string;
+  viewModels: ISuggestionViewModel[];
+  useTableLayout: boolean;
+  onToggleVote: SuggestionAction;
+  onMarkSuggestionAsDone: SuggestionAction;
+  onDeleteSuggestion: SuggestionAction;
+  onAddComment: SuggestionAction;
+  onDeleteComment: CommentAction;
+  onToggleComments: (itemId: number) => void;
+  formatDateTime: (value: string) => string;
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
+  title,
+  titleId,
+  contentId,
+  isExpanded,
+  onToggle,
+  isLoading,
+  isSectionLoading,
+  searchValue,
+  onSearchChange,
+  categoryOptions,
+  selectedCategoryKey,
+  onCategoryChange,
+  disableCategoryDropdown,
+  subcategoryOptions,
+  selectedSubcategoryKey,
+  onSubcategoryChange,
+  disableSubcategoryDropdown,
+  subcategoryPlaceholder,
+  viewModels,
+  useTableLayout,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion,
+  onAddComment,
+  onDeleteComment,
+  onToggleComments,
+  formatDateTime,
+  page,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext
+}) => (
+  <div className={styles.suggestionSection}>
+    <SectionHeader
+      title={title}
+      titleId={titleId}
+      contentId={contentId}
+      isExpanded={isExpanded}
+      onToggle={onToggle}
+    />
+    <div
+      id={contentId}
+      role="region"
+      aria-labelledby={titleId}
+      className={`${styles.sectionContent} ${isExpanded ? '' : styles.sectionContentCollapsed}`}
+      hidden={!isExpanded}
+    >
+      {isExpanded && (
+        <>
+          <div className={styles.filterControls}>
+            <TextField
+              label="Search"
+              value={searchValue}
+              onChange={onSearchChange}
+              disabled={isLoading}
+              placeholder="Search by title or details"
+              className={styles.filterSearch}
+            />
+            <Dropdown
+              label="Category"
+              options={categoryOptions}
+              selectedKey={selectedCategoryKey}
+              onChange={onCategoryChange}
+              disabled={isLoading || isSectionLoading || disableCategoryDropdown}
+              className={styles.filterDropdown}
+            />
+            <Dropdown
+              label="Subcategory"
+              options={subcategoryOptions}
+              selectedKey={selectedSubcategoryKey}
+              onChange={onSubcategoryChange}
+              disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
+              className={styles.filterDropdown}
+              placeholder={subcategoryPlaceholder}
+            />
+          </div>
+          {isLoading || isSectionLoading ? (
+            <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
+          ) : (
+            <>
+              <SuggestionList
+                viewModels={viewModels}
+                useTableLayout={useTableLayout}
+                isLoading={isLoading}
+                onToggleVote={onToggleVote}
+                onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+                onDeleteSuggestion={onDeleteSuggestion}
+                onAddComment={onAddComment}
+                onDeleteComment={onDeleteComment}
+                onToggleComments={onToggleComments}
+                formatDateTime={formatDateTime}
+              />
+              <PaginationControls
+                page={page}
+                hasPrevious={hasPrevious}
+                hasNext={hasNext}
+                onPrevious={onPrevious}
+                onNext={onNext}
+              />
+            </>
+          )}
+        </>
+      )}
+    </div>
+  </div>
+);
+
+interface ISimilarSuggestionsProps {
+  viewModels: ISuggestionViewModel[];
+  isLoading: boolean;
+  query: ISimilarSuggestionsQuery;
+  page: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  onToggleVote: SuggestionAction;
+  onMarkSuggestionAsDone: SuggestionAction;
+  onDeleteSuggestion: SuggestionAction;
+  onAddComment: SuggestionAction;
+  onDeleteComment: CommentAction;
+  onToggleComments: (itemId: number) => void;
+  formatDateTime: (value: string) => string;
+  isProcessing: boolean;
+  useTableLayout: boolean;
+}
+
+const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
+  viewModels,
+  isLoading,
+  query,
+  page,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext,
+  onToggleVote,
+  onMarkSuggestionAsDone,
+  onDeleteSuggestion,
+  onAddComment,
+  onDeleteComment,
+  onToggleComments,
+  formatDateTime,
+  isProcessing,
+  useTableLayout
+}) => {
+  const hasTitleQuery: boolean = query.title.length > 0;
+  const hasDescriptionQuery: boolean = query.description.length > 0;
+
+  if (!hasTitleQuery && !hasDescriptionQuery) {
+    return null;
+  }
+
+  const querySegments: { key: string; content: React.ReactNode }[] = [];
+
+  if (hasTitleQuery) {
+    querySegments.push({
+      key: 'title',
+      content: (
+        <>
+          title{' '}
+          <span className={styles.similarSuggestionsQueryValue}>“{query.title}”</span>
+        </>
+      )
+    });
+  }
+
+  if (hasDescriptionQuery) {
+    querySegments.push({
+      key: 'description',
+      content: (
+        <>
+          description{' '}
+          <span className={styles.similarSuggestionsQueryValue}>“{query.description}”</span>
+        </>
+      )
+    });
+  }
+
+  const hasResults: boolean = viewModels.length > 0;
+
+  return (
+    <div className={styles.similarSuggestions} aria-live="polite">
+      <div className={styles.similarSuggestionsHeader}>
+        <h4 className={styles.similarSuggestionsTitle}>Similar suggestions</h4>
+        {!isLoading && hasResults && (
+          <span className={styles.similarSuggestionsSummary}>
+            {viewModels.length === 1 ? '1 matching suggestion' : `${viewModels.length} matching suggestions`}
+          </span>
+        )}
+      </div>
+      <p className={styles.similarSuggestionsQuery}>
+        Showing results for{' '}
+        {querySegments.map((segment, index) => (
+          <React.Fragment key={segment.key}>
+            {index > 0 ? ' and ' : null}
+            {segment.content}
+          </React.Fragment>
+        ))}
+      </p>
+      {isLoading ? (
+        <Spinner label="Searching..." size={SpinnerSize.small} />
+      ) : hasResults ? (
+        <>
+          <div className={styles.similarSuggestionsResults}>
+            <SuggestionList
+              viewModels={viewModels}
+              useTableLayout={useTableLayout}
+              isLoading={isProcessing}
+              onToggleVote={onToggleVote}
+              onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+              onDeleteSuggestion={onDeleteSuggestion}
+              onAddComment={onAddComment}
+              onDeleteComment={onDeleteComment}
+              onToggleComments={onToggleComments}
+              formatDateTime={formatDateTime}
+            />
+          </div>
+          <PaginationControls
+            page={page}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
+        </>
+      ) : (
+        <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
+      )}
+    </div>
+  );
+};
+
 const MAX_VOTES_PER_USER: number = 5;
 const FALLBACK_CATEGORIES: SuggestionCategory[] = ['Change request', 'Webbinar', 'Article'];
 const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
@@ -235,9 +999,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const {
       activeSuggestions,
       completedSuggestions,
+      similarSuggestions,
       isLoading,
       isActiveSuggestionsLoading,
       isCompletedSuggestionsLoading,
+      isSimilarSuggestionsLoading,
       availableVotes,
       newTitle,
       newDescription,
@@ -247,6 +1013,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       categories,
       activeFilter,
       completedFilter,
+      similarSuggestionsQuery,
       error,
       success,
       isAddSuggestionExpanded,
@@ -264,6 +1031,30 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const completedFilterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
       completedFilter.category,
       subcategories
+    );
+
+    const isFilterCategoryLimited: boolean = filterCategoryOptions.length <= 1;
+    const isActiveFilterSubcategoryLimited: boolean = activeFilterSubcategoryOptions.length <= 1;
+    const isCompletedFilterSubcategoryLimited: boolean = completedFilterSubcategoryOptions.length <= 1;
+    const activeFilterSubcategoryPlaceholder: string = isActiveFilterSubcategoryLimited
+      ? 'No subcategories available'
+      : 'Select a subcategory';
+    const completedFilterSubcategoryPlaceholder: string = isCompletedFilterSubcategoryLimited
+      ? 'No subcategories available'
+      : 'Select a subcategory';
+
+    const activeSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
+      activeSuggestions.items,
+      false
+    );
+    const completedSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
+      completedSuggestions.items,
+      true
+    );
+    const similarSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
+      similarSuggestions.items,
+      true,
+      { allowVoting: true }
     );
 
     return (
@@ -302,13 +1093,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         )}
 
         <div className={styles.addSuggestion}>
-          {this._renderSectionHeader(
-            'Add a suggestion',
-            this._sectionIds.add.title,
-            this._sectionIds.add.content,
-            isAddSuggestionExpanded,
-            this._toggleAddSuggestionSection
-          )}
+          <SectionHeader
+            title="Add a suggestion"
+            titleId={this._sectionIds.add.title}
+            contentId={this._sectionIds.add.content}
+            isExpanded={isAddSuggestionExpanded}
+            onToggle={this._toggleAddSuggestionSection}
+          />
           <div
             id={this._sectionIds.add.content}
             role="region"
@@ -335,7 +1126,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   onChange={this._onDescriptionChange}
                   disabled={isLoading}
                 />
-                {this._renderSimilarSuggestions()}
+                <SimilarSuggestions
+                  viewModels={similarSuggestionViewModels}
+                  isLoading={isSimilarSuggestionsLoading}
+                  query={similarSuggestionsQuery}
+                  page={similarSuggestions.page}
+                  hasPrevious={similarSuggestions.previousTokens.length > 0}
+                  hasNext={!!similarSuggestions.nextToken}
+                  onPrevious={this._goToPreviousSimilarPage}
+                  onNext={this._goToNextSimilarPage}
+                  onToggleVote={(item) => this._toggleVote(item)}
+                  onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
+                  onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                  onAddComment={(item) => this._addCommentToSuggestion(item)}
+                  onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                  onToggleComments={(id) => this._toggleCommentsSection(id)}
+                  formatDateTime={(value) => this._formatDateTime(value)}
+                  isProcessing={isLoading}
+                  useTableLayout={this.props.useTableLayout === true}
+                />
                 <Dropdown
                   label="Category"
                   options={categoryOptions}
@@ -365,284 +1174,120 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </div>
         </div>
 
-        <div className={styles.suggestionSection}>
-          {this._renderSectionHeader(
-            'Active suggestions',
-            this._sectionIds.active.title,
-            this._sectionIds.active.content,
-            isActiveSuggestionsExpanded,
-            this._toggleActiveSection
-          )}
-          <div
-            id={this._sectionIds.active.content}
-            role="region"
-            aria-labelledby={this._sectionIds.active.title}
-            className={`${styles.sectionContent} ${
-              isActiveSuggestionsExpanded ? '' : styles.sectionContentCollapsed
-            }`}
-            hidden={!isActiveSuggestionsExpanded}
-          >
-            {isActiveSuggestionsExpanded && (
-              <>
-                <div className={styles.filterControls}>
-                  <TextField
-                    label="Search"
-                    value={activeFilter.searchQuery}
-                    onChange={this._onActiveSearchChange}
-                    disabled={isLoading}
-                    placeholder="Search by title or details"
-                    className={styles.filterSearch}
-                  />
-                  <Dropdown
-                    label="Category"
-                    options={filterCategoryOptions}
-                    selectedKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
-                    onChange={this._onActiveFilterCategoryChange}
-                    disabled={
-                      isLoading ||
-                      isActiveSuggestionsLoading ||
-                      filterCategoryOptions.length <= 1
-                    }
-                    className={styles.filterDropdown}
-                  />
-                  <Dropdown
-                    label="Subcategory"
-                    options={activeFilterSubcategoryOptions}
-                    selectedKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-                    onChange={this._onActiveFilterSubcategoryChange}
-                    disabled={
-                      isLoading ||
-                      isActiveSuggestionsLoading ||
-                      activeFilterSubcategoryOptions.length <= 1
-                    }
-                    className={styles.filterDropdown}
-                  />
-                </div>
-                {isLoading || isActiveSuggestionsLoading ? (
-                  <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
-                ) : (
-                  <>
-                    {this._renderSuggestionList(activeSuggestions.items, false)}
-                    {this._renderPaginationControls(
-                      activeSuggestions.page,
-                      activeSuggestions.previousTokens.length > 0,
-                      !!activeSuggestions.nextToken,
-                      this._goToPreviousActivePage,
-                      this._goToNextActivePage
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <SuggestionSection
+          title="Active suggestions"
+          titleId={this._sectionIds.active.title}
+          contentId={this._sectionIds.active.content}
+          isExpanded={isActiveSuggestionsExpanded}
+          onToggle={this._toggleActiveSection}
+          isLoading={isLoading}
+          isSectionLoading={isActiveSuggestionsLoading}
+          searchValue={activeFilter.searchQuery}
+          onSearchChange={this._onActiveSearchChange}
+          categoryOptions={filterCategoryOptions}
+          selectedCategoryKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+          onCategoryChange={this._onActiveFilterCategoryChange}
+          disableCategoryDropdown={isFilterCategoryLimited}
+          subcategoryOptions={activeFilterSubcategoryOptions}
+          selectedSubcategoryKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+          onSubcategoryChange={this._onActiveFilterSubcategoryChange}
+          disableSubcategoryDropdown={isActiveFilterSubcategoryLimited}
+          subcategoryPlaceholder={activeFilterSubcategoryPlaceholder}
+          viewModels={activeSuggestionViewModels}
+          useTableLayout={this.props.useTableLayout === true}
+          onToggleVote={(item) => this._toggleVote(item)}
+          onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
+          onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+          onAddComment={(item) => this._addCommentToSuggestion(item)}
+          onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+          onToggleComments={(id) => this._toggleCommentsSection(id)}
+          formatDateTime={(value) => this._formatDateTime(value)}
+          page={activeSuggestions.page}
+          hasPrevious={activeSuggestions.previousTokens.length > 0}
+          hasNext={!!activeSuggestions.nextToken}
+          onPrevious={this._goToPreviousActivePage}
+          onNext={this._goToNextActivePage}
+        />
 
-        <div className={styles.suggestionSection}>
-          {this._renderSectionHeader(
-            'Completed suggestions',
-            this._sectionIds.completed.title,
-            this._sectionIds.completed.content,
-            isCompletedSuggestionsExpanded,
-            this._toggleCompletedSection
-          )}
-          <div
-            id={this._sectionIds.completed.content}
-            role="region"
-            aria-labelledby={this._sectionIds.completed.title}
-            className={`${styles.sectionContent} ${
-              isCompletedSuggestionsExpanded ? '' : styles.sectionContentCollapsed
-            }`}
-            hidden={!isCompletedSuggestionsExpanded}
-          >
-            {isCompletedSuggestionsExpanded && (
-              <>
-                <div className={styles.filterControls}>
-                  <TextField
-                    label="Search"
-                    value={completedFilter.searchQuery}
-                    onChange={this._onCompletedSearchChange}
-                    disabled={isLoading}
-                    placeholder="Search by title or details"
-                    className={styles.filterSearch}
-                  />
-                  <Dropdown
-                    label="Category"
-                    options={filterCategoryOptions}
-                    selectedKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
-                    onChange={this._onCompletedFilterCategoryChange}
-                    disabled={
-                      isLoading ||
-                      isCompletedSuggestionsLoading ||
-                      filterCategoryOptions.length <= 1
-                    }
-                    className={styles.filterDropdown}
-                  />
-                  <Dropdown
-                    label="Subcategory"
-                    options={completedFilterSubcategoryOptions}
-                    selectedKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-                    onChange={this._onCompletedFilterSubcategoryChange}
-                    disabled={
-                      isLoading ||
-                      isCompletedSuggestionsLoading ||
-                      completedFilterSubcategoryOptions.length <= 1
-                    }
-                    className={styles.filterDropdown}
-                  />
-                </div>
-                {isLoading || isCompletedSuggestionsLoading ? (
-                  <Spinner label="Loading suggestions..." size={SpinnerSize.large} />
-                ) : (
-                  <>
-                    {this._renderSuggestionList(completedSuggestions.items, true)}
-                    {this._renderPaginationControls(
-                      completedSuggestions.page,
-                      completedSuggestions.previousTokens.length > 0,
-                      !!completedSuggestions.nextToken,
-                      this._goToPreviousCompletedPage,
-                      this._goToNextCompletedPage
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <SuggestionSection
+          title="Completed suggestions"
+          titleId={this._sectionIds.completed.title}
+          contentId={this._sectionIds.completed.content}
+          isExpanded={isCompletedSuggestionsExpanded}
+          onToggle={this._toggleCompletedSection}
+          isLoading={isLoading}
+          isSectionLoading={isCompletedSuggestionsLoading}
+          searchValue={completedFilter.searchQuery}
+          onSearchChange={this._onCompletedSearchChange}
+          categoryOptions={filterCategoryOptions}
+          selectedCategoryKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+          onCategoryChange={this._onCompletedFilterCategoryChange}
+          disableCategoryDropdown={isFilterCategoryLimited}
+          subcategoryOptions={completedFilterSubcategoryOptions}
+          selectedSubcategoryKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+          onSubcategoryChange={this._onCompletedFilterSubcategoryChange}
+          disableSubcategoryDropdown={isCompletedFilterSubcategoryLimited}
+          subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
+          viewModels={completedSuggestionViewModels}
+          useTableLayout={this.props.useTableLayout === true}
+          onToggleVote={(item) => this._toggleVote(item)}
+          onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
+          onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+          onAddComment={(item) => this._addCommentToSuggestion(item)}
+          onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+          onToggleComments={(id) => this._toggleCommentsSection(id)}
+          formatDateTime={(value) => this._formatDateTime(value)}
+          page={completedSuggestions.page}
+          hasPrevious={completedSuggestions.previousTokens.length > 0}
+          hasNext={!!completedSuggestions.nextToken}
+          onPrevious={this._goToPreviousCompletedPage}
+          onNext={this._goToNextCompletedPage}
+        />
       </section>
     );
   }
 
-  private _renderSimilarSuggestions(): React.ReactNode {
-    const {
-      similarSuggestions,
-      isSimilarSuggestionsLoading,
-      similarSuggestionsQuery
-    } = this.state;
-
-    const hasTitleQuery: boolean = similarSuggestionsQuery.title.length > 0;
-    const hasDescriptionQuery: boolean = similarSuggestionsQuery.description.length > 0;
-
-    const suggestionItems: ISuggestionItem[] = similarSuggestions.items;
-    const hasResults: boolean = suggestionItems.length > 0;
-
-    if (!hasTitleQuery && !hasDescriptionQuery) {
-      return null;
-    }
-
-    const querySegments: { key: string; content: React.ReactNode }[] = [];
-
-    if (hasTitleQuery) {
-      querySegments.push({
-        key: 'title',
-        content: (
-          <>
-            title{' '}
-            <span className={styles.similarSuggestionsQueryValue}>
-              “{similarSuggestionsQuery.title}”
-            </span>
-          </>
-        )
-      });
-    }
-
-    if (hasDescriptionQuery) {
-      querySegments.push({
-        key: 'description',
-        content: (
-          <>
-            description{' '}
-            <span className={styles.similarSuggestionsQueryValue}>
-              “{similarSuggestionsQuery.description}”
-            </span>
-          </>
-        )
-      });
-    }
-
-    return (
-      <div className={styles.similarSuggestions} aria-live="polite">
-        <div className={styles.similarSuggestionsHeader}>
-          <h4 className={styles.similarSuggestionsTitle}>Similar suggestions</h4>
-          {!isSimilarSuggestionsLoading && hasResults && (
-            <span className={styles.similarSuggestionsSummary}>
-              {suggestionItems.length === 1
-                ? '1 matching suggestion'
-                : `${suggestionItems.length} matching suggestions`}
-            </span>
-          )}
-        </div>
-        <p className={styles.similarSuggestionsQuery}>
-          Showing results for{' '}
-          {querySegments.map((segment, index) => (
-            <React.Fragment key={segment.key}>
-              {index > 0 ? ' and ' : null}
-              {segment.content}
-            </React.Fragment>
-          ))}
-        </p>
-        {isSimilarSuggestionsLoading ? (
-          <Spinner label="Searching..." size={SpinnerSize.small} />
-        ) : hasResults ? (
-          <>
-            <div className={styles.similarSuggestionsResults}>
-              {this._renderSuggestionList(suggestionItems, true, { allowVoting: true })}
-            </div>
-            {this._renderPaginationControls(
-              similarSuggestions.page,
-              similarSuggestions.previousTokens.length > 0,
-              !!similarSuggestions.nextToken,
-              this._goToPreviousSimilarPage,
-              this._goToNextSimilarPage
-            )}
-          </>
-        ) : (
-          <p className={styles.noSimilarSuggestions}>No similar suggestions found.</p>
-        )}
-      </div>
-    );
-  }
-
-  private _renderSectionHeader(
-    title: string,
-    titleId: string,
-    contentId: string,
-    isExpanded: boolean,
-    onToggle: () => void
-  ): React.ReactNode {
-    return (
-      <div className={styles.sectionHeader}>
-        <h3 id={titleId} className={styles.sectionTitle}>
-          {title}
-        </h3>
-        <ActionButton
-          className={styles.sectionToggleButton}
-          iconProps={{ iconName: isExpanded ? 'ChevronUpSmall' : 'ChevronDownSmall' }}
-          onClick={onToggle}
-          aria-expanded={isExpanded}
-          aria-controls={contentId}
-        >
-          {isExpanded ? 'Hide' : 'Show'}
-        </ActionButton>
-      </div>
-    );
-  }
-
-  private _renderSuggestionList(
+  private _createSuggestionViewModels(
     items: ISuggestionItem[],
     readOnly: boolean,
     options: { allowVoting?: boolean } = {}
-  ): React.ReactNode {
-    if (items.length === 0) {
-      return <p className={styles.emptyState}>There are no suggestions in this section yet.</p>;
-    }
-
+  ): ISuggestionViewModel[] {
     const noVotesRemaining: boolean = this.state.availableVotes <= 0;
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
     const allowVoting: boolean = options.allowVoting === true;
 
-    return this.props.useTableLayout
-      ? this._renderSuggestionTable(items, readOnly, normalizedUser, noVotesRemaining, allowVoting)
-      : this._renderSuggestionCards(items, readOnly, normalizedUser, noVotesRemaining, allowVoting);
+    return items.map((item) => {
+      const interaction: ISuggestionInteractionState = this._getInteractionState(
+        item,
+        readOnly,
+        normalizedUser,
+        noVotesRemaining,
+        allowVoting
+      );
+      const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
+      const isLoadingComments: boolean = this.state.loadingCommentIds.indexOf(item.id) !== -1;
+      const hasLoadedComments: boolean = item.areCommentsLoaded;
+      const resolvedCommentCount: number = hasLoadedComments ? item.comments.length : item.commentCount;
+      const renderedComments: ISuggestionComment[] = hasLoadedComments ? item.comments : [];
+      const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
+      const toggleId: string = `${regionId}-toggle`;
+
+      return {
+        item,
+        interaction,
+        comment: {
+          isExpanded,
+          isLoading: isLoadingComments,
+          hasLoaded: hasLoadedComments,
+          resolvedCount: resolvedCommentCount,
+          comments: renderedComments,
+          canAddComment: interaction.canAddComment,
+          canDeleteComments: this.props.isCurrentUserAdmin,
+          regionId,
+          toggleId
+        }
+      };
+    });
   }
 
   private _goToPreviousActivePage = async (): Promise<void> => {
@@ -791,345 +1436,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
   };
 
-  private _renderSuggestionCards(
-    items: ISuggestionItem[],
-    readOnly: boolean,
-    normalizedUser: string | undefined,
-    noVotesRemaining: boolean,
-    allowVoting: boolean
-  ): React.ReactNode {
-    return (
-      <ul className={styles.suggestionList}>
-        {items.map((item) => {
-          const {
-            hasVoted,
-            disableVote,
-            canAddComment,
-            canMarkSuggestionAsDone,
-            canDeleteSuggestion,
-            isVotingAllowed
-          } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining, allowVoting);
-          const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
-
-          return (
-            <li key={item.id} className={styles.suggestionCard}>
-              <div className={styles.cardHeader}>
-                <div className={styles.cardText}>
-                  <div className={styles.cardMeta}>
-                    <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
-                      #{item.id}
-                    </span>
-                    <span className={styles.categoryBadge}>{item.category}</span>
-                    {item.subcategory && (
-                      <span className={styles.subcategoryBadge}>{item.subcategory}</span>
-                    )}
-                  </div>
-                  <h4 className={styles.suggestionTitle}>{item.title}</h4>
-                  {this._renderSuggestionTimestamps(item)}
-                  {item.description && (
-                    <p className={styles.suggestionDescription}>{item.description}</p>
-                  )}
-                </div>
-              <div className={styles.voteBadge} aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}>
-                <span className={styles.voteNumber}>{item.votes}</span>
-                <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
-              </div>
-            </div>
-              {this._renderActionButtons(
-                item,
-                readOnly,
-                hasVoted,
-                disableVote,
-                canMarkSuggestionAsDone,
-                canDeleteSuggestion,
-                styles.cardActions,
-                isVotingAllowed
-              )}
-              {this._renderCommentSection(item, {
-                canAddComment,
-                canDeleteComments
-              })}
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }
-
-  private _renderSuggestionTable(
-    items: ISuggestionItem[],
-    readOnly: boolean,
-    normalizedUser: string | undefined,
-    noVotesRemaining: boolean,
-    allowVoting: boolean
-  ): React.ReactNode {
-    return (
-      <div className={styles.tableWrapper}>
-        <table className={styles.suggestionTable}>
-          <thead>
-            <tr>
-              <th scope="col" className={styles.tableHeaderId}>#</th>
-              <th scope="col" className={styles.tableHeaderSuggestion}>Suggestion</th>
-              <th scope="col" className={styles.tableHeaderCategory}>Category</th>
-              <th scope="col" className={styles.tableHeaderSubcategory}>Subcategory</th>
-              <th scope="col" className={styles.tableHeaderVotes}>Votes</th>
-              <th scope="col" className={styles.tableHeaderActions}>Actions</th>
-            </tr>
-          </thead>
-        <tbody>
-          {items.map((item) => {
-            const {
-              hasVoted,
-              disableVote,
-              canAddComment,
-              canMarkSuggestionAsDone,
-              canDeleteSuggestion,
-              isVotingAllowed
-            } = this._getInteractionState(item, readOnly, normalizedUser, noVotesRemaining, allowVoting);
-            const canDeleteComments: boolean = this.props.isCurrentUserAdmin;
-
-            return (
-              <React.Fragment key={item.id}>
-                <tr className={styles.suggestionRow}>
-                  <td className={styles.tableCellId} data-label="Entry">
-                    <span className={styles.entryId} aria-label={`Entry number ${item.id}`}>
-                      #{item.id}
-                    </span>
-                  </td>
-                  <td className={styles.tableCellSuggestion} data-label="Suggestion">
-                    <h4 className={styles.suggestionTitle}>{item.title}</h4>
-                    {this._renderSuggestionTimestamps(item)}
-                    {item.description && (
-                      <p className={styles.suggestionDescription}>{item.description}</p>
-                    )}
-                  </td>
-                  <td className={styles.tableCellCategory} data-label="Category">
-                    <span className={styles.categoryBadge}>{item.category}</span>
-                  </td>
-                  <td className={styles.tableCellSubcategory} data-label="Subcategory">
-                    {item.subcategory ? (
-                      <span className={styles.subcategoryBadge}>{item.subcategory}</span>
-                    ) : (
-                      <span className={styles.subcategoryPlaceholder}>—</span>
-                    )}
-                  </td>
-                  <td className={styles.tableCellVotes} data-label="Votes">
-                    <div
-                      className={styles.voteBadge}
-                      aria-label={`${item.votes} ${item.votes === 1 ? 'vote' : 'votes'}`}
-                    >
-                      <span className={styles.voteNumber}>{item.votes}</span>
-                      <span className={styles.voteText}>{item.votes === 1 ? 'vote' : 'votes'}</span>
-                    </div>
-                  </td>
-                  <td className={styles.tableCellActions} data-label="Actions">
-                    {this._renderActionButtons(
-                      item,
-                      readOnly,
-                      hasVoted,
-                      disableVote,
-                      canMarkSuggestionAsDone,
-                      canDeleteSuggestion,
-                      styles.tableActions,
-                      isVotingAllowed
-                    )}
-                  </td>
-                </tr>
-                <tr className={styles.metaRow}>
-                  <td className={styles.metaCell} colSpan={6} data-label="Details">
-                    <div className={styles.metaContent}>
-                      {this._renderSuggestionTimestamps(item)}
-                      {this._renderCommentSection(item, {
-                        canAddComment,
-                        canDeleteComments
-                      })}
-                    </div>
-                  </td>
-                </tr>
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-    );
-  }
-
-  private _renderActionButtons(
-    item: ISuggestionItem,
-    readOnly: boolean,
-    hasVoted: boolean,
-    disableVote: boolean,
-    canMarkSuggestionAsDone: boolean,
-    canDeleteSuggestion: boolean,
-    containerClassName: string,
-    isVotingAllowed: boolean
-  ): React.ReactNode {
-    return (
-      <div className={containerClassName}>
-        {isVotingAllowed ? (
-          <PrimaryButton
-            text={hasVoted ? 'Remove vote' : 'Vote'}
-            onClick={() => this._toggleVote(item)}
-            disabled={disableVote}
-          />
-        ) : (
-          <DefaultButton text="Votes closed" disabled />
-        )}
-        {canMarkSuggestionAsDone && (
-          <DefaultButton
-            text="Mark as done"
-            onClick={() => this._markSuggestionAsDone(item)}
-            disabled={this.state.isLoading}
-          />
-        )}
-        {canDeleteSuggestion && (
-          <IconButton
-            iconProps={{ iconName: 'Delete' }}
-            title="Remove suggestion"
-            ariaLabel="Remove suggestion"
-            onClick={() => this._deleteSuggestion(item)}
-            disabled={this.state.isLoading}
-          />
-        )}
-      </div>
-    );
-  }
-
-  private _renderSuggestionTimestamps(item: ISuggestionItem): React.ReactNode {
-    const entries: { label: string; value: string }[] = [];
-    const { createdDateTime, lastModifiedDateTime, completedDateTime } = item;
-
-    if (createdDateTime) {
-      entries.push({ label: 'Created', value: createdDateTime });
-    }
-
-    const shouldShowLastModified: boolean = !!lastModifiedDateTime && !completedDateTime;
-
-    if (shouldShowLastModified && lastModifiedDateTime) {
-      entries.push({ label: 'Last modified', value: lastModifiedDateTime });
-    }
-
-    if (completedDateTime) {
-      entries.push({ label: 'Completed', value: completedDateTime });
-    }
-
-    if (entries.length === 0) {
-      return undefined;
-    }
-
-    return (
-      <div className={styles.timestampRow}>
-        {entries.map((entry) => (
-          <span key={entry.label} className={styles.timestampEntry}>
-            <span className={styles.timestampLabel}>{entry.label}:</span>
-            <span className={styles.timestampValue}>{this._formatDateTime(entry.value)}</span>
-          </span>
-        ))}
-      </div>
-    );
-  }
-
-  private _renderCommentSection(
-    item: ISuggestionItem,
-    options: { canAddComment: boolean; canDeleteComments: boolean }
-  ): React.ReactNode {
-    const { canAddComment, canDeleteComments } = options;
-    const commentCount: number = item.commentCount;
-    const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
-    const isLoadingComments: boolean = this.state.loadingCommentIds.indexOf(item.id) !== -1;
-    const hasLoadedComments: boolean = item.areCommentsLoaded;
-    const resolvedCommentCount: number = hasLoadedComments ? item.comments.length : commentCount;
-    const renderedComments: ISuggestionComment[] = hasLoadedComments ? item.comments : [];
-    const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
-    const toggleId: string = `${regionId}-toggle`;
-
-    return (
-      <div className={styles.commentSection}>
-        <div className={styles.commentHeader}>
-          <button
-            type="button"
-            id={toggleId}
-            className={styles.commentToggleButton}
-            onClick={() => this._toggleCommentsSection(item.id)}
-            aria-expanded={isExpanded}
-            aria-controls={regionId}
-          >
-            <Icon
-              iconName={isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'}
-              className={styles.commentToggleIcon}
-            />
-            <span className={styles.commentHeading}>Comments</span>
-            <span className={styles.commentCount}>({resolvedCommentCount})</span>
-          </button>
-          {canAddComment && (
-            <DefaultButton
-              className={styles.commentAddButton}
-              text="Add comment"
-              onClick={() => this._addCommentToSuggestion(item)}
-              disabled={this.state.isLoading}
-            />
-          )}
-        </div>
-        <div
-          id={regionId}
-          role="region"
-          aria-labelledby={toggleId}
-          className={`${styles.commentContent} ${isExpanded ? '' : styles.commentContentCollapsed}`}
-          hidden={!isExpanded}
-        >
-          {isExpanded && (
-            isLoadingComments ? (
-              <Spinner label="Loading comments..." size={SpinnerSize.small} />
-            ) : !hasLoadedComments ? (
-              null
-            ) : renderedComments.length === 0 ? (
-              <p className={styles.commentEmpty}>No comments yet.</p>
-            ) : (
-              <ul className={styles.commentList}>
-                {renderedComments.map((comment) => {
-                  const hasMeta: boolean = !!comment.author || !!comment.createdDateTime;
-
-                  return (
-                    <li key={comment.id} className={styles.commentItem}>
-                      {(hasMeta || canDeleteComments) && (
-                        <div className={styles.commentItemTopRow}>
-                          {hasMeta ? (
-                            <div className={styles.commentMeta}>
-                              {comment.author && <span className={styles.commentAuthor}>{comment.author}</span>}
-                              {comment.createdDateTime && (
-                                <span className={styles.commentTimestamp}>
-                                  {this._formatDateTime(comment.createdDateTime)}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className={styles.commentMetaPlaceholder} aria-hidden={true} />
-                          )}
-                          {canDeleteComments && (
-                            <IconButton
-                              className={styles.commentDeleteButton}
-                              iconProps={{ iconName: 'Delete' }}
-                              title="Delete comment"
-                              ariaLabel="Delete comment"
-                              onClick={() => this._deleteCommentFromSuggestion(item, comment)}
-                              disabled={this.state.isLoading}
-                            />
-                          )}
-                        </div>
-                      )}
-                      <p className={styles.commentText}>{comment.text}</p>
-                    </li>
-                  );
-                })}
-              </ul>
-            )
-          )}
-        </div>
-      </div>
-    );
-  }
-
   private _getInteractionState(
     item: ISuggestionItem,
     readOnly: boolean,
@@ -1174,28 +1480,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return value;
-  }
-
-  private _renderPaginationControls(
-    page: number,
-    hasPrevious: boolean,
-    hasNext: boolean,
-    onPrevious: () => void,
-    onNext: () => void
-  ): React.ReactNode {
-    if (!hasPrevious && !hasNext && page <= 1) {
-      return undefined;
-    }
-
-    return (
-      <div className={styles.paginationControls}>
-        <DefaultButton text="Previous" onClick={onPrevious} disabled={!hasPrevious} />
-        <span className={styles.paginationInfo} aria-live="polite">
-          Page {page}
-        </span>
-        <DefaultButton text="Next" onClick={onNext} disabled={!hasNext} />
-      </div>
-    );
   }
 
   private _getSubcategoryOptions(
