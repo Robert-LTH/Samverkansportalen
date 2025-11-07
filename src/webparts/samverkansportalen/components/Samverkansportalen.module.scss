@@ -367,6 +367,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
   margin-bottom: 0.25rem;
 }
 
@@ -374,13 +375,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2rem;
-  height: 2rem;
+  min-width: 2.5rem;
+  padding: 0.2rem 0.85rem;
   border-radius: 999px;
-  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
-  color: "[theme:neutralPrimary, default: #323130]";
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: var(--accentColorDark);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 3px var(--accentColorLightest);
 }
 
 .categoryBadge {
@@ -423,6 +426,43 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.statusDropdown {
+  min-width: 8rem;
+}
+
+.statusDropdown :global(.ms-Dropdown-title) {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--accentColorTint);
+  color: var(--accentColorDark);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 1.25rem;
+  min-height: 2rem;
+  line-height: 1.2;
+}
+
+.statusDropdown :global(.ms-Dropdown-title:hover),
+.statusDropdown :global(.ms-Dropdown-title:focus) {
+  border-color: var(--accentColorDark);
+}
+
+.statusDropdown :global(.ms-Dropdown-caretDownWrapper) {
+  color: var(--accentColorDark);
+}
+
+.statusDropdown :global(.ms-Dropdown.is-disabled .ms-Dropdown-title) {
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  color: "[theme:neutralTertiary, default: #a19f9d]";
+  border-color: transparent;
+}
+
+.statusDropdown :global(.ms-Dropdown.is-disabled .ms-Dropdown-caretDownWrapper) {
+  color: "[theme:neutralTertiary, default: #a19f9d]";
 }
 
 .suggestionTitle {
@@ -607,15 +647,19 @@
 .voteBadge {
   align-self: flex-start;
   min-width: 5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   border-radius: 0.5rem;
   background: var(--accentColorLightest);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
   text-align: center;
 }
 
 .voteNumber {
   display: block;
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -626,6 +670,16 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.voteActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.voteActions :global(.ms-Button) {
+  width: 100%;
 }
 
 .cardActions {
@@ -701,6 +755,10 @@
   .tableCellVotes .voteBadge {
     margin-top: 0.25rem;
   }
+}
+
+.tableCellStatus .statusDropdown {
+  width: 100%;
 }
 
 .emptyState {
