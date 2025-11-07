@@ -12,6 +12,8 @@ import {
   SpinnerSize,
   TextField,
   Dropdown,
+  Pivot,
+  PivotItem,
   type IDropdownOption
 } from '@fluentui/react';
 import { debounce } from '@microsoft/sp-lodash-subset';
@@ -33,7 +35,7 @@ interface ISuggestionItem {
   title: string;
   description: string;
   votes: number;
-  status: 'Active' | 'Done';
+  status: string;
   voters: string[];
   category: SuggestionCategory;
   subcategory?: string;
@@ -83,7 +85,11 @@ interface ISamverkansportalenState {
   newSubcategoryKey?: string;
   subcategories: ISubcategoryDefinition[];
   categories: SuggestionCategory[];
-  availableVotes: number;
+  availableVotesByCategory: Record<string, number>;
+  isUnlimitedVotes: boolean;
+  statuses: string[];
+  completedStatus: string;
+  defaultStatus: string;
   activeFilter: IFilterState;
   completedFilter: IFilterState;
   similarSuggestions: IPaginatedSuggestionsState;
@@ -91,6 +97,9 @@ interface ISamverkansportalenState {
   similarSuggestionsQuery: ISimilarSuggestionsQuery;
   selectedSimilarSuggestion?: ISuggestionItem;
   isSelectedSimilarSuggestionLoading: boolean;
+  myVoteSuggestions: ISuggestionItem[];
+  isMyVotesLoading: boolean;
+  selectedMainTab: 'all' | 'myVotes';
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -105,6 +114,7 @@ interface IFilterState {
   category?: SuggestionCategory;
   subcategory?: string;
   suggestionId?: number;
+  status?: string;
 }
 
 interface IPaginatedSuggestionsState {
@@ -119,7 +129,7 @@ interface ISuggestionInteractionState {
   hasVoted: boolean;
   disableVote: boolean;
   canAddComment: boolean;
-  canMarkSuggestionAsDone: boolean;
+  canAdvanceSuggestionStatus: boolean;
   canDeleteSuggestion: boolean;
   isVotingAllowed: boolean;
 }
@@ -244,7 +254,7 @@ interface IActionButtonsProps {
   containerClassName: string;
   isLoading: boolean;
   onToggleVote: () => void;
-  onMarkSuggestionAsDone: () => void;
+  onAdvanceSuggestionStatus: () => void;
   onDeleteSuggestion: () => void;
 }
 
@@ -253,7 +263,7 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
   containerClassName,
   isLoading,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion
 }) => (
   <div className={containerClassName}>
@@ -266,8 +276,12 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
     ) : (
       <DefaultButton text={strings.VotesClosedText} disabled />
     )}
-    {interaction.canMarkSuggestionAsDone && (
-      <DefaultButton text={strings.MarkAsDoneButtonText} onClick={onMarkSuggestionAsDone} disabled={isLoading} />
+    {interaction.canAdvanceSuggestionStatus && (
+      <DefaultButton
+        text={strings.AdvanceSuggestionStatusButtonText}
+        onClick={onAdvanceSuggestionStatus}
+        disabled={isLoading}
+      />
     )}
     {interaction.canDeleteSuggestion && (
       <IconButton
@@ -380,7 +394,7 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
 interface ISuggestionCardsProps {
   viewModels: ISuggestionViewModel[];
   onToggleVote: SuggestionAction;
-  onMarkSuggestionAsDone: SuggestionAction;
+  onAdvanceSuggestionStatus: SuggestionAction;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
@@ -392,7 +406,7 @@ interface ISuggestionCardsProps {
 const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
   viewModels,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
@@ -414,6 +428,7 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
               </span>
               <span className={styles.categoryBadge}>{item.category}</span>
               {item.subcategory && <span className={styles.subcategoryBadge}>{item.subcategory}</span>}
+              <span className={styles.statusBadge}>{item.status}</span>
             </div>
             <h4 className={styles.suggestionTitle}>{item.title}</h4>
             <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
@@ -432,7 +447,7 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
           containerClassName={styles.cardActions}
           isLoading={isLoading}
           onToggleVote={() => onToggleVote(item)}
-          onMarkSuggestionAsDone={() => onMarkSuggestionAsDone(item)}
+          onAdvanceSuggestionStatus={() => onAdvanceSuggestionStatus(item)}
           onDeleteSuggestion={() => onDeleteSuggestion(item)}
         />
         <CommentSection
@@ -452,7 +467,7 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
 interface ISuggestionTableProps {
   viewModels: ISuggestionViewModel[];
   onToggleVote: SuggestionAction;
-  onMarkSuggestionAsDone: SuggestionAction;
+  onAdvanceSuggestionStatus: SuggestionAction;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
@@ -464,7 +479,7 @@ interface ISuggestionTableProps {
 const SuggestionTable: React.FC<ISuggestionTableProps> = ({
   viewModels,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
@@ -487,6 +502,9 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
           </th>
           <th scope="col" className={styles.tableHeaderSubcategory}>
             {strings.SubcategoryLabel}
+          </th>
+          <th scope="col" className={styles.tableHeaderStatus}>
+            {strings.StatusLabel}
           </th>
           <th scope="col" className={styles.tableHeaderVotes}>
             {strings.VotesLabel}
@@ -526,6 +544,9 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   <span className={styles.subcategoryPlaceholder}>—</span>
                 )}
               </td>
+              <td className={styles.tableCellStatus} data-label={strings.StatusLabel}>
+                <span className={styles.statusBadge}>{item.status}</span>
+              </td>
               <td className={styles.tableCellVotes} data-label={strings.VotesLabel}>
                 <div
                   className={styles.voteBadge}
@@ -541,20 +562,20 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 className={styles.tableCellActions}
                 data-label={strings.SuggestionTableActionsColumnLabel}
               >
-                <ActionButtons
-                  interaction={interaction}
-                  containerClassName={styles.tableActions}
-                  isLoading={isLoading}
-                  onToggleVote={() => onToggleVote(item)}
-                  onMarkSuggestionAsDone={() => onMarkSuggestionAsDone(item)}
-                  onDeleteSuggestion={() => onDeleteSuggestion(item)}
-                />
+                  <ActionButtons
+                    interaction={interaction}
+                    containerClassName={styles.tableActions}
+                    isLoading={isLoading}
+                    onToggleVote={() => onToggleVote(item)}
+                    onAdvanceSuggestionStatus={() => onAdvanceSuggestionStatus(item)}
+                    onDeleteSuggestion={() => onDeleteSuggestion(item)}
+                  />
               </td>
             </tr>
             <tr className={styles.metaRow}>
               <td
                 className={styles.metaCell}
-                colSpan={6}
+                colSpan={7}
                 data-label={strings.SuggestionTableDetailsColumnLabel}
               >
                 <div className={styles.metaContent}>
@@ -583,7 +604,7 @@ interface ISuggestionListProps {
   useTableLayout: boolean;
   isLoading: boolean;
   onToggleVote: SuggestionAction;
-  onMarkSuggestionAsDone: SuggestionAction;
+  onAdvanceSuggestionStatus: SuggestionAction;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
@@ -596,7 +617,7 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
   useTableLayout,
   isLoading,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
@@ -611,7 +632,7 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
     <SuggestionTable
       viewModels={viewModels}
       onToggleVote={onToggleVote}
-      onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+      onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
       onDeleteSuggestion={onDeleteSuggestion}
       onAddComment={onAddComment}
       onDeleteComment={onDeleteComment}
@@ -623,7 +644,7 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
     <SuggestionCards
       viewModels={viewModels}
       onToggleVote={onToggleVote}
-      onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+      onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
       onDeleteSuggestion={onDeleteSuggestion}
       onAddComment={onAddComment}
       onDeleteComment={onDeleteComment}
@@ -659,7 +680,7 @@ interface ISuggestionSectionProps {
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
   onToggleVote: SuggestionAction;
-  onMarkSuggestionAsDone: SuggestionAction;
+  onAdvanceSuggestionStatus: SuggestionAction;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
@@ -694,7 +715,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   viewModels,
   useTableLayout,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
@@ -759,7 +780,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
                 useTableLayout={useTableLayout}
                 isLoading={isLoading}
                 onToggleVote={onToggleVote}
-                onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+                onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
                 onDeleteSuggestion={onDeleteSuggestion}
                 onAddComment={onAddComment}
                 onDeleteComment={onDeleteComment}
@@ -791,7 +812,7 @@ interface ISimilarSuggestionsProps {
   onPrevious: () => void;
   onNext: () => void;
   onToggleVote: SuggestionAction;
-  onMarkSuggestionAsDone: SuggestionAction;
+  onAdvanceSuggestionStatus: SuggestionAction;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
@@ -810,7 +831,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   onPrevious,
   onNext,
   onToggleVote,
-  onMarkSuggestionAsDone,
+  onAdvanceSuggestionStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
@@ -890,7 +911,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
               useTableLayout={false}
               isLoading={isProcessing}
               onToggleVote={onToggleVote}
-              onMarkSuggestionAsDone={onMarkSuggestionAsDone}
+              onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
               onDeleteSuggestion={onDeleteSuggestion}
               onAddComment={onAddComment}
               onDeleteComment={onDeleteComment}
@@ -913,7 +934,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   );
 };
 
-const MAX_VOTES_PER_USER: number = 5;
+const MAX_VOTES_PER_CATEGORY: number = 5;
 const FALLBACK_CATEGORIES: SuggestionCategory[] = [
   strings.DefaultCategoryChangeRequest,
   strings.DefaultCategoryWebinar,
@@ -948,6 +969,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     super(props);
 
     const uniquePrefix: string = `samverkansportalen-${Math.random().toString(36).slice(2, 10)}`;
+    const { statuses, completedStatus, defaultStatus } = this._deriveStatusStateFromProps(props);
     this._sectionIds = {
       add: { title: `${uniquePrefix}-add-title`, content: `${uniquePrefix}-add-content` },
       active: { title: `${uniquePrefix}-active-title`, content: `${uniquePrefix}-active-content` },
@@ -974,18 +996,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       newSubcategoryKey: undefined,
       subcategories: [],
       categories: [...FALLBACK_CATEGORIES],
-      availableVotes: MAX_VOTES_PER_USER,
+      statuses,
+      completedStatus,
+      defaultStatus,
+      availableVotesByCategory: {},
+      isUnlimitedVotes: props.isCurrentUserAdmin,
       activeFilter: {
         searchQuery: '',
         category: undefined,
         subcategory: undefined,
-        suggestionId: undefined
+        suggestionId: undefined,
+        status: undefined
       },
       completedFilter: {
         searchQuery: '',
         category: undefined,
         subcategory: undefined,
-        suggestionId: undefined
+        suggestionId: undefined,
+        status: completedStatus
       },
       similarSuggestions: {
         items: [],
@@ -998,6 +1026,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       similarSuggestionsQuery: { ...EMPTY_SIMILAR_SUGGESTIONS_QUERY },
       selectedSimilarSuggestion: undefined,
       isSelectedSimilarSuggestionLoading: false,
+      myVoteSuggestions: [],
+      isMyVotesLoading: false,
+      selectedMainTab: 'all',
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
@@ -1010,6 +1041,169 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._isMounted = true;
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this._initialize();
+  }
+
+  private _deriveStatusStateFromProps(
+    props: ISamverkansportalenProps
+  ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
+    const statuses: string[] = this._sanitizeStatuses(props.statuses);
+    const completedStatus: string = this._resolveCompletedStatus(props.completedStatus, statuses);
+    const defaultStatus: string = this._resolveDefaultStatus(statuses, completedStatus);
+    return { statuses, completedStatus, defaultStatus };
+  }
+
+  private _sanitizeStatuses(values: string[] | undefined): string[] {
+    const source: string[] = Array.isArray(values) ? values : [];
+    const seen: Set<string> = new Set();
+    const results: string[] = [];
+
+    source.forEach((entry) => {
+      const normalized: string = typeof entry === 'string' ? entry.trim() : '';
+
+      if (!normalized) {
+        return;
+      }
+
+      const key: string = normalized.toLowerCase();
+
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      results.push(normalized);
+    });
+
+    if (results.length === 0) {
+      return ['Active', 'Done'];
+    }
+
+    return results;
+  }
+
+  private _resolveCompletedStatus(candidate: string, statuses: string[]): string {
+    if (statuses.length === 0) {
+      return 'Done';
+    }
+
+    const normalizedCandidate: string = typeof candidate === 'string' ? candidate.trim() : '';
+
+    if (normalizedCandidate.length > 0) {
+      const match: string | undefined = statuses.find((status) =>
+        this._areStatusesEqual(status, normalizedCandidate)
+      );
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return statuses[statuses.length - 1];
+  }
+
+  private _resolveDefaultStatus(statuses: string[], completedStatus: string): string {
+    if (statuses.length === 0) {
+      return completedStatus;
+    }
+
+    const firstActive: string | undefined = statuses.find(
+      (status) => !this._areStatusesEqual(status, completedStatus)
+    );
+
+    return firstActive ?? completedStatus;
+  }
+
+  private _areStatusesEqual(left: string | undefined, right: string | undefined): boolean {
+    const normalizedLeft: string = typeof left === 'string' ? left.trim().toLowerCase() : '';
+    const normalizedRight: string = typeof right === 'string' ? right.trim().toLowerCase() : '';
+    return normalizedLeft === normalizedRight;
+  }
+
+  private _isCompletedStatusValue(status: string | undefined, completedStatus: string): boolean {
+    return this._areStatusesEqual(status, completedStatus);
+  }
+
+  private _isActiveStatusValue(status: string | undefined, statuses: string[], completedStatus: string): boolean {
+    if (!status) {
+      return false;
+    }
+
+    const exists: boolean = statuses.some((entry) => this._areStatusesEqual(entry, status));
+    return exists && !this._isCompletedStatusValue(status, completedStatus);
+  }
+
+  private _getNextStatus(statuses: string[], completedStatus: string, current: string): string | undefined {
+    if (statuses.length === 0) {
+      return undefined;
+    }
+
+    const index: number = statuses.findIndex((entry) => this._areStatusesEqual(entry, current));
+
+    if (index === -1) {
+      return statuses[0];
+    }
+
+    if (index >= statuses.length - 1) {
+      return undefined;
+    }
+
+    const next: string = statuses[index + 1];
+    return next;
+  }
+
+  private _areStatusCollectionsEqual(left: string[] | undefined, right: string[] | undefined): boolean {
+    const leftNormalized: string[] = this._sanitizeStatuses(left);
+    const rightNormalized: string[] = this._sanitizeStatuses(right);
+
+    if (leftNormalized.length !== rightNormalized.length) {
+      return false;
+    }
+
+    return leftNormalized.every((value, index) =>
+      this._areStatusesEqual(value, rightNormalized[index])
+    );
+  }
+
+  private _applyStatusConfiguration(): void {
+    const { statuses, completedStatus, defaultStatus } = this._deriveStatusStateFromProps(this.props);
+
+    this._updateState(
+      (prevState) => {
+        const activeStatus: string | undefined = this._isActiveStatusValue(
+          prevState.activeFilter.status,
+          statuses,
+          completedStatus
+        )
+          ? prevState.activeFilter.status
+          : undefined;
+
+        return {
+          statuses,
+          completedStatus,
+          defaultStatus,
+          activeFilter: { ...prevState.activeFilter, status: activeStatus },
+          completedFilter: { ...prevState.completedFilter, status: completedStatus }
+        } as Partial<ISamverkansportalenState>;
+      },
+      () => {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this._loadSuggestions();
+      }
+    );
+  }
+
+  private _getActiveStatuses(): string[] {
+    return this.state.statuses.filter(
+      (status) => !this._isCompletedStatusValue(status, this.state.completedStatus)
+    );
+  }
+
+  private _isStatusInCollection(status: string | undefined, collection: string[]): boolean {
+    if (!status) {
+      return false;
+    }
+
+    return collection.some((entry) => this._areStatusesEqual(entry, status));
   }
 
   public componentWillUnmount(): void {
@@ -1027,6 +1221,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
     const categoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.categoryListTitle) !== this._categoryListTitle;
+    const statusesChanged: boolean =
+      !this._areStatusCollectionsEqual(prevProps.statuses, this.props.statuses) ||
+      !this._areStatusesEqual(prevProps.completedStatus, this.props.completedStatus);
+
+    if (statusesChanged) {
+      this._applyStatusConfiguration();
+    }
 
     if (listChanged || voteListChanged || commentListChanged || subcategoryListChanged || categoryListChanged) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -1043,7 +1244,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isActiveSuggestionsLoading,
       isCompletedSuggestionsLoading,
       isSimilarSuggestionsLoading,
-      availableVotes,
       newTitle,
       newDescription,
       newCategory,
@@ -1057,7 +1257,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       success,
       isAddSuggestionExpanded,
       isActiveSuggestionsExpanded,
-      isCompletedSuggestionsExpanded
+      isCompletedSuggestionsExpanded,
+      myVoteSuggestions,
+      isMyVotesLoading,
+      selectedMainTab
     } = this.state;
 
     const subcategoryOptions: IDropdownOption[] = this._getSubcategoryOptions(newCategory, subcategories);
@@ -1095,6 +1298,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       true,
       { allowVoting: true }
     );
+    const myVoteSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
+      myVoteSuggestions,
+      false,
+      { allowVoting: true }
+    );
 
     return (
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
@@ -1105,7 +1313,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </div>
           <div className={styles.voteSummary} aria-live="polite">
             <span className={styles.voteLabel}>{strings.VotesRemainingLabel}</span>
-            <span className={styles.voteValue}>{availableVotes} / {MAX_VOTES_PER_USER}</span>
+            <span className={styles.voteValue}>
+              {this._getVoteSummaryLabel(categories)}
+            </span>
           </div>
         </header>
 
@@ -1131,156 +1341,185 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </MessageBar>
         )}
 
-        <div className={styles.addSuggestion}>
-          <SectionHeader
-            title={strings.AddSuggestionSectionTitle}
-            titleId={this._sectionIds.add.title}
-            contentId={this._sectionIds.add.content}
-            isExpanded={isAddSuggestionExpanded}
-            onToggle={this._toggleAddSuggestionSection}
-          />
-          <div
-            id={this._sectionIds.add.content}
-            role="region"
-            aria-labelledby={this._sectionIds.add.title}
-            className={`${styles.sectionContent} ${
-              isAddSuggestionExpanded ? '' : styles.sectionContentCollapsed
-            }`}
-            hidden={!isAddSuggestionExpanded}
-          >
-            {isAddSuggestionExpanded && (
-              <div className={styles.addForm}>
-                <TextField
-                  label={strings.AddSuggestionTitleLabel}
-                  required
-                  value={newTitle}
-                  onChange={this._onTitleChange}
-                  disabled={isLoading}
+        <Pivot selectedKey={selectedMainTab} onLinkClick={this._onSuggestionTabChange}>
+          <PivotItem headerText={strings.AllSuggestionsTabLabel} itemKey="all">
+            <div className={styles.pivotContent}>
+              <div className={styles.addSuggestion}>
+                <SectionHeader
+                  title={strings.AddSuggestionSectionTitle}
+                  titleId={this._sectionIds.add.title}
+                  contentId={this._sectionIds.add.content}
+                  isExpanded={isAddSuggestionExpanded}
+                  onToggle={this._toggleAddSuggestionSection}
                 />
-                <TextField
-                  label={strings.AddSuggestionDetailsLabel}
-                  multiline
-                  rows={3}
-                  value={newDescription}
-                  onChange={this._onDescriptionChange}
-                  disabled={isLoading}
-                />
-                <SimilarSuggestions
-                  viewModels={similarSuggestionViewModels}
-                  isLoading={isSimilarSuggestionsLoading}
-                  query={similarSuggestionsQuery}
-                  page={similarSuggestions.page}
-                  hasPrevious={similarSuggestions.previousTokens.length > 0}
-                  hasNext={!!similarSuggestions.nextToken}
-                  onPrevious={this._goToPreviousSimilarPage}
-                  onNext={this._goToNextSimilarPage}
+                <div
+                  id={this._sectionIds.add.content}
+                  role="region"
+                  aria-labelledby={this._sectionIds.add.title}
+                  className={`${styles.sectionContent} ${
+                    isAddSuggestionExpanded ? '' : styles.sectionContentCollapsed
+                  }`}
+                  hidden={!isAddSuggestionExpanded}
+                >
+                  {isAddSuggestionExpanded && (
+                    <div className={styles.addForm}>
+                      <TextField
+                        label={strings.AddSuggestionTitleLabel}
+                        required
+                        value={newTitle}
+                        onChange={this._onTitleChange}
+                        disabled={isLoading}
+                      />
+                      <TextField
+                        label={strings.AddSuggestionDetailsLabel}
+                        multiline
+                        rows={3}
+                        value={newDescription}
+                        onChange={this._onDescriptionChange}
+                        disabled={isLoading}
+                      />
+                      <SimilarSuggestions
+                        viewModels={similarSuggestionViewModels}
+                        isLoading={isSimilarSuggestionsLoading}
+                        query={similarSuggestionsQuery}
+                        page={similarSuggestions.page}
+                        hasPrevious={similarSuggestions.previousTokens.length > 0}
+                        hasNext={!!similarSuggestions.nextToken}
+                        onPrevious={this._goToPreviousSimilarPage}
+                        onNext={this._goToNextSimilarPage}
+                        onToggleVote={(item) => this._toggleVote(item)}
+                        onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                        onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                        onAddComment={(item) => this._addCommentToSuggestion(item)}
+                        onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                        onToggleComments={(id) => this._toggleCommentsSection(id)}
+                        formatDateTime={(value) => this._formatDateTime(value)}
+                        isProcessing={isLoading}
+                      />
+                      <Dropdown
+                        label={strings.CategoryLabel}
+                        options={categoryOptions}
+                        selectedKey={newCategory}
+                        onChange={this._onCategoryChange}
+                        disabled={isLoading || categoryOptions.length === 0}
+                      />
+                      <Dropdown
+                        label={strings.SubcategoryLabel}
+                        options={subcategoryOptions}
+                        selectedKey={newSubcategoryKey}
+                        onChange={this._onSubcategoryChange}
+                        disabled={isLoading || subcategoryOptions.length === 0}
+                        placeholder={
+                          subcategoryOptions.length === 0
+                            ? strings.NoSubcategoriesAvailablePlaceholder
+                            : strings.SelectSubcategoryPlaceholder
+                        }
+                      />
+                      <PrimaryButton
+                        text={strings.SubmitSuggestionButtonText}
+                        onClick={this._addSuggestion}
+                        disabled={isLoading || newTitle.trim().length === 0}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <SuggestionSection
+                title={strings.ActiveSuggestionsSectionTitle}
+                titleId={this._sectionIds.active.title}
+                contentId={this._sectionIds.active.content}
+                isExpanded={isActiveSuggestionsExpanded}
+                onToggle={this._toggleActiveSection}
+                isLoading={isLoading}
+                isSectionLoading={isActiveSuggestionsLoading}
+                searchValue={activeFilter.searchQuery}
+                onSearchChange={this._onActiveSearchChange}
+                categoryOptions={filterCategoryOptions}
+                selectedCategoryKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                onCategoryChange={this._onActiveFilterCategoryChange}
+                disableCategoryDropdown={isFilterCategoryLimited}
+                subcategoryOptions={activeFilterSubcategoryOptions}
+                selectedSubcategoryKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                onSubcategoryChange={this._onActiveFilterSubcategoryChange}
+                disableSubcategoryDropdown={isActiveFilterSubcategoryLimited}
+                subcategoryPlaceholder={activeFilterSubcategoryPlaceholder}
+                viewModels={activeSuggestionViewModels}
+                useTableLayout={this.props.useTableLayout === true}
+                onToggleVote={(item) => this._toggleVote(item)}
+                onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                onAddComment={(item) => this._addCommentToSuggestion(item)}
+                onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                onToggleComments={(id) => this._toggleCommentsSection(id)}
+                formatDateTime={(value) => this._formatDateTime(value)}
+                page={activeSuggestions.page}
+                hasPrevious={activeSuggestions.previousTokens.length > 0}
+                hasNext={!!activeSuggestions.nextToken}
+                onPrevious={this._goToPreviousActivePage}
+                onNext={this._goToNextActivePage}
+              />
+
+              <SuggestionSection
+                title={strings.CompletedSuggestionsSectionTitle}
+                titleId={this._sectionIds.completed.title}
+                contentId={this._sectionIds.completed.content}
+                isExpanded={isCompletedSuggestionsExpanded}
+                onToggle={this._toggleCompletedSection}
+                isLoading={isLoading}
+                isSectionLoading={isCompletedSuggestionsLoading}
+                searchValue={completedFilter.searchQuery}
+                onSearchChange={this._onCompletedSearchChange}
+                categoryOptions={filterCategoryOptions}
+                selectedCategoryKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                onCategoryChange={this._onCompletedFilterCategoryChange}
+                disableCategoryDropdown={isFilterCategoryLimited}
+                subcategoryOptions={completedFilterSubcategoryOptions}
+                selectedSubcategoryKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                onSubcategoryChange={this._onCompletedFilterSubcategoryChange}
+                disableSubcategoryDropdown={isCompletedFilterSubcategoryLimited}
+                subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
+                viewModels={completedSuggestionViewModels}
+                useTableLayout={this.props.useTableLayout === true}
+                onToggleVote={(item) => this._toggleVote(item)}
+                onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                onAddComment={(item) => this._addCommentToSuggestion(item)}
+                onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                onToggleComments={(id) => this._toggleCommentsSection(id)}
+                formatDateTime={(value) => this._formatDateTime(value)}
+                page={completedSuggestions.page}
+                hasPrevious={completedSuggestions.previousTokens.length > 0}
+                hasNext={!!completedSuggestions.nextToken}
+                onPrevious={this._goToPreviousCompletedPage}
+                onNext={this._goToNextCompletedPage}
+              />
+            </div>
+          </PivotItem>
+
+          <PivotItem headerText={strings.MyVotesTabLabel} itemKey="myVotes">
+            <div className={styles.pivotContent}>
+              {isMyVotesLoading ? (
+                <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
+              ) : myVoteSuggestions.length === 0 ? (
+                <p className={styles.emptyState}>{strings.NoVotedSuggestionsLabel}</p>
+              ) : (
+                <SuggestionList
+                  viewModels={myVoteSuggestionViewModels}
+                  useTableLayout={this.props.useTableLayout === true}
+                  isLoading={isLoading || isMyVotesLoading}
                   onToggleVote={(item) => this._toggleVote(item)}
-                  onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
+                  onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
                   onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
                   onAddComment={(item) => this._addCommentToSuggestion(item)}
                   onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                   onToggleComments={(id) => this._toggleCommentsSection(id)}
                   formatDateTime={(value) => this._formatDateTime(value)}
-                  isProcessing={isLoading}
                 />
-                <Dropdown
-                  label={strings.CategoryLabel}
-                  options={categoryOptions}
-                  selectedKey={newCategory}
-                  onChange={this._onCategoryChange}
-                  disabled={isLoading || categoryOptions.length === 0}
-                />
-                <Dropdown
-                  label={strings.SubcategoryLabel}
-                  options={subcategoryOptions}
-                  selectedKey={newSubcategoryKey}
-                  onChange={this._onSubcategoryChange}
-                  disabled={isLoading || subcategoryOptions.length === 0}
-                  placeholder={
-                    subcategoryOptions.length === 0
-                      ? strings.NoSubcategoriesAvailablePlaceholder
-                      : strings.SelectSubcategoryPlaceholder
-                  }
-                />
-                <PrimaryButton
-                  text={strings.SubmitSuggestionButtonText}
-                  onClick={this._addSuggestion}
-                  disabled={isLoading || newTitle.trim().length === 0}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <SuggestionSection
-          title={strings.ActiveSuggestionsSectionTitle}
-          titleId={this._sectionIds.active.title}
-          contentId={this._sectionIds.active.content}
-          isExpanded={isActiveSuggestionsExpanded}
-          onToggle={this._toggleActiveSection}
-          isLoading={isLoading}
-          isSectionLoading={isActiveSuggestionsLoading}
-          searchValue={activeFilter.searchQuery}
-          onSearchChange={this._onActiveSearchChange}
-          categoryOptions={filterCategoryOptions}
-          selectedCategoryKey={activeFilter.category ?? ALL_CATEGORY_FILTER_KEY}
-          onCategoryChange={this._onActiveFilterCategoryChange}
-          disableCategoryDropdown={isFilterCategoryLimited}
-          subcategoryOptions={activeFilterSubcategoryOptions}
-          selectedSubcategoryKey={activeFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-          onSubcategoryChange={this._onActiveFilterSubcategoryChange}
-          disableSubcategoryDropdown={isActiveFilterSubcategoryLimited}
-          subcategoryPlaceholder={activeFilterSubcategoryPlaceholder}
-          viewModels={activeSuggestionViewModels}
-          useTableLayout={this.props.useTableLayout === true}
-          onToggleVote={(item) => this._toggleVote(item)}
-          onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
-          onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-          onAddComment={(item) => this._addCommentToSuggestion(item)}
-          onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
-          onToggleComments={(id) => this._toggleCommentsSection(id)}
-          formatDateTime={(value) => this._formatDateTime(value)}
-          page={activeSuggestions.page}
-          hasPrevious={activeSuggestions.previousTokens.length > 0}
-          hasNext={!!activeSuggestions.nextToken}
-          onPrevious={this._goToPreviousActivePage}
-          onNext={this._goToNextActivePage}
-        />
-
-        <SuggestionSection
-          title={strings.CompletedSuggestionsSectionTitle}
-          titleId={this._sectionIds.completed.title}
-          contentId={this._sectionIds.completed.content}
-          isExpanded={isCompletedSuggestionsExpanded}
-          onToggle={this._toggleCompletedSection}
-          isLoading={isLoading}
-          isSectionLoading={isCompletedSuggestionsLoading}
-          searchValue={completedFilter.searchQuery}
-          onSearchChange={this._onCompletedSearchChange}
-          categoryOptions={filterCategoryOptions}
-          selectedCategoryKey={completedFilter.category ?? ALL_CATEGORY_FILTER_KEY}
-          onCategoryChange={this._onCompletedFilterCategoryChange}
-          disableCategoryDropdown={isFilterCategoryLimited}
-          subcategoryOptions={completedFilterSubcategoryOptions}
-          selectedSubcategoryKey={completedFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-          onSubcategoryChange={this._onCompletedFilterSubcategoryChange}
-          disableSubcategoryDropdown={isCompletedFilterSubcategoryLimited}
-          subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
-          viewModels={completedSuggestionViewModels}
-          useTableLayout={this.props.useTableLayout === true}
-          onToggleVote={(item) => this._toggleVote(item)}
-          onMarkSuggestionAsDone={(item) => this._markSuggestionAsDone(item)}
-          onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-          onAddComment={(item) => this._addCommentToSuggestion(item)}
-          onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
-          onToggleComments={(id) => this._toggleCommentsSection(id)}
-          formatDateTime={(value) => this._formatDateTime(value)}
-          page={completedSuggestions.page}
-          hasPrevious={completedSuggestions.previousTokens.length > 0}
-          hasNext={!!completedSuggestions.nextToken}
-          onPrevious={this._goToPreviousCompletedPage}
-          onNext={this._goToNextCompletedPage}
-        />
+              )}
+            </div>
+          </PivotItem>
+        </Pivot>
       </section>
     );
   }
@@ -1290,16 +1529,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     readOnly: boolean,
     options: { allowVoting?: boolean } = {}
   ): ISuggestionViewModel[] {
-    const noVotesRemaining: boolean = this.state.availableVotes <= 0;
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
     const allowVoting: boolean = options.allowVoting === true;
 
     return items.map((item) => {
+      const remainingVotesForCategory: number = this._getRemainingVotesForCategory(item.category);
       const interaction: ISuggestionInteractionState = this._getInteractionState(
         item,
         readOnly,
         normalizedUser,
-        noVotesRemaining,
+        remainingVotesForCategory,
         allowVoting
       );
       const isExpanded: boolean = this._isCommentSectionExpanded(item.id);
@@ -1478,29 +1717,32 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     item: ISuggestionItem,
     readOnly: boolean,
     normalizedUser: string | undefined,
-    noVotesRemaining: boolean,
+    remainingVotesForCategory: number,
     allowVoting: boolean
   ): {
     hasVoted: boolean;
     disableVote: boolean;
     canAddComment: boolean;
-    canMarkSuggestionAsDone: boolean;
+    canAdvanceSuggestionStatus: boolean;
     canDeleteSuggestion: boolean;
     isVotingAllowed: boolean;
   } {
     const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
-    const isVotingAllowed: boolean = allowVoting || !readOnly;
+    const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
+    const isVotingAllowed: boolean = allowVoting || (!readOnly && !isCompleted);
     const disableVote: boolean =
-      this.state.isLoading || !isVotingAllowed || item.status === 'Done' || (!hasVoted && noVotesRemaining);
-    const canMarkSuggestionAsDone: boolean = this.props.isCurrentUserAdmin && !readOnly && item.status !== 'Done';
+      this.state.isLoading ||
+      !isVotingAllowed ||
+      (!hasVoted && !this.state.isUnlimitedVotes && remainingVotesForCategory <= 0);
+    const canAdvanceSuggestionStatus: boolean = this.props.isCurrentUserAdmin && !readOnly && !isCompleted;
     const canDeleteSuggestion: boolean = this._canCurrentUserDeleteSuggestion(item);
-    const canAddComment: boolean = !readOnly && item.status !== 'Done';
+    const canAddComment: boolean = !readOnly && !isCompleted;
 
     return {
       hasVoted,
       disableVote,
       canAddComment,
-      canMarkSuggestionAsDone,
+      canAdvanceSuggestionStatus,
       canDeleteSuggestion,
       isVotingAllowed
     };
@@ -1848,7 +2090,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      const key: string = trimmed.toLowerCase();
+      const key: string = this._getCategoryKey(trimmed);
 
       if (seen.has(key)) {
         return;
@@ -1876,8 +2118,49 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return undefined;
     }
 
-    const lower: string = normalized.toLowerCase();
+    const lower: string = this._getCategoryKey(normalized);
     return categories.find((category) => category.toLowerCase() === lower);
+  }
+
+  private _getCategoryKey(category: SuggestionCategory): string {
+    return category.trim().toLowerCase();
+  }
+
+  private _getVoteSummaryLabel(categories: SuggestionCategory[]): string {
+    if (this.state.isUnlimitedVotes) {
+      return strings.VotesUnlimitedLabel;
+    }
+
+    const categoryKeys: Set<string> = new Set();
+    categories.forEach((category) => categoryKeys.add(this._getCategoryKey(category)));
+    Object.keys(this.state.availableVotesByCategory).forEach((key) => categoryKeys.add(key));
+
+    if (categoryKeys.size === 0) {
+      return strings.VotesPerCategoryDefaultLabel.replace(
+        '{0}',
+        MAX_VOTES_PER_CATEGORY.toString()
+      );
+    }
+
+    const summaryEntries: string[] = [];
+
+    categoryKeys.forEach((key) => {
+      const displayName: string =
+        categories.find((category) => this._getCategoryKey(category) === key) ?? key;
+      const remaining: number = this.state.availableVotesByCategory[key] ?? MAX_VOTES_PER_CATEGORY;
+      summaryEntries.push(`${displayName}: ${remaining}/${MAX_VOTES_PER_CATEGORY}`);
+    });
+
+    return summaryEntries.join(' • ');
+  }
+
+  private _getRemainingVotesForCategory(category: SuggestionCategory): number {
+    if (this.state.isUnlimitedVotes) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    const key: string = this._getCategoryKey(category);
+    return this.state.availableVotesByCategory[key] ?? MAX_VOTES_PER_CATEGORY;
   }
 
   private _getDefaultCategory(categories: SuggestionCategory[]): SuggestionCategory {
@@ -1897,7 +2180,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? []
       : options.previousTokens;
 
-    const { items, nextToken } = await this._getSuggestionsPage('Active', effectiveSkipToken, filter);
+    const { items, nextToken } = await this._getSuggestionsPage('active', effectiveSkipToken, filter);
 
     if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
@@ -1938,7 +2221,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? []
       : options.previousTokens;
 
-    const { items, nextToken } = await this._getSuggestionsPage('Done', effectiveSkipToken, filter);
+    const { items, nextToken } = await this._getSuggestionsPage('completed', effectiveSkipToken, filter);
 
     if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
@@ -2001,13 +2284,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private async _getSuggestionsPage(
-    status: 'Active' | 'Done',
+    statusGroup: 'active' | 'completed',
     skipToken: string | undefined,
     filter: IFilterState
   ): Promise<{ items: ISuggestionItem[]; nextToken?: string }> {
     const listId: string = this._getResolvedListId();
+    const baseStatuses: string[] =
+      statusGroup === 'completed' ? [this.state.completedStatus] : this._getActiveStatuses();
+    const statuses: string[] = this._isStatusInCollection(filter.status, baseStatuses)
+      ? [filter.status as string]
+      : baseStatuses;
+
     const response = await this.props.graphService.getSuggestionItems(listId, {
-      status,
+      statuses,
       top: SUGGESTIONS_PAGE_SIZE,
       skipToken,
       category: filter.category,
@@ -2015,7 +2304,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       searchQuery: filter.searchQuery,
       suggestionIds:
         typeof filter.suggestionId === 'number' ? [filter.suggestionId] : undefined,
-      orderBy: status === 'Done' ? 'fields/CompletedDateTime desc' : 'createdDateTime desc'
+      orderBy:
+        statusGroup === 'completed'
+          ? 'fields/CompletedDateTime desc'
+          : 'createdDateTime desc'
     });
 
     const suggestionIds: number[] = response.items
@@ -2024,7 +2316,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
 
-    if (status === 'Active' && suggestionIds.length > 0) {
+    const shouldLoadVotes: boolean =
+      suggestionIds.length > 0 &&
+      statuses.some((status) => !this._isCompletedStatusValue(status, this.state.completedStatus));
+
+    if (shouldLoadVotes) {
       const voteListId: string = this._getResolvedVotesListId();
       const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
         suggestionIds
@@ -2066,9 +2362,17 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
         const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
         const storedVotes: number = this._parseVotes(fields.Votes);
-        const status: 'Active' | 'Done' = fields.Status === 'Done' ? 'Done' : 'Active';
+        const rawStatus: unknown = fields.Status;
+        const resolvedStatus: string =
+          typeof rawStatus === 'string' && rawStatus.trim().length > 0
+            ? rawStatus.trim()
+            : this.state.defaultStatus;
+        const isCompleted: boolean = this._isCompletedStatusValue(
+          resolvedStatus,
+          this.state.completedStatus
+        );
         const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
-        const votes: number = status === 'Done' ? Math.max(liveVotes, storedVotes) : liveVotes;
+        const votes: number = isCompleted ? Math.max(liveVotes, storedVotes) : liveVotes;
         const createdDateTime: string | undefined =
           typeof entry.createdDateTime === 'string' && entry.createdDateTime.trim().length > 0
             ? entry.createdDateTime.trim()
@@ -2091,7 +2395,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               : 'Untitled suggestion',
           description: typeof fields.Details === 'string' ? fields.Details : '',
           votes,
-          status,
+          status: resolvedStatus,
           category: this._normalizeCategory(fields.Category),
           subcategory:
             typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
@@ -2209,22 +2513,102 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
 
     if (!normalizedUser) {
-      this._updateState({ availableVotes: MAX_VOTES_PER_USER });
+      this._updateState({
+        availableVotesByCategory: {},
+        myVoteSuggestions: [],
+        isMyVotesLoading: false
+      });
       return;
     }
 
     const voteListId: string = this._getResolvedVotesListId();
-    const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
-      username: normalizedUser
-    });
+    this._updateState({ isMyVotesLoading: true });
 
-    const usedVotes: number = voteItems.reduce((total, entry) => {
-      const votes: number = this._parseVotes(entry.fields?.Votes);
-      return total + votes;
-    }, 0);
+    try {
+      const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+        username: normalizedUser
+      });
 
-    const availableVotes: number = Math.max(MAX_VOTES_PER_USER - usedVotes, 0);
-    this._updateState({ availableVotes });
+      const suggestionIds: number[] = voteItems
+        .map((entry) => this._parseNumericId(entry.fields?.SuggestionId))
+        .filter((value): value is number => typeof value === 'number');
+
+      if (suggestionIds.length === 0) {
+        this._updateState({
+          availableVotesByCategory: {},
+          myVoteSuggestions: [],
+          isMyVotesLoading: false
+        });
+        return;
+      }
+
+      const listId: string = this._getResolvedListId();
+      const [suggestionResponse, allVoteItems, commentCounts] = await Promise.all([
+        this.props.graphService.getSuggestionItems(listId, {
+          suggestionIds,
+          top: suggestionIds.length
+        }),
+        this.props.graphService.getVoteItems(voteListId, {
+          suggestionIds
+        }),
+        this._currentCommentsListId
+          ? this.props.graphService.getCommentCounts(this._getResolvedCommentsListId(), {
+              suggestionIds
+            })
+          : Promise.resolve(new Map<number, number>())
+      ]);
+
+      const votesBySuggestion: Map<number, IVoteEntry[]> = this._groupVotesBySuggestion(allVoteItems);
+      const suggestions: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
+        suggestionResponse.items,
+        votesBySuggestion,
+        commentCounts
+      );
+
+      const suggestionsById: Map<number, ISuggestionItem> = new Map(
+        suggestions.map((suggestion) => [suggestion.id, suggestion])
+      );
+
+      const usedVotesByCategory: Record<string, number> = {};
+
+      voteItems.forEach((entry) => {
+        const suggestionId: number | undefined = this._parseNumericId(entry.fields?.SuggestionId);
+
+        if (typeof suggestionId !== 'number') {
+          return;
+        }
+
+        const suggestion: ISuggestionItem | undefined = suggestionsById.get(suggestionId);
+
+        if (!suggestion) {
+          return;
+        }
+
+        const votes: number = this._parseVotes(entry.fields?.Votes);
+
+        if (votes <= 0) {
+          return;
+        }
+
+        const categoryKey: string = this._getCategoryKey(suggestion.category);
+        usedVotesByCategory[categoryKey] = (usedVotesByCategory[categoryKey] ?? 0) + votes;
+      });
+
+      const availableVotesByCategory: Record<string, number> = {};
+      Object.keys(usedVotesByCategory).forEach((key) => {
+        const remaining: number = Math.max(MAX_VOTES_PER_CATEGORY - usedVotesByCategory[key], 0);
+        availableVotesByCategory[key] = remaining;
+      });
+
+      this._updateState({
+        availableVotesByCategory,
+        myVoteSuggestions: suggestions,
+        isMyVotesLoading: false
+      });
+    } catch (error) {
+      console.error('Failed to load available votes.', error);
+      this._updateState({ isMyVotesLoading: false });
+    }
   }
 
   private _onTitleChange = (
@@ -2542,7 +2926,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _loadSelectedSimilarSuggestion(
     suggestionId: number,
-    status: 'Active' | 'Done'
+    status: string
   ): Promise<void> {
     if (!this._isMounted) {
       return;
@@ -2551,11 +2935,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ isSelectedSimilarSuggestionLoading: true });
 
     try {
-      const { items } = await this._getSuggestionsPage(status, undefined, {
+      const isCompleted: boolean = this._isCompletedStatusValue(status, this.state.completedStatus);
+      const { items } = await this._getSuggestionsPage(isCompleted ? 'completed' : 'active', undefined, {
         searchQuery: '',
         category: undefined,
         subcategory: undefined,
-        suggestionId
+        suggestionId,
+        status
       });
 
       if (!this._isMounted || this.state.selectedSimilarSuggestion?.id !== suggestionId) {
@@ -2902,9 +3288,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const currentVote: IVoteEntry | undefined = item.voteEntries.find((vote) => vote.username === normalizedUser);
     const hasVoted: boolean = !!currentVote && currentVote.votes > 0;
+    const remainingVotesForCategory: number = this._getRemainingVotesForCategory(item.category);
 
-    if (!hasVoted && this.state.availableVotes <= 0) {
-      this._handleError('You have used all of your votes. Mark a suggestion as done or remove one of your votes to continue.');
+    if (!hasVoted && !this.state.isUnlimitedVotes && remainingVotesForCategory <= 0) {
+      this._handleError(strings.NoVotesRemainingForCategoryMessage);
       return;
     }
 
@@ -3177,22 +3564,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
-  private async _markSuggestionAsDone(item: ISuggestionItem): Promise<void> {
+  private async _advanceSuggestionStatus(item: ISuggestionItem): Promise<void> {
     if (!this.props.isCurrentUserAdmin) {
-      this._handleError('Only administrators can mark suggestions as done.');
+      this._handleError('Only administrators can update suggestion statuses.');
       return;
     }
 
-    const commentInput: string | null = window.prompt(
-      'Add a comment for this suggestion (optional). Leave blank to skip.',
-      ''
+    const nextStatus: string | undefined = this._getNextStatus(
+      this.state.statuses,
+      this.state.completedStatus,
+      item.status
     );
 
-    if (commentInput === null) {
+    if (!nextStatus) {
+      this._handleError('There is no next status configured for this suggestion.');
       return;
     }
 
-    const commentText: string = commentInput.trim();
+    const isAdvancingToCompleted: boolean = this._isCompletedStatusValue(
+      nextStatus,
+      this.state.completedStatus
+    );
+
+    let commentText: string | undefined;
+
+    if (isAdvancingToCompleted) {
+      const commentInput: string | null = window.prompt(
+        'Add a comment for this suggestion (optional). Leave blank to skip.',
+        ''
+      );
+
+      if (commentInput === null) {
+        return;
+      }
+
+      commentText = commentInput.trim();
+    }
 
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
@@ -3201,15 +3608,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const voteListId: string = this._getResolvedVotesListId();
       const commentListId: string = this._getResolvedCommentsListId();
 
-      await this.props.graphService.updateSuggestion(listId, item.id, {
-        Status: 'Done',
-        Votes: item.votes,
-        CompletedDateTime: new Date().toISOString()
-      });
+      const updatePayload: IGraphSuggestionItemFields = {
+        Status: nextStatus
+      };
 
-      await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
+      if (isAdvancingToCompleted) {
+        updatePayload.Votes = item.votes;
+        updatePayload.CompletedDateTime = new Date().toISOString();
+      }
 
-      if (commentText.length > 0) {
+      await this.props.graphService.updateSuggestion(listId, item.id, updatePayload);
+
+      if (isAdvancingToCompleted) {
+        await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
+      }
+
+      if (commentText && commentText.length > 0) {
         const title: string = `Suggestion #${item.id}`;
         await this.props.graphService.addCommentItem(commentListId, {
           Title: title.length > 255 ? title.slice(0, 255) : title,
@@ -3218,15 +3632,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         });
       }
 
-      await this._loadSuggestions();
+      await Promise.all([this._loadSuggestions(), this._loadAvailableVotes()]);
 
       if (this.state.selectedSimilarSuggestion?.id === item.id) {
-        await this._loadSelectedSimilarSuggestion(item.id, 'Done');
+        await this._loadSelectedSimilarSuggestion(item.id, nextStatus);
       }
 
-      this._updateState({ success: 'The suggestion has been marked as done.' });
+      this._updateState({ success: strings.SuggestionStatusUpdatedMessage });
     } catch (error) {
-      this._handleError('We could not mark this suggestion as done. Please try again.', error);
+      this._handleError('We could not update the suggestion status. Please try again.', error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -3257,7 +3671,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this.props.graphService.deleteCommentsForSuggestion(commentListId, item.id)
       ]);
 
-      if (item.status === 'Done') {
+      if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
         await this._refreshCompletedSuggestions();
       } else {
         await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
@@ -3404,6 +3818,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ error: message, success: undefined });
   }
 
+  private _onSuggestionTabChange = (item?: PivotItem): void => {
+    if (!item) {
+      return;
+    }
+
+    const key: string | undefined = item.props.itemKey;
+    const normalized: 'all' | 'myVotes' = key === 'myVotes' ? 'myVotes' : 'all';
+
+    if (normalized === this.state.selectedMainTab) {
+      return;
+    }
+
+    this._updateState({ selectedMainTab: normalized });
+  };
+
   private _toggleAddSuggestionSection = (): void => {
     if (!this._isMounted) {
       return;
@@ -3445,10 +3874,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _updateState(
-    state: Partial<ISamverkansportalenState>,
+    state:
+      | Partial<ISamverkansportalenState>
+      | ((prevState: ISamverkansportalenState) => Partial<ISamverkansportalenState>),
     callback?: () => void
   ): void {
     if (!this._isMounted) {
+      return;
+    }
+
+    if (typeof state === 'function') {
+      this.setState(
+        (prevState) =>
+          state(prevState) as Pick<ISamverkansportalenState, keyof ISamverkansportalenState>,
+        callback
+      );
       return;
     }
 

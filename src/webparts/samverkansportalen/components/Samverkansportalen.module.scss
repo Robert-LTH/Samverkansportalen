@@ -133,6 +133,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+.pivotContent {
+  margin-top: 2rem;
+  display: grid;
+  gap: 2rem;
+}
+
 .addForm {
   display: grid;
   gap: 1rem;
@@ -286,6 +292,12 @@
   width: 12rem;
 }
 
+.tableHeaderStatus,
+.tableCellStatus {
+  width: 10rem;
+  text-align: center;
+}
+
 .tableHeaderActions,
 .tableCellActions {
   width: 14rem;
@@ -398,6 +410,19 @@
 .subcategoryPlaceholder {
   color: "[theme:neutralTertiary, default: #a19f9d]";
   font-style: italic;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accentColorTint);
+  color: var(--accentColorDark);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .suggestionTitle {

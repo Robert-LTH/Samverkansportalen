@@ -20,6 +20,7 @@ import {
   DEFAULT_SUGGESTIONS_HEADER_SUBTITLE,
   DEFAULT_SUGGESTIONS_HEADER_TITLE,
   DEFAULT_SUGGESTIONS_LIST_TITLE,
+  DEFAULT_STATUS_DEFINITIONS,
   ISamverkansportalenProps
 } from './components/ISamverkansportalenProps';
 import GraphSuggestionsService, {
@@ -44,6 +45,8 @@ export interface ISamverkansportalenWebPartProps {
   newCategoryTitle?: string;
   headerTitle: string;
   headerSubtitle: string;
+  statusDefinitions?: string;
+  completedStatus?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -71,6 +74,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _resolvedCategoryListTitle?: string;
 
   public render(): void {
+    const statuses: string[] = this._getStatusDefinitions();
+    const completedStatus: string = this._getCompletedStatus(statuses);
+
     const element: React.ReactElement<ISamverkansportalenProps> = React.createElement(
       Samverkansportalen,
       {
@@ -95,7 +101,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         headerSubtitle: this._normalizeHeaderText(
           this.properties.headerSubtitle,
           DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
-        )
+        ),
+        statuses,
+        completedStatus
       }
     );
 
@@ -132,6 +140,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this.properties.headerSubtitle = this._normalizeHeaderText(
       this.properties.headerSubtitle,
       DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
+    );
+    const normalizedStatusDefinitions: string = this._normalizeStatusDefinitions(
+      this.properties.statusDefinitions
+    );
+    this.properties.statusDefinitions = normalizedStatusDefinitions;
+    const statusList: string[] = this._parseStatusDefinitions(normalizedStatusDefinitions);
+    this.properties.completedStatus = this._normalizeCompletedStatus(
+      this.properties.completedStatus,
+      statusList
     );
 
     return this._getEnvironmentMessage().then(message => {
@@ -256,6 +273,24 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       this.properties.headerSubtitle = this._normalizeHeaderText(
         typeof newValue === 'string' ? newValue : undefined,
         DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
+      );
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'statusDefinitions') {
+      const normalized: string = this._normalizeStatusDefinitions(
+        typeof newValue === 'string' ? newValue : undefined
+      );
+      this.properties.statusDefinitions = normalized;
+      const statuses: string[] = this._parseStatusDefinitions(normalized);
+      this.properties.completedStatus = this._normalizeCompletedStatus(
+        this.properties.completedStatus,
+        statuses
+      );
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'completedStatus') {
+      const statuses: string[] = this._getStatusDefinitions();
+      this.properties.completedStatus = this._normalizeCompletedStatus(
+        typeof newValue === 'string' ? newValue : undefined,
+        statuses
       );
       this.context.propertyPane.refresh();
     }
@@ -954,6 +989,71 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return trimmed.length > 0 ? trimmed : fallback;
   }
 
+  private _parseStatusDefinitions(value?: string): string[] {
+    const source: string = typeof value === 'string' && value.trim().length > 0
+      ? value
+      : DEFAULT_STATUS_DEFINITIONS;
+    const segments: string[] = source.split(/[\n,;]/);
+    const seen: Set<string> = new Set();
+    const results: string[] = [];
+
+    segments.forEach((segment) => {
+      const trimmed: string = segment.trim();
+
+      if (!trimmed) {
+        return;
+      }
+
+      const key: string = trimmed.toLowerCase();
+
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      results.push(trimmed);
+    });
+
+    if (results.length === 0 && source !== DEFAULT_STATUS_DEFINITIONS) {
+      return this._parseStatusDefinitions(DEFAULT_STATUS_DEFINITIONS);
+    }
+
+    return results.length > 0 ? results : ['Active', 'Done'];
+  }
+
+  private _normalizeStatusDefinitions(value?: string): string {
+    const statuses: string[] = this._parseStatusDefinitions(value);
+    return statuses.join('\n');
+  }
+
+  private _normalizeCompletedStatus(value: string | undefined, statuses: string[]): string {
+    if (statuses.length === 0) {
+      return 'Done';
+    }
+
+    const trimmed: string = (value ?? '').trim();
+
+    if (trimmed.length > 0) {
+      const match: string | undefined = statuses.find(
+        (status) => status.toLowerCase() === trimmed.toLowerCase()
+      );
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return statuses[statuses.length - 1];
+  }
+
+  private _getStatusDefinitions(): string[] {
+    return this._parseStatusDefinitions(this.properties.statusDefinitions);
+  }
+
+  private _getCompletedStatus(statuses: string[]): string {
+    return this._normalizeCompletedStatus(this.properties.completedStatus, statuses);
+  }
+
   private get _selectedSubcategoryListTitle(): string | undefined {
     return this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
   }
@@ -1004,6 +1104,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       canMutateCategories && (this.properties.newCategoryTitle ?? '').trim().length > 0;
     const canRemoveCategory: boolean =
       canMutateCategories && !!this.properties.selectedCategoryKey && this._categoryOptions.length > 0;
+    const statusDefinitions: string[] = this._getStatusDefinitions();
+    const completedStatus: string = this._getCompletedStatus(statusDefinitions);
+    const completedStatusOptions: IPropertyPaneDropdownOption[] = statusDefinitions.map((status) => ({
+      key: status,
+      text: status
+    }));
 
     return {
       pages: [
@@ -1151,6 +1257,21 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneLabel('createListStatus', {
                   text: this._listCreationMessage ?? ''
+                }),
+                PropertyPaneTextField('statusDefinitions', {
+                  label: strings.StatusDefinitionsFieldLabel,
+                  multiline: true,
+                  rows: 3,
+                  value: this.properties.statusDefinitions ?? DEFAULT_STATUS_DEFINITIONS
+                }),
+                PropertyPaneDropdown('completedStatus', {
+                  label: strings.CompletedStatusFieldLabel,
+                  options:
+                    completedStatusOptions.length > 0
+                      ? completedStatusOptions
+                      : [{ key: completedStatus, text: completedStatus }],
+                  selectedKey: completedStatus,
+                  disabled: completedStatusOptions.length === 0
                 }),
                 PropertyPaneTextField('headerTitle', {
                   label: strings.HeaderTitleFieldLabel,

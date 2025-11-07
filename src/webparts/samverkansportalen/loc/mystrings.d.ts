@@ -63,6 +63,8 @@ declare interface ISamverkansportalenWebPartStrings {
   CreateListPromptCommentsLabel: string;
   CreateListPromptCategoryLabel: string;
   CreateListPromptSubcategoryLabel: string;
+  StatusDefinitionsFieldLabel: string;
+  CompletedStatusFieldLabel: string;
   UseTableLayoutToggleLabel: string;
   UseTableLayoutToggleOnText: string;
   UseTableLayoutToggleOffText: string;
@@ -76,6 +78,8 @@ declare interface ISamverkansportalenWebPartStrings {
   LastModifiedLabel: string;
   CompletedLabel: string;
   VotesRemainingLabel: string;
+  VotesUnlimitedLabel: string;
+  VotesPerCategoryDefaultLabel: string;
   CategoryLabel: string;
   SubcategoryLabel: string;
   NoSubcategoriesAvailablePlaceholder: string;
@@ -86,7 +90,7 @@ declare interface ISamverkansportalenWebPartStrings {
   VoteButtonText: string;
   RemoveVoteButtonText: string;
   VotesClosedText: string;
-  MarkAsDoneButtonText: string;
+  AdvanceSuggestionStatusButtonText: string;
   RemoveSuggestionButtonLabel: string;
   CommentsLabel: string;
   AddCommentButtonText: string;
@@ -95,6 +99,7 @@ declare interface ISamverkansportalenWebPartStrings {
   VotesLabel: string;
   LoadingCommentsLabel: string;
   LoadingSuggestionsLabel: string;
+  SuggestionStatusUpdatedMessage: string;
   SimilarSuggestionsTitle: string;
   SingleMatchingSuggestionLabel: string;
   MultipleMatchingSuggestionsLabel: string;
@@ -106,12 +111,16 @@ declare interface ISamverkansportalenWebPartStrings {
   NoSimilarSuggestionsLabel: string;
   NoCommentsLabel: string;
   NoSuggestionsLabel: string;
+  NoVotedSuggestionsLabel: string;
   ActiveSuggestionsSectionTitle: string;
   CompletedSuggestionsSectionTitle: string;
+  AllSuggestionsTabLabel: string;
+  MyVotesTabLabel: string;
   SuggestionTableSuggestionColumnLabel: string;
   SuggestionTableActionsColumnLabel: string;
   SuggestionTableEntryColumnLabel: string;
   SuggestionTableDetailsColumnLabel: string;
+  StatusLabel: string;
   EntryAriaLabel: string;
   DefaultCategoryChangeRequest: string;
   DefaultCategoryWebinar: string;
@@ -120,6 +129,7 @@ declare interface ISamverkansportalenWebPartStrings {
   SearchPlaceholder: string;
   AllCategoriesOptionLabel: string;
   AllSubcategoriesOptionLabel: string;
+  NoVotesRemainingForCategoryMessage: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
   AppLocalEnvironmentOffice: string;
