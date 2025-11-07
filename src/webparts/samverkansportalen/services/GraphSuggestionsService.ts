@@ -411,7 +411,7 @@ export class GraphSuggestionsService {
   public async getSuggestionItems(
     listId: string,
     options: {
-      status?: 'Active' | 'Done';
+      statuses?: string[];
       top?: number;
       skipToken?: string;
       category?: SuggestionCategory;
@@ -442,9 +442,16 @@ export class GraphSuggestionsService {
       .filter((id): id is number => typeof id === 'number');
     const hasSuggestionIdFilter: boolean = normalizedSuggestionIds.length > 0;
 
-    if (options.status) {
-      const normalizedStatus: string = options.status === 'Done' ? 'Done' : 'Active';
-      filterParts.push(`fields/Status eq '${normalizedStatus}'`);
+    const statuses: string[] = Array.isArray(options.statuses)
+      ? options.statuses.filter((status) => typeof status === 'string' && status.trim().length > 0)
+      : [];
+
+    if (statuses.length > 0) {
+      const statusFilters: string[] = statuses.map((status) => {
+        const escapedStatus: string = this._escapeFilterValue(status);
+        return `fields/Status eq '${escapedStatus}'`;
+      });
+      filterParts.push(`(${statusFilters.join(' or ')})`);
     }
 
     if (options.category) {
