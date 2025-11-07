@@ -253,8 +253,6 @@ interface IActionButtonsProps {
   interaction: ISuggestionInteractionState;
   containerClassName: string;
   isLoading: boolean;
-  onToggleVote: () => void;
-  onAdvanceSuggestionStatus: () => void;
   onDeleteSuggestion: () => void;
 }
 
@@ -262,27 +260,9 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
   interaction,
   containerClassName,
   isLoading,
-  onToggleVote,
-  onAdvanceSuggestionStatus,
   onDeleteSuggestion
 }) => (
   <div className={containerClassName}>
-    {interaction.isVotingAllowed ? (
-      <PrimaryButton
-        text={interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText}
-        onClick={onToggleVote}
-        disabled={interaction.disableVote}
-      />
-    ) : (
-      <DefaultButton text={strings.VotesClosedText} disabled />
-    )}
-    {interaction.canAdvanceSuggestionStatus && (
-      <DefaultButton
-        text={strings.AdvanceSuggestionStatusButtonText}
-        onClick={onAdvanceSuggestionStatus}
-        disabled={isLoading}
-      />
-    )}
     {interaction.canDeleteSuggestion && (
       <IconButton
         iconProps={{ iconName: 'Delete' }}
@@ -294,6 +274,89 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
     )}
   </div>
 );
+
+interface ISuggestionStatusControlProps {
+  statuses: string[];
+  value: string;
+  isEditable: boolean;
+  isDisabled: boolean;
+  onChange: (status: string) => void;
+}
+
+const SuggestionStatusControl: React.FC<ISuggestionStatusControlProps> = ({
+  statuses,
+  value,
+  isEditable,
+  isDisabled,
+  onChange
+}) => {
+  const normalizedStatuses: string[] = React.useMemo(() => {
+    const seen: Set<string> = new Set();
+    const items: string[] = [];
+
+    const addStatus = (status: string | undefined): void => {
+      if (!status) {
+        return;
+      }
+
+      const trimmed: string = status.trim();
+
+      if (!trimmed) {
+        return;
+      }
+
+      const key: string = trimmed.toLowerCase();
+
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      items.push(trimmed);
+    };
+
+    statuses.forEach((status) => addStatus(status));
+    addStatus(value);
+
+    return items;
+  }, [statuses, value]);
+
+  const options: IDropdownOption[] = React.useMemo(
+    () =>
+      normalizedStatuses.map((status) => ({
+        key: status,
+        text: status
+      })),
+    [normalizedStatuses]
+  );
+
+  if (!isEditable) {
+    return <span className={styles.statusBadge}>{value}</span>;
+  }
+
+  const selectedOption: IDropdownOption | undefined = options.find((option) => option.key === value);
+
+  return (
+    <Dropdown
+      className={styles.statusDropdown}
+      options={options}
+      selectedKey={selectedOption ? selectedOption.key : value}
+      onChange={(_event, option) => {
+        if (!option) {
+          return;
+        }
+
+        const nextStatus: string = String(option.key);
+
+        if (nextStatus !== value) {
+          onChange(nextStatus);
+        }
+      }}
+      disabled={isDisabled}
+      ariaLabel={strings.StatusLabel}
+    />
+  );
+};
 
 interface ICommentSectionProps {
   item: ISuggestionItem;
@@ -394,25 +457,27 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
 interface ISuggestionCardsProps {
   viewModels: ISuggestionViewModel[];
   onToggleVote: SuggestionAction;
-  onAdvanceSuggestionStatus: SuggestionAction;
+  onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
+  statuses: string[];
 }
 
 const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
   viewModels,
   onToggleVote,
-  onAdvanceSuggestionStatus,
+  onChangeStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
   onToggleComments,
   formatDateTime,
-  isLoading
+  isLoading,
+  statuses
 }) => (
   <ul className={styles.suggestionList}>
     {viewModels.map(({ item, interaction, comment }) => (
@@ -428,7 +493,13 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
               </span>
               <span className={styles.categoryBadge}>{item.category}</span>
               {item.subcategory && <span className={styles.subcategoryBadge}>{item.subcategory}</span>}
-              <span className={styles.statusBadge}>{item.status}</span>
+              <SuggestionStatusControl
+                statuses={statuses}
+                value={item.status}
+                isEditable={interaction.canAdvanceSuggestionStatus}
+                isDisabled={isLoading}
+                onChange={(status) => onChangeStatus(item, status)}
+              />
             </div>
             <h4 className={styles.suggestionTitle}>{item.title}</h4>
             <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
@@ -440,14 +511,23 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
           >
             <span className={styles.voteNumber}>{item.votes}</span>
             <span className={styles.voteText}>{item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}</span>
+            <div className={styles.voteActions}>
+              {interaction.isVotingAllowed ? (
+                <PrimaryButton
+                  text={interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText}
+                  onClick={() => onToggleVote(item)}
+                  disabled={interaction.disableVote}
+                />
+              ) : (
+                <DefaultButton text={strings.VotesClosedText} disabled />
+              )}
+            </div>
           </div>
         </div>
         <ActionButtons
           interaction={interaction}
           containerClassName={styles.cardActions}
           isLoading={isLoading}
-          onToggleVote={() => onToggleVote(item)}
-          onAdvanceSuggestionStatus={() => onAdvanceSuggestionStatus(item)}
           onDeleteSuggestion={() => onDeleteSuggestion(item)}
         />
         <CommentSection
@@ -467,25 +547,27 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
 interface ISuggestionTableProps {
   viewModels: ISuggestionViewModel[];
   onToggleVote: SuggestionAction;
-  onAdvanceSuggestionStatus: SuggestionAction;
+  onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
+  statuses: string[];
 }
 
 const SuggestionTable: React.FC<ISuggestionTableProps> = ({
   viewModels,
   onToggleVote,
-  onAdvanceSuggestionStatus,
+  onChangeStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
   onToggleComments,
   formatDateTime,
-  isLoading
+  isLoading,
+  statuses
 }) => (
   <div className={styles.tableWrapper}>
     <table className={styles.suggestionTable}>
@@ -545,7 +627,13 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 )}
               </td>
               <td className={styles.tableCellStatus} data-label={strings.StatusLabel}>
-                <span className={styles.statusBadge}>{item.status}</span>
+                <SuggestionStatusControl
+                  statuses={statuses}
+                  value={item.status}
+                  isEditable={interaction.canAdvanceSuggestionStatus}
+                  isDisabled={isLoading}
+                  onChange={(status) => onChangeStatus(item, status)}
+                />
               </td>
               <td className={styles.tableCellVotes} data-label={strings.VotesLabel}>
                 <div
@@ -556,6 +644,17 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   <span className={styles.voteText}>
                     {item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}
                   </span>
+                  <div className={styles.voteActions}>
+                    {interaction.isVotingAllowed ? (
+                      <PrimaryButton
+                        text={interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText}
+                        onClick={() => onToggleVote(item)}
+                        disabled={interaction.disableVote}
+                      />
+                    ) : (
+                      <DefaultButton text={strings.VotesClosedText} disabled />
+                    )}
+                  </div>
                 </div>
               </td>
               <td
@@ -566,8 +665,6 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                     interaction={interaction}
                     containerClassName={styles.tableActions}
                     isLoading={isLoading}
-                    onToggleVote={() => onToggleVote(item)}
-                    onAdvanceSuggestionStatus={() => onAdvanceSuggestionStatus(item)}
                     onDeleteSuggestion={() => onDeleteSuggestion(item)}
                   />
               </td>
@@ -604,12 +701,13 @@ interface ISuggestionListProps {
   useTableLayout: boolean;
   isLoading: boolean;
   onToggleVote: SuggestionAction;
-  onAdvanceSuggestionStatus: SuggestionAction;
+  onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
+  statuses: string[];
 }
 
 const SuggestionList: React.FC<ISuggestionListProps> = ({
@@ -617,12 +715,13 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
   useTableLayout,
   isLoading,
   onToggleVote,
-  onAdvanceSuggestionStatus,
+  onChangeStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
   onToggleComments,
-  formatDateTime
+  formatDateTime,
+  statuses
 }) => {
   if (viewModels.length === 0) {
     return <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>;
@@ -632,25 +731,27 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
     <SuggestionTable
       viewModels={viewModels}
       onToggleVote={onToggleVote}
-      onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
+      onChangeStatus={onChangeStatus}
       onDeleteSuggestion={onDeleteSuggestion}
       onAddComment={onAddComment}
       onDeleteComment={onDeleteComment}
       onToggleComments={onToggleComments}
       formatDateTime={formatDateTime}
       isLoading={isLoading}
+      statuses={statuses}
     />
   ) : (
     <SuggestionCards
       viewModels={viewModels}
       onToggleVote={onToggleVote}
-      onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
+      onChangeStatus={onChangeStatus}
       onDeleteSuggestion={onDeleteSuggestion}
       onAddComment={onAddComment}
       onDeleteComment={onDeleteComment}
       onToggleComments={onToggleComments}
       formatDateTime={formatDateTime}
       isLoading={isLoading}
+      statuses={statuses}
     />
   );
 };
@@ -680,12 +781,13 @@ interface ISuggestionSectionProps {
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
   onToggleVote: SuggestionAction;
-  onAdvanceSuggestionStatus: SuggestionAction;
+  onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
+  statuses: string[];
   page: number;
   hasPrevious: boolean;
   hasNext: boolean;
@@ -715,12 +817,13 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   viewModels,
   useTableLayout,
   onToggleVote,
-  onAdvanceSuggestionStatus,
+  onChangeStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
   onToggleComments,
   formatDateTime,
+  statuses,
   page,
   hasPrevious,
   hasNext,
@@ -780,12 +883,13 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
                 useTableLayout={useTableLayout}
                 isLoading={isLoading}
                 onToggleVote={onToggleVote}
-                onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
+                onChangeStatus={onChangeStatus}
                 onDeleteSuggestion={onDeleteSuggestion}
                 onAddComment={onAddComment}
                 onDeleteComment={onDeleteComment}
                 onToggleComments={onToggleComments}
                 formatDateTime={formatDateTime}
+                statuses={statuses}
               />
               <PaginationControls
                 page={page}
@@ -812,13 +916,14 @@ interface ISimilarSuggestionsProps {
   onPrevious: () => void;
   onNext: () => void;
   onToggleVote: SuggestionAction;
-  onAdvanceSuggestionStatus: SuggestionAction;
+  onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
   onAddComment: SuggestionAction;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isProcessing: boolean;
+  statuses: string[];
 }
 
 const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
@@ -831,13 +936,14 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   onPrevious,
   onNext,
   onToggleVote,
-  onAdvanceSuggestionStatus,
+  onChangeStatus,
   onDeleteSuggestion,
   onAddComment,
   onDeleteComment,
   onToggleComments,
   formatDateTime,
-  isProcessing
+  isProcessing,
+  statuses
 }) => {
   const hasTitleQuery: boolean = query.title.length > 0;
   const hasDescriptionQuery: boolean = query.description.length > 0;
@@ -911,12 +1017,13 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
               useTableLayout={false}
               isLoading={isProcessing}
               onToggleVote={onToggleVote}
-              onAdvanceSuggestionStatus={onAdvanceSuggestionStatus}
+              onChangeStatus={onChangeStatus}
               onDeleteSuggestion={onDeleteSuggestion}
               onAddComment={onAddComment}
               onDeleteComment={onDeleteComment}
               onToggleComments={onToggleComments}
               formatDateTime={formatDateTime}
+              statuses={statuses}
             />
           </div>
           <PaginationControls
@@ -1130,25 +1237,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const exists: boolean = statuses.some((entry) => this._areStatusesEqual(entry, status));
     return exists && !this._isCompletedStatusValue(status, completedStatus);
-  }
-
-  private _getNextStatus(statuses: string[], completedStatus: string, current: string): string | undefined {
-    if (statuses.length === 0) {
-      return undefined;
-    }
-
-    const index: number = statuses.findIndex((entry) => this._areStatusesEqual(entry, current));
-
-    if (index === -1) {
-      return statuses[0];
-    }
-
-    if (index >= statuses.length - 1) {
-      return undefined;
-    }
-
-    const next: string = statuses[index + 1];
-    return next;
   }
 
   private _areStatusCollectionsEqual(left: string[] | undefined, right: string[] | undefined): boolean {
@@ -1388,13 +1476,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                         onPrevious={this._goToPreviousSimilarPage}
                         onNext={this._goToNextSimilarPage}
                         onToggleVote={(item) => this._toggleVote(item)}
-                        onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                        onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                         onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
                         onAddComment={(item) => this._addCommentToSuggestion(item)}
                         onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                         onToggleComments={(id) => this._toggleCommentsSection(id)}
                         formatDateTime={(value) => this._formatDateTime(value)}
                         isProcessing={isLoading}
+                        statuses={this.state.statuses}
                       />
                       <Dropdown
                         label={strings.CategoryLabel}
@@ -1447,12 +1536,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 viewModels={activeSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 onToggleVote={(item) => this._toggleVote(item)}
-                onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
                 onAddComment={(item) => this._addCommentToSuggestion(item)}
                 onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                 onToggleComments={(id) => this._toggleCommentsSection(id)}
                 formatDateTime={(value) => this._formatDateTime(value)}
+                statuses={this.state.statuses}
                 page={activeSuggestions.page}
                 hasPrevious={activeSuggestions.previousTokens.length > 0}
                 hasNext={!!activeSuggestions.nextToken}
@@ -1482,12 +1572,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 viewModels={completedSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 onToggleVote={(item) => this._toggleVote(item)}
-                onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
                 onAddComment={(item) => this._addCommentToSuggestion(item)}
                 onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                 onToggleComments={(id) => this._toggleCommentsSection(id)}
                 formatDateTime={(value) => this._formatDateTime(value)}
+                statuses={this.state.statuses}
                 page={completedSuggestions.page}
                 hasPrevious={completedSuggestions.previousTokens.length > 0}
                 hasNext={!!completedSuggestions.nextToken}
@@ -1509,12 +1600,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   useTableLayout={this.props.useTableLayout === true}
                   isLoading={isLoading || isMyVotesLoading}
                   onToggleVote={(item) => this._toggleVote(item)}
-                  onAdvanceSuggestionStatus={(item) => this._advanceSuggestionStatus(item)}
+                  onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                   onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
                   onAddComment={(item) => this._addCommentToSuggestion(item)}
                   onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                   onToggleComments={(id) => this._toggleCommentsSection(id)}
                   formatDateTime={(value) => this._formatDateTime(value)}
+                  statuses={this.state.statuses}
                 />
               )}
             </div>
@@ -3564,31 +3656,49 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
-  private async _advanceSuggestionStatus(item: ISuggestionItem): Promise<void> {
+  private _normalizeRequestedStatus(status: string): string | undefined {
+    const trimmed: string = (status ?? '').trim();
+
+    if (!trimmed) {
+      return undefined;
+    }
+
+    const match: string | undefined = this.state.statuses.find((entry) =>
+      this._areStatusesEqual(entry, trimmed)
+    );
+
+    return match ?? trimmed;
+  }
+
+  private async _updateSuggestionStatus(item: ISuggestionItem, requestedStatus: string): Promise<void> {
     if (!this.props.isCurrentUserAdmin) {
       this._handleError('Only administrators can update suggestion statuses.');
       return;
     }
 
-    const nextStatus: string | undefined = this._getNextStatus(
-      this.state.statuses,
-      this.state.completedStatus,
-      item.status
-    );
+    const targetStatus: string | undefined = this._normalizeRequestedStatus(requestedStatus);
 
-    if (!nextStatus) {
-      this._handleError('There is no next status configured for this suggestion.');
+    if (!targetStatus) {
+      this._handleError('Please select a valid status for this suggestion.');
       return;
     }
 
-    const isAdvancingToCompleted: boolean = this._isCompletedStatusValue(
-      nextStatus,
+    if (this._areStatusesEqual(item.status, targetStatus)) {
+      return;
+    }
+
+    const isCurrentlyCompleted: boolean = this._isCompletedStatusValue(
+      item.status,
+      this.state.completedStatus
+    );
+    const willBeCompleted: boolean = this._isCompletedStatusValue(
+      targetStatus,
       this.state.completedStatus
     );
 
     let commentText: string | undefined;
 
-    if (isAdvancingToCompleted) {
+    if (willBeCompleted && !isCurrentlyCompleted) {
       const commentInput: string | null = window.prompt(
         'Add a comment for this suggestion (optional). Leave blank to skip.',
         ''
@@ -3608,18 +3718,20 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const voteListId: string = this._getResolvedVotesListId();
       const commentListId: string = this._getResolvedCommentsListId();
 
-      const updatePayload: IGraphSuggestionItemFields = {
-        Status: nextStatus
+      const updatePayload: Partial<IGraphSuggestionItemFields> = {
+        Status: targetStatus
       };
 
-      if (isAdvancingToCompleted) {
+      if (willBeCompleted) {
         updatePayload.Votes = item.votes;
         updatePayload.CompletedDateTime = new Date().toISOString();
+      } else if (isCurrentlyCompleted) {
+        (updatePayload as Record<string, unknown>).CompletedDateTime = null;
       }
 
       await this.props.graphService.updateSuggestion(listId, item.id, updatePayload);
 
-      if (isAdvancingToCompleted) {
+      if (willBeCompleted) {
         await this.props.graphService.deleteVotesForSuggestion(voteListId, item.id);
       }
 
@@ -3635,7 +3747,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       await Promise.all([this._loadSuggestions(), this._loadAvailableVotes()]);
 
       if (this.state.selectedSimilarSuggestion?.id === item.id) {
-        await this._loadSelectedSimilarSuggestion(item.id, nextStatus);
+        await this._loadSelectedSimilarSuggestion(item.id, targetStatus);
       }
 
       this._updateState({ success: strings.SuggestionStatusUpdatedMessage });
