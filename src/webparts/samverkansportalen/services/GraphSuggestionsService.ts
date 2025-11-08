@@ -15,6 +15,7 @@ export const DEFAULT_STATUS_LIST_TITLE: string = 'Suggestion statuses';
 export type SuggestionCategory = string;
 
 const CLIENT_PAGINATION_TOKEN_PREFIX: string = 'offset:';
+const HONOR_NON_INDEXED_PREFER_HEADER_VALUE: string = 'HonorNonIndexedQueriesWarningMayFailRandomly';
 
 export interface IGraphSuggestionItemFields extends Record<string, unknown> {
   id?: number | string;
@@ -556,6 +557,11 @@ export class GraphSuggestionsService {
       addSearchClause('Details', options.searchQuery);
     }
 
+    const requiresNonIndexedQuery: boolean = this._requiresHonorNonIndexedQuery(
+      filterParts,
+      options.orderBy
+    );
+
     if (filterParts.length > 0) {
       request = request.filter(filterParts.join(' and '));
     }
@@ -580,7 +586,8 @@ export class GraphSuggestionsService {
         createBaseRequest,
         filterParts,
         options.orderBy,
-        shouldStopEarly
+        shouldStopEarly,
+        requiresNonIndexedQuery
       );
 
       const filteredItems: IGraphSuggestionItem[] = hasSearchFilters
@@ -617,6 +624,10 @@ export class GraphSuggestionsService {
 
       if (options.skipToken && !hasSuggestionIdFilter) {
         request = request.query({ $skiptoken: options.skipToken });
+      }
+
+      if (requiresNonIndexedQuery) {
+        request = this._applyHonorNonIndexedHeader(request);
       }
 
       try {
@@ -1429,7 +1440,8 @@ export class GraphSuggestionsService {
     createBaseRequest: () => GraphRequest,
     filterParts: string[],
     orderBy?: string,
-    shouldStopEarly?: (items: IGraphSuggestionItem[]) => boolean
+    shouldStopEarly?: (items: IGraphSuggestionItem[]) => boolean,
+    requiresNonIndexedQuery: boolean = false
   ): Promise<IGraphSuggestionItem[]> {
     const aggregated: IGraphSuggestionItem[] = [];
     let skipToken: string | undefined;
@@ -1447,6 +1459,10 @@ export class GraphSuggestionsService {
         request = request.orderby(orderBy);
       } else {
         request = request.orderby('createdDateTime desc');
+      }
+
+      if (requiresNonIndexedQuery) {
+        request = this._applyHonorNonIndexedHeader(request);
       }
 
       request = request.top(pageSize);
@@ -1475,6 +1491,21 @@ export class GraphSuggestionsService {
     }
 
     return aggregated;
+  }
+
+  private _applyHonorNonIndexedHeader(request: GraphRequest): GraphRequest {
+    return request.header('Prefer', HONOR_NON_INDEXED_PREFER_HEADER_VALUE);
+  }
+
+  private _requiresHonorNonIndexedQuery(filterParts: string[], orderBy?: string): boolean {
+    const normalizedOrderBy: string =
+      typeof orderBy === 'string' ? orderBy.toLowerCase() : '';
+
+    if (normalizedOrderBy.includes('votes')) {
+      return true;
+    }
+
+    return filterParts.some((filterPart) => filterPart.toLowerCase().includes('votes'));
   }
 
   private _matchesSuggestionIds(item: IGraphSuggestionItem, ids: number[]): boolean {
