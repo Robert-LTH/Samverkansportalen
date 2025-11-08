@@ -21,6 +21,7 @@ declare interface ISamverkansportalenWebPartStrings {
   CreateCommentsListProgressMessage: string;
   CreateCategoryListProgressMessage: string;
   CreateSubcategoryListProgressMessage: string;
+  CreateStatusListProgressMessage: string;
   CategoryManagementLabel: string;
   SubcategoryManagementLabel: string;
   CategoryItemsFieldLabel: string;
@@ -39,6 +40,7 @@ declare interface ISamverkansportalenWebPartStrings {
   SubcategoryNameMissingMessage: string;
   CategoryListNotConfiguredMessage: string;
   SubcategoryListNotConfiguredMessage: string;
+  StatusListNotConfiguredMessage: string;
   CategoryUpdateProgressMessage: string;
   SubcategoryUpdateProgressMessage: string;
   CategoryUpdateSuccessMessage: string;
@@ -47,6 +49,8 @@ declare interface ISamverkansportalenWebPartStrings {
   SubcategoryUpdateErrorMessage: string;
   CategoryLoadErrorMessage: string;
   SubcategoryLoadErrorMessage: string;
+  StatusLoadErrorMessage: string;
+  StatusListLoadErrorMessage: string;
   CategoryAddedMessage: string;
   SubcategoryAddedMessage: string;
   CategoryRemovedMessage: string;
@@ -63,7 +67,11 @@ declare interface ISamverkansportalenWebPartStrings {
   CreateListPromptCommentsLabel: string;
   CreateListPromptCategoryLabel: string;
   CreateListPromptSubcategoryLabel: string;
+  CreateListPromptStatusLabel: string;
   StatusDefinitionsFieldLabel: string;
+  StatusListFieldLabel: string;
+  StatusListDefaultOptionLabel: string;
+  CreateStatusListButtonLabel: string;
   CompletedStatusFieldLabel: string;
   UseTableLayoutToggleLabel: string;
   UseTableLayoutToggleOnText: string;
@@ -112,9 +120,11 @@ declare interface ISamverkansportalenWebPartStrings {
   NoCommentsLabel: string;
   NoSuggestionsLabel: string;
   NoVotedSuggestionsLabel: string;
+  TopSuggestionsLoadErrorMessage: string;
   ActiveSuggestionsSectionTitle: string;
   CompletedSuggestionsSectionTitle: string;
   AllSuggestionsTabLabel: string;
+  AdminTopSuggestionsTabLabel: string;
   MyVotesTabLabel: string;
   SuggestionTableSuggestionColumnLabel: string;
   SuggestionTableActionsColumnLabel: string;

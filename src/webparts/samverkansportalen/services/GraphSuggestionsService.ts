@@ -10,6 +10,7 @@ export interface IGraphListInfo {
 export const DEFAULT_CATEGORY_LIST_TITLE: string = 'Suggestion categories';
 export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories';
 export const DEFAULT_COMMENT_LIST_TITLE: string = 'Suggestion comments';
+export const DEFAULT_STATUS_LIST_TITLE: string = 'Suggestion statuses';
 
 export type SuggestionCategory = string;
 
@@ -62,6 +63,16 @@ export interface IGraphCategoryItemFields extends Record<string, unknown> {
 export interface IGraphCategoryItem {
   id: number;
   fields: IGraphCategoryItemFields;
+}
+
+export interface IGraphStatusItemFields extends Record<string, unknown> {
+  Title?: string;
+  SortOrder?: number | string;
+}
+
+export interface IGraphStatusItem {
+  id: number;
+  fields: IGraphStatusItemFields;
 }
 
 export interface IGraphCommentItemFields extends Record<string, unknown> {
@@ -237,6 +248,19 @@ const SUBCATEGORY_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
   }
 ];
 
+const STATUS_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
+  {
+    name: 'SortOrder',
+    createPayload: () => ({
+      name: 'SortOrder',
+      displayName: 'SortOrder',
+      number: {
+        decimalPlaces: '0'
+      }
+    })
+  }
+];
+
 const COMMENT_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
   {
     name: 'SuggestionId',
@@ -386,6 +410,25 @@ export class GraphSuggestionsService {
       'Defines suggestion categories for the Samverkansportalen web part.',
       []
     );
+    return { id: created.id, created: true };
+  }
+
+  public async ensureStatusList(listTitle: string): Promise<{ id: string; created: boolean }> {
+    const normalizedTitle: string =
+      listTitle.trim().length > 0 ? listTitle.trim() : DEFAULT_STATUS_LIST_TITLE;
+    const existing: IGraphListInfo | undefined = await this._getListByTitle(normalizedTitle);
+
+    if (existing) {
+      await this._ensureColumns(existing.id, STATUS_COLUMN_DEFINITIONS);
+      return { id: existing.id, created: false };
+    }
+
+    const created: IGraphListInfo = await this._createListWithColumns(
+      normalizedTitle,
+      'Defines suggestion statuses for the Samverkansportalen web part.',
+      STATUS_COLUMN_DEFINITIONS
+    );
+    await this._ensureColumns(created.id, STATUS_COLUMN_DEFINITIONS);
     return { id: created.id, created: true };
   }
 
@@ -695,6 +738,25 @@ export class GraphSuggestionsService {
         return parsedEntry;
       })
       .filter((item): item is IGraphCategoryItem => !!item);
+  }
+
+  public async getStatusItems(listId: string): Promise<IGraphStatusItem[]> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    const response: { value?: IGraphListItemApiModel[] } = await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .select('id')
+      .expand('fields($select=Title,SortOrder)')
+      .top(999)
+      .get();
+
+    const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+
+    return items
+      .map((entry) => this._extractListItemWithFields<IGraphStatusItemFields>(entry))
+      .filter((item): item is IGraphStatusItem => !!item);
   }
 
   public async getCommentItems(

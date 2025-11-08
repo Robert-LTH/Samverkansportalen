@@ -19,6 +19,7 @@ export interface ISamverkansportalenProps {
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
   categoryListTitle?: string;
+  statusListTitle?: string;
   commentListTitle?: string;
   headerTitle: string;
   headerSubtitle: string;

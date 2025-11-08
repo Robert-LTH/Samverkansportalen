@@ -26,10 +26,11 @@ import {
 import GraphSuggestionsService, {
   DEFAULT_CATEGORY_LIST_TITLE,
   DEFAULT_COMMENT_LIST_TITLE,
+  DEFAULT_STATUS_LIST_TITLE,
   DEFAULT_SUBCATEGORY_LIST_TITLE
 } from './services/GraphSuggestionsService';
 
-type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories';
+type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories' | 'statuses';
 
 export interface ISamverkansportalenWebPartProps {
   description: string;
@@ -37,6 +38,7 @@ export interface ISamverkansportalenWebPartProps {
   useTableLayout?: boolean;
   subcategoryListTitle?: string;
   categoryListTitle?: string;
+  statusListTitle?: string;
   voteListTitle?: string;
   commentListTitle?: string;
   selectedSubcategoryKey?: string;
@@ -72,6 +74,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _categoryStatusMessage?: string;
   private _resolvedCategoryListId?: string;
   private _resolvedCategoryListTitle?: string;
+  private _statusOptions: IPropertyPaneDropdownOption[] = [];
+  private _isLoadingStatuses: boolean = false;
+  private _statusStatusMessage?: string;
+  private _resolvedStatusListId?: string;
+  private _resolvedStatusListTitle?: string;
 
   public render(): void {
     const statuses: string[] = this._getStatusDefinitions();
@@ -94,6 +101,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         useTableLayout: this.properties.useTableLayout,
         subcategoryListTitle: this._selectedSubcategoryListTitle,
         categoryListTitle: this._selectedCategoryListTitle,
+        statusListTitle: this._selectedStatusListTitle,
         headerTitle: this._normalizeHeaderText(
           this.properties.headerTitle,
           DEFAULT_SUGGESTIONS_HEADER_TITLE
@@ -133,6 +141,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     );
     this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
     this.properties.categoryListTitle = this._normalizeOptionalListTitle(this.properties.categoryListTitle);
+    this.properties.statusListTitle = this._normalizeOptionalListTitle(this.properties.statusListTitle);
     this.properties.headerTitle = this._normalizeHeaderText(
       this.properties.headerTitle,
       DEFAULT_SUGGESTIONS_HEADER_TITLE
@@ -222,6 +231,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._ensureSubcategoryOptions();
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this._ensureCategoryOptions();
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._ensureStatusOptions();
     this._listCreationMessage = undefined;
   }
 
@@ -262,6 +273,16 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       this._ensureCategoryOptions().catch(() => {
         // Errors are handled inside _ensureCategoryOptions.
+      });
+    } else if (propertyPath === 'statusListTitle') {
+      this.properties.statusListTitle = this._normalizeOptionalListTitle(
+        typeof newValue === 'string' ? newValue : undefined
+      );
+      this._resetStatusState();
+      this.context.propertyPane.refresh();
+
+      this._ensureStatusOptions().catch(() => {
+        // Errors are handled inside _ensureStatusOptions.
       });
     } else if (propertyPath === 'headerTitle') {
       this.properties.headerTitle = this._normalizeHeaderText(
@@ -377,6 +398,13 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._resolvedCategoryListTitle = undefined;
     this.properties.selectedCategoryKey = undefined;
     this.properties.newCategoryTitle = undefined;
+  }
+
+  private _resetStatusState(): void {
+    this._statusOptions = [];
+    this._statusStatusMessage = undefined;
+    this._resolvedStatusListId = undefined;
+    this._resolvedStatusListTitle = undefined;
   }
 
   private async _ensureSubcategoryOptions(): Promise<void> {
@@ -511,6 +539,98 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
   }
 
+  private async _ensureStatusOptions(): Promise<void> {
+    if (this._isLoadingStatuses) {
+      return;
+    }
+
+    const listTitle: string | undefined = this._selectedStatusListTitle;
+
+    if (!listTitle) {
+      this._statusOptions = [];
+      this._statusStatusMessage = strings.StatusListNotConfiguredMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    this._isLoadingStatuses = true;
+
+    try {
+      const listId: string | undefined = await this._getResolvedStatusListId(listTitle);
+
+      if (!listId) {
+        this._statusOptions = [];
+        if (!this._statusStatusMessage) {
+          this._statusStatusMessage = strings.StatusLoadErrorMessage;
+        }
+        return;
+      }
+
+      const items = await this._getGraphService().getStatusItems(listId);
+
+      const definitions: Array<{ title: string; order: number | undefined }> = [];
+
+      items.forEach((item) => {
+        const rawTitle: unknown = item.fields?.Title;
+
+        if (typeof rawTitle !== 'string') {
+          return;
+        }
+
+        const title: string = rawTitle.trim();
+
+        if (!title) {
+          return;
+        }
+
+        const rawOrder: unknown = item.fields?.SortOrder;
+        let order: number | undefined;
+
+        if (typeof rawOrder === 'number' && Number.isFinite(rawOrder)) {
+          order = rawOrder;
+        } else if (typeof rawOrder === 'string') {
+          const parsed: number = parseInt(rawOrder, 10);
+          if (Number.isFinite(parsed)) {
+            order = parsed;
+          }
+        }
+
+        definitions.push({ title, order });
+      });
+
+      definitions.sort((a, b) => {
+        if (typeof a.order === 'number' && typeof b.order === 'number' && a.order !== b.order) {
+          return a.order - b.order;
+        }
+
+        if (typeof a.order === 'number') {
+          return -1;
+        }
+
+        if (typeof b.order === 'number') {
+          return 1;
+        }
+
+        return a.title.localeCompare(b.title);
+      });
+
+      this._statusOptions = definitions.map(({ title }) => ({ key: title, text: title }));
+
+      const availableStatuses: string[] = this._statusOptions.map((option) => option.text);
+      this.properties.completedStatus = this._normalizeCompletedStatus(
+        this.properties.completedStatus,
+        availableStatuses
+      );
+      this._statusStatusMessage = undefined;
+    } catch (error) {
+      console.error('Failed to load statuses for the property pane.', error);
+      this._statusStatusMessage = strings.StatusLoadErrorMessage;
+    } finally {
+      this._isLoadingStatuses = false;
+      this.context.propertyPane.refresh();
+    }
+  }
+
   private async _getResolvedSubcategoryListId(listTitle?: string): Promise<string | undefined> {
     const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
       listTitle ?? this._selectedSubcategoryListTitle
@@ -568,6 +688,36 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     this._resolvedCategoryListId = listInfo.id;
     this._resolvedCategoryListTitle = normalizedTitle;
+    return listInfo.id;
+  }
+
+  private async _getResolvedStatusListId(listTitle?: string): Promise<string | undefined> {
+    const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
+      listTitle ?? this._selectedStatusListTitle
+    );
+
+    if (!normalizedTitle) {
+      return undefined;
+    }
+
+    if (
+      this._resolvedStatusListId &&
+      this._resolvedStatusListTitle &&
+      this._resolvedStatusListTitle.localeCompare(normalizedTitle, undefined, {
+        sensitivity: 'accent'
+      }) === 0
+    ) {
+      return this._resolvedStatusListId;
+    }
+
+    const listInfo = await this._getGraphService().getListByTitle(normalizedTitle);
+
+    if (!listInfo) {
+      return undefined;
+    }
+
+    this._resolvedStatusListId = listInfo.id;
+    this._resolvedStatusListTitle = normalizedTitle;
     return listInfo.id;
   }
 
@@ -773,6 +923,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
   };
 
+  private _handleEnsureStatusListClick = (): void => {
+    this._ensureListFromPropertyPane('statuses').catch(() => {
+      // Errors are handled inside _ensureListFromPropertyPane.
+    });
+  };
+
   private async _ensureListFromPropertyPane(type: ListCreationType): Promise<void> {
     const promptLabel: string = this._getListPromptLabel(type);
     const promptMessage: string = strings.CreateListPromptMessage.replace('{0}', promptLabel);
@@ -844,6 +1000,18 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         message = result.created
           ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
           : strings.CreateListAlreadyExistsMessage;
+      } else if (type === 'statuses') {
+        const result: { id: string; created: boolean } = await service.ensureStatusList(trimmed);
+        this.properties.statusListTitle = trimmed;
+        this._addListOption(trimmed);
+        this._resetStatusState();
+        this._resolvedStatusListId = result.id;
+        this._resolvedStatusListTitle = trimmed;
+        this.render();
+        await this._ensureStatusOptions();
+        message = result.created
+          ? strings.CreateListSuccessMessage.replace('{0}', trimmed)
+          : strings.CreateListAlreadyExistsMessage;
       } else {
         const result: { id: string; created: boolean } = await service.ensureCategoryList(trimmed);
         this.properties.categoryListTitle = trimmed;
@@ -878,6 +1046,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return strings.CreateListPromptSubcategoryLabel;
       case 'categories':
         return strings.CreateListPromptCategoryLabel;
+      case 'statuses':
+        return strings.CreateListPromptStatusLabel;
       default:
         return strings.CreateListPromptSuggestionsLabel;
     }
@@ -891,6 +1061,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return this._selectedCommentListTitle;
       case 'subcategories':
         return this._selectedSubcategoryListTitle ?? DEFAULT_SUBCATEGORY_LIST_TITLE;
+      case 'statuses':
+        return this._selectedStatusListTitle ?? DEFAULT_STATUS_LIST_TITLE;
       case 'categories':
         return this._selectedCategoryListTitle ?? DEFAULT_CATEGORY_LIST_TITLE;
       default:
@@ -906,6 +1078,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return strings.CreateCommentsListProgressMessage;
       case 'subcategories':
         return strings.CreateSubcategoryListProgressMessage;
+      case 'statuses':
+        return strings.CreateStatusListProgressMessage;
       case 'categories':
         return strings.CreateCategoryListProgressMessage;
       default:
@@ -924,6 +1098,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     const commentListTitle: string = this._selectedCommentListTitle;
     const subcategoryListTitle: string | undefined = this._selectedSubcategoryListTitle;
     const categoryListTitle: string | undefined = this._selectedCategoryListTitle;
+    const statusListTitle: string | undefined = this._selectedStatusListTitle;
 
     try {
       await this._getGraphService().ensureList(listTitle);
@@ -934,6 +1109,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       }
       if (categoryListTitle) {
         await this._getGraphService().ensureCategoryList(categoryListTitle);
+      }
+      if (statusListTitle) {
+        await this._getGraphService().ensureStatusList(statusListTitle);
       }
     } catch (error) {
       console.error('Failed to ensure the configured suggestions list.', error);
@@ -1062,6 +1240,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return this._normalizeOptionalListTitle(this.properties.categoryListTitle);
   }
 
+  private get _selectedStatusListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.properties.statusListTitle);
+  }
+
   private _getGraphService(): GraphSuggestionsService {
     if (!this._graphService) {
       this._graphService = new GraphSuggestionsService(
@@ -1104,12 +1286,25 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       canMutateCategories && (this.properties.newCategoryTitle ?? '').trim().length > 0;
     const canRemoveCategory: boolean =
       canMutateCategories && !!this.properties.selectedCategoryKey && this._categoryOptions.length > 0;
-    const statusDefinitions: string[] = this._getStatusDefinitions();
-    const completedStatus: string = this._getCompletedStatus(statusDefinitions);
-    const completedStatusOptions: IPropertyPaneDropdownOption[] = statusDefinitions.map((status) => ({
-      key: status,
-      text: status
-    }));
+    const fallbackStatusDefinitions: string[] = this._getStatusDefinitions();
+    const effectiveStatusOptions: IPropertyPaneDropdownOption[] =
+      this._statusOptions.length > 0
+        ? this._statusOptions
+        : fallbackStatusDefinitions.map((status) => ({ key: status, text: status }));
+    const effectiveStatuses: string[] = effectiveStatusOptions.map((option) =>
+      typeof option.text === 'string' && option.text.trim().length > 0
+        ? option.text
+        : option.key.toString()
+    );
+    const completedStatus: string = this._normalizeCompletedStatus(
+      this.properties.completedStatus,
+      effectiveStatuses
+    );
+    this.properties.completedStatus = completedStatus;
+    const completedStatusOptions: IPropertyPaneDropdownOption[] =
+      effectiveStatusOptions.length > 0
+        ? effectiveStatusOptions
+        : [{ key: completedStatus, text: completedStatus }];
 
     return {
       pages: [
@@ -1205,6 +1400,24 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneLabel('categoryStatus', {
                   text: this._categoryStatusMessage ?? ''
+                }),
+                PropertyPaneDropdown('statusListTitle', {
+                  label: strings.StatusListFieldLabel,
+                  options: [
+                    { key: '', text: strings.StatusListDefaultOptionLabel },
+                    ...this._listOptions
+                  ],
+                  selectedKey: this._selectedStatusListTitle ?? '',
+                  disabled: this._isLoadingLists && this._listOptions.length === 0
+                }),
+                PropertyPaneButton('createStatusListButton', {
+                  text: strings.CreateStatusListButtonLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleEnsureStatusListClick,
+                  disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneLabel('statusStatus', {
+                  text: this._statusStatusMessage ?? ''
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
                   label: strings.SubcategoryListFieldLabel,
