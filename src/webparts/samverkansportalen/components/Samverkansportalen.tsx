@@ -99,7 +99,10 @@ interface ISamverkansportalenState {
   isSelectedSimilarSuggestionLoading: boolean;
   myVoteSuggestions: ISuggestionItem[];
   isMyVotesLoading: boolean;
-  selectedMainTab: 'all' | 'myVotes';
+  adminSuggestions: ISuggestionItem[];
+  isAdminSuggestionsLoading: boolean;
+  adminFilter: IFilterState;
+  selectedMainTab: 'all' | 'myVotes' | 'admin';
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -1051,6 +1054,7 @@ const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
 const SUGGESTIONS_PAGE_SIZE: number = 5;
+const ADMIN_TOP_SUGGESTIONS_COUNT: number = 10;
 const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
 const MIN_SIMILAR_SUGGESTION_QUERY_LENGTH: number = 3;
 const MAX_SIMILAR_SUGGESTIONS: number = 5;
@@ -1063,6 +1067,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _currentCommentsListId?: string;
   private _currentSubcategoryListId?: string;
   private _currentCategoryListId?: string;
+  private _currentStatusListId?: string;
   private readonly _sectionIds: {
     add: { title: string; content: string };
     active: { title: string; content: string };
@@ -1122,6 +1127,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         suggestionId: undefined,
         status: completedStatus
       },
+      adminFilter: {
+        searchQuery: '',
+        category: undefined,
+        subcategory: undefined,
+        suggestionId: undefined,
+        status: undefined
+      },
       similarSuggestions: {
         items: [],
         page: 1,
@@ -1135,6 +1147,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isSelectedSimilarSuggestionLoading: false,
       myVoteSuggestions: [],
       isMyVotesLoading: false,
+      adminSuggestions: [],
+      isAdminSuggestionsLoading: false,
       selectedMainTab: 'all',
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
@@ -1153,8 +1167,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _deriveStatusStateFromProps(
     props: ISamverkansportalenProps
   ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
-    const statuses: string[] = this._sanitizeStatuses(props.statuses);
-    const completedStatus: string = this._resolveCompletedStatus(props.completedStatus, statuses);
+    return this._deriveStatusState(props.statuses, props.completedStatus);
+  }
+
+  private _deriveStatusState(
+    statusesInput: string[] | undefined,
+    completedStatusCandidate: string | undefined
+  ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
+    const statuses: string[] = this._sanitizeStatuses(statusesInput);
+    const completedStatus: string = this._resolveCompletedStatus(completedStatusCandidate, statuses);
     const defaultStatus: string = this._resolveDefaultStatus(statuses, completedStatus);
     return { statuses, completedStatus, defaultStatus };
   }
@@ -1188,7 +1209,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return results;
   }
 
-  private _resolveCompletedStatus(candidate: string, statuses: string[]): string {
+  private _resolveCompletedStatus(candidate: string | undefined, statuses: string[]): string {
     if (statuses.length === 0) {
       return 'Done';
     }
@@ -1252,8 +1273,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
   }
 
-  private _applyStatusConfiguration(): void {
-    const { statuses, completedStatus, defaultStatus } = this._deriveStatusStateFromProps(this.props);
+  private _applyStatusConfiguration(
+    statusesOverride?: string[],
+    completedStatusOverride?: string,
+    options: { reloadSuggestions?: boolean } = {}
+  ): void {
+    const { statuses, completedStatus, defaultStatus } = this._deriveStatusState(
+      statusesOverride ?? this.props.statuses,
+      completedStatusOverride ?? this.props.completedStatus
+    );
+    const shouldReload: boolean = options.reloadSuggestions !== false;
 
     this._updateState(
       (prevState) => {
@@ -1274,8 +1303,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         } as Partial<ISamverkansportalenState>;
       },
       () => {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        this._loadSuggestions();
+        if (shouldReload) {
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          this._loadSuggestions();
+        }
       }
     );
   }
@@ -1309,15 +1340,28 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this._normalizeOptionalListTitle(prevProps.subcategoryListTitle) !== this._subcategoryListTitle;
     const categoryListChanged: boolean =
       this._normalizeOptionalListTitle(prevProps.categoryListTitle) !== this._categoryListTitle;
+    const statusListChanged: boolean =
+      this._normalizeOptionalListTitle(prevProps.statusListTitle) !== this._statusListTitle;
     const statusesChanged: boolean =
       !this._areStatusCollectionsEqual(prevProps.statuses, this.props.statuses) ||
       !this._areStatusesEqual(prevProps.completedStatus, this.props.completedStatus);
 
     if (statusesChanged) {
-      this._applyStatusConfiguration();
+      if (this._statusListTitle) {
+        this._applyStatusConfiguration(this.state.statuses, this.props.completedStatus);
+      } else {
+        this._applyStatusConfiguration();
+      }
     }
 
-    if (listChanged || voteListChanged || commentListChanged || subcategoryListChanged || categoryListChanged) {
+    if (
+      listChanged ||
+      voteListChanged ||
+      commentListChanged ||
+      subcategoryListChanged ||
+      categoryListChanged ||
+      statusListChanged
+    ) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
     }
@@ -1348,6 +1392,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isCompletedSuggestionsExpanded,
       myVoteSuggestions,
       isMyVotesLoading,
+      adminSuggestions,
+      isAdminSuggestionsLoading,
+      adminFilter,
       selectedMainTab
     } = this.state;
 
@@ -1362,14 +1409,22 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       completedFilter.category,
       subcategories
     );
+    const adminFilterSubcategoryOptions: IDropdownOption[] = this._getFilterSubcategoryOptions(
+      adminFilter.category,
+      subcategories
+    );
 
     const isFilterCategoryLimited: boolean = filterCategoryOptions.length <= 1;
     const isActiveFilterSubcategoryLimited: boolean = activeFilterSubcategoryOptions.length <= 1;
     const isCompletedFilterSubcategoryLimited: boolean = completedFilterSubcategoryOptions.length <= 1;
+    const isAdminFilterSubcategoryLimited: boolean = adminFilterSubcategoryOptions.length <= 1;
     const activeFilterSubcategoryPlaceholder: string = isActiveFilterSubcategoryLimited
       ? strings.NoSubcategoriesAvailablePlaceholder
       : strings.SelectSubcategoryPlaceholder;
     const completedFilterSubcategoryPlaceholder: string = isCompletedFilterSubcategoryLimited
+      ? strings.NoSubcategoriesAvailablePlaceholder
+      : strings.SelectSubcategoryPlaceholder;
+    const adminFilterSubcategoryPlaceholder: string = isAdminFilterSubcategoryLimited
       ? strings.NoSubcategoriesAvailablePlaceholder
       : strings.SelectSubcategoryPlaceholder;
 
@@ -1388,6 +1443,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
     const myVoteSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
       myVoteSuggestions,
+      false,
+      { allowVoting: true }
+    );
+    const adminSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
+      adminSuggestions,
       false,
       { allowVoting: true }
     );
@@ -1587,6 +1647,54 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               />
             </div>
           </PivotItem>
+
+          {this.props.isCurrentUserAdmin && (
+            <PivotItem headerText={strings.AdminTopSuggestionsTabLabel} itemKey="admin">
+              <div className={styles.pivotContent}>
+                <div className={styles.filters}>
+                  <div className={styles.filterControls}>
+                    <Dropdown
+                      label={strings.CategoryLabel}
+                      options={filterCategoryOptions}
+                      selectedKey={adminFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                      onChange={this._onAdminFilterCategoryChange}
+                      disabled={isFilterCategoryLimited}
+                      className={styles.filterDropdown}
+                    />
+                    <Dropdown
+                      label={strings.SubcategoryLabel}
+                      options={adminFilterSubcategoryOptions}
+                      selectedKey={adminFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                      onChange={this._onAdminFilterSubcategoryChange}
+                      disabled={isAdminFilterSubcategoryLimited}
+                      placeholder={adminFilterSubcategoryPlaceholder}
+                      className={styles.filterDropdown}
+                    />
+                  </div>
+                </div>
+
+                {isAdminSuggestionsLoading ? (
+                  <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
+                ) : adminSuggestions.length === 0 ? (
+                  <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>
+                ) : (
+                  <SuggestionList
+                    viewModels={adminSuggestionViewModels}
+                    useTableLayout={this.props.useTableLayout === true}
+                    isLoading={isLoading || isAdminSuggestionsLoading}
+                    onToggleVote={(item) => this._toggleVote(item)}
+                    onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
+                    onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                    onAddComment={(item) => this._addCommentToSuggestion(item)}
+                    onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                    onToggleComments={(id) => this._toggleCommentsSection(id)}
+                    formatDateTime={(value) => this._formatDateTime(value)}
+                    statuses={this.state.statuses}
+                  />
+                )}
+              </div>
+            </PivotItem>
+          )}
 
           <PivotItem headerText={strings.MyVotesTabLabel} itemKey="myVotes">
             <div className={styles.pivotContent}>
@@ -1939,12 +2047,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._currentCommentsListId = undefined;
     this._currentSubcategoryListId = undefined;
     this._currentCategoryListId = undefined;
+    this._currentStatusListId = undefined;
     this._updateState({ isLoading: true, error: undefined, success: undefined });
 
     try {
       await this._ensureLists();
       await this._ensureCategoryList();
       await this._ensureSubcategoryList();
+      await this._ensureStatusList();
       await this._loadSuggestions();
     } catch (error) {
       const message: string =
@@ -1952,6 +2062,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           ? 'We could not load the configured category list. Please verify the configuration or reset it to use the default categories.'
           : error instanceof Error && error.message.includes('subcategory list')
           ? 'We could not load the configured subcategory list. Please verify the configuration or remove it.'
+          : error instanceof Error && error.message.includes('status list')
+          ? strings.StatusListLoadErrorMessage
           : 'We could not load the suggestions list. Please refresh the page or contact your administrator.';
       this._handleError(message, error);
     } finally {
@@ -2014,6 +2126,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     await this._loadSubcategories();
   }
 
+  private async _ensureStatusList(): Promise<void> {
+    this._currentStatusListId = undefined;
+
+    const listTitle: string | undefined = this._statusListTitle;
+
+    if (!listTitle) {
+      this._applyStatusConfiguration(undefined, undefined, { reloadSuggestions: false });
+      return;
+    }
+
+    const listInfo = await this.props.graphService.getListByTitle(listTitle);
+
+    if (!listInfo) {
+      throw new Error(`Failed to load the status list "${listTitle}".`);
+    }
+
+    this._currentStatusListId = listInfo.id;
+    await this._loadStatusesFromList();
+  }
+
   private async _loadSuggestions(): Promise<void> {
     this._updateState({
       isActiveSuggestionsLoading: true,
@@ -2041,6 +2173,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         isActiveSuggestionsLoading: false,
         isCompletedSuggestionsLoading: false
       });
+    }
+  }
+
+  private async _loadAdminSuggestions(filter: IFilterState = this.state.adminFilter): Promise<void> {
+    const resolvedCategory: SuggestionCategory | undefined = this._findCategoryMatch(
+      filter.category,
+      this.state.categories
+    );
+    const resolvedSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      resolvedCategory,
+      filter.subcategory,
+      this.state.subcategories
+    );
+
+    const normalizedFilter: IFilterState = {
+      ...filter,
+      category: resolvedCategory,
+      subcategory: resolvedSubcategory
+    };
+
+    this._updateState({
+      isAdminSuggestionsLoading: true,
+      error: undefined,
+      success: undefined,
+      adminFilter: normalizedFilter
+    });
+
+    try {
+      const items: ISuggestionItem[] = await this._getTopSuggestionsByVotes(normalizedFilter);
+      this._updateState({
+        adminSuggestions: items,
+        isAdminSuggestionsLoading: false
+      });
+    } catch (error) {
+      this._handleError(strings.TopSuggestionsLoadErrorMessage, error);
+      this._updateState({ isAdminSuggestionsLoading: false });
     }
   }
 
@@ -2111,13 +2279,87 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this.state.completedFilter.subcategory,
       definitions
     );
+    const nextAdminFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      this.state.adminFilter.category,
+      this.state.adminFilter.subcategory,
+      definitions
+    );
 
-    this._updateState({
-      subcategories: definitions,
-      newSubcategoryKey: nextSubcategoryKey,
-      activeFilter: { ...this.state.activeFilter, subcategory: nextActiveFilterSubcategory },
-      completedFilter: { ...this.state.completedFilter, subcategory: nextCompletedFilterSubcategory }
+    this._updateState(
+      {
+        subcategories: definitions,
+        newSubcategoryKey: nextSubcategoryKey,
+        activeFilter: { ...this.state.activeFilter, subcategory: nextActiveFilterSubcategory },
+        completedFilter: { ...this.state.completedFilter, subcategory: nextCompletedFilterSubcategory },
+        adminFilter: { ...this.state.adminFilter, subcategory: nextAdminFilterSubcategory }
+      },
+      () => {
+        if (this.props.isCurrentUserAdmin && this.state.selectedMainTab === 'admin') {
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          this._loadAdminSuggestions();
+        }
+      }
+    );
+  }
+
+  private async _loadStatusesFromList(): Promise<void> {
+    const listId: string = this._getResolvedStatusListId();
+    const items = await this.props.graphService.getStatusItems(listId);
+
+    const definitions: Array<{ title: string; order?: number }> = [];
+
+    items.forEach((item) => {
+      const rawTitle: unknown = item.fields?.Title;
+
+      if (typeof rawTitle !== 'string') {
+        return;
+      }
+
+      const title: string = rawTitle.trim();
+
+      if (!title) {
+        return;
+      }
+
+      const rawOrder: unknown = item.fields?.SortOrder;
+      let order: number | undefined;
+
+      if (typeof rawOrder === 'number' && Number.isFinite(rawOrder)) {
+        order = rawOrder;
+      } else if (typeof rawOrder === 'string') {
+        const parsed: number = parseInt(rawOrder, 10);
+        if (Number.isFinite(parsed)) {
+          order = parsed;
+        }
+      }
+
+      definitions.push({ title, order });
     });
+
+    definitions.sort((a, b) => {
+      if (typeof a.order === 'number' && typeof b.order === 'number' && a.order !== b.order) {
+        return a.order - b.order;
+      }
+
+      if (typeof a.order === 'number') {
+        return -1;
+      }
+
+      if (typeof b.order === 'number') {
+        return 1;
+      }
+
+      return a.title.localeCompare(b.title);
+    });
+
+    const statuses: string[] = definitions.map((definition) => definition.title);
+
+    if (statuses.length === 0) {
+      this._applyStatusConfiguration(undefined, undefined, { reloadSuggestions: false });
+      return;
+    }
+
+    this._applyStatusConfiguration(statuses, this.state.completedStatus, { reloadSuggestions: false });
   }
 
   private _applyCategories(definitions: SuggestionCategory[]): void {
@@ -2133,6 +2375,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
     const nextCompletedFilterCategory: SuggestionCategory | undefined = this._findCategoryMatch(
       this.state.completedFilter.category,
+      categories
+    );
+    const nextAdminFilterCategory: SuggestionCategory | undefined = this._findCategoryMatch(
+      this.state.adminFilter.category,
       categories
     );
 
@@ -2153,22 +2399,40 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this.state.completedFilter.subcategory,
       this.state.subcategories
     );
+    const nextAdminFilterSubcategory: string | undefined = this._normalizeFilterSubcategory(
+      nextAdminFilterCategory,
+      this.state.adminFilter.subcategory,
+      this.state.subcategories
+    );
 
-    this._updateState({
-      categories,
-      newCategory: nextCategory,
-      newSubcategoryKey: nextSubcategoryKey,
-      activeFilter: {
-        ...this.state.activeFilter,
-        category: nextActiveFilterCategory,
-        subcategory: nextActiveFilterSubcategory
+    this._updateState(
+      {
+        categories,
+        newCategory: nextCategory,
+        newSubcategoryKey: nextSubcategoryKey,
+        activeFilter: {
+          ...this.state.activeFilter,
+          category: nextActiveFilterCategory,
+          subcategory: nextActiveFilterSubcategory
+        },
+        completedFilter: {
+          ...this.state.completedFilter,
+          category: nextCompletedFilterCategory,
+          subcategory: nextCompletedFilterSubcategory
+        },
+        adminFilter: {
+          ...this.state.adminFilter,
+          category: nextAdminFilterCategory,
+          subcategory: nextAdminFilterSubcategory
+        }
       },
-      completedFilter: {
-        ...this.state.completedFilter,
-        category: nextCompletedFilterCategory,
-        subcategory: nextCompletedFilterSubcategory
+      () => {
+        if (this.props.isCurrentUserAdmin && this.state.selectedMainTab === 'admin') {
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          this._loadAdminSuggestions();
+        }
       }
-    });
+    );
   }
 
   private _normalizeCategoryList(values: SuggestionCategory[]): SuggestionCategory[] {
@@ -2435,6 +2699,42 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       commentCounts
     );
     return { items, nextToken: response.nextToken };
+  }
+
+  private async _getTopSuggestionsByVotes(filter: IFilterState): Promise<ISuggestionItem[]> {
+    const listId: string = this._getResolvedListId();
+
+    const response = await this.props.graphService.getSuggestionItems(listId, {
+      top: ADMIN_TOP_SUGGESTIONS_COUNT,
+      category: filter.category,
+      subcategory: filter.subcategory,
+      orderBy: 'fields/Votes desc'
+    });
+
+    const suggestionIds: number[] = response.items
+      .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
+      .filter((value): value is number => typeof value === 'number');
+
+    let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
+
+    if (suggestionIds.length > 0) {
+      const voteListId: string = this._getResolvedVotesListId();
+      const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+        suggestionIds
+      });
+      votesBySuggestion = this._groupVotesBySuggestion(voteItems);
+    }
+
+    let commentCounts: Map<number, number> = new Map();
+
+    if (suggestionIds.length > 0 && this._currentCommentsListId) {
+      const commentListId: string = this._getResolvedCommentsListId();
+      commentCounts = await this.props.graphService.getCommentCounts(commentListId, {
+        suggestionIds
+      });
+    }
+
+    return this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts);
   }
 
   private _mapGraphItemsToSuggestions(
@@ -3266,6 +3566,55 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._applyCompletedFilter(nextFilter);
   };
 
+  private _onAdminFilterCategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key).trim();
+    let nextCategory: SuggestionCategory | undefined;
+
+    if (key !== ALL_CATEGORY_FILTER_KEY) {
+      nextCategory =
+        this._findCategoryMatch(key, this.state.categories) ?? (key.length > 0 ? key : undefined);
+    }
+
+    const nextFilter: IFilterState = {
+      ...this.state.adminFilter,
+      category: nextCategory,
+      subcategory: this._normalizeFilterSubcategory(
+        nextCategory,
+        this.state.adminFilter.subcategory,
+        this.state.subcategories
+      ),
+      suggestionId: undefined
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._loadAdminSuggestions(nextFilter);
+  };
+
+  private _onAdminFilterSubcategoryChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+    const nextFilter: IFilterState =
+      key === ALL_SUBCATEGORY_FILTER_KEY
+        ? { ...this.state.adminFilter, subcategory: undefined, suggestionId: undefined }
+        : { ...this.state.adminFilter, subcategory: key, suggestionId: undefined };
+
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._loadAdminSuggestions(nextFilter);
+  };
+
   private _dismissError = (): void => {
     this._updateState({ error: undefined });
   };
@@ -3852,6 +4201,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._normalizeOptionalListTitle(this.props.categoryListTitle);
   }
 
+  private get _statusListTitle(): string | undefined {
+    return this._normalizeOptionalListTitle(this.props.statusListTitle);
+  }
+
   private _parseVotes(value: unknown): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value;
@@ -3925,6 +4278,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._currentSubcategoryListId;
   }
 
+  private _getResolvedStatusListId(): string {
+    if (!this._currentStatusListId) {
+      throw new Error('The status list has not been initialized yet.');
+    }
+
+    return this._currentStatusListId;
+  }
+
   private _handleError(message: string, error?: unknown): void {
     console.error(message, error);
     this._updateState({ error: message, success: undefined });
@@ -3936,13 +4297,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string | undefined = item.props.itemKey;
-    const normalized: 'all' | 'myVotes' = key === 'myVotes' ? 'myVotes' : 'all';
+    const normalized: 'all' | 'myVotes' | 'admin' =
+      key === 'myVotes' ? 'myVotes' : key === 'admin' ? 'admin' : 'all';
 
     if (normalized === this.state.selectedMainTab) {
       return;
     }
 
-    this._updateState({ selectedMainTab: normalized });
+    this._updateState({ selectedMainTab: normalized }, () => {
+      if (
+        normalized === 'admin' &&
+        this.props.isCurrentUserAdmin &&
+        this.state.adminSuggestions.length === 0 &&
+        !this.state.isAdminSuggestionsLoading
+      ) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this._loadAdminSuggestions();
+      }
+    });
   };
 
   private _toggleAddSuggestionSection = (): void => {
