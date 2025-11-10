@@ -1431,6 +1431,27 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return firstActive ?? completedStatus;
   }
 
+  private _getDropdownOptionText(option: IPropertyPaneDropdownOption): string {
+    const text: string | undefined =
+      typeof option.text === 'string' ? option.text.trim() : undefined;
+
+    if (text && text.length > 0) {
+      return text;
+    }
+
+    const key: unknown = option.key;
+
+    if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
+      const normalizedKey: string = String(key).trim();
+
+      if (normalizedKey.length > 0) {
+        return normalizedKey;
+      }
+    }
+
+    return '';
+  }
+
   private _getStatusDefinitions(): string[] {
     return this._parseStatusDefinitions(this.properties.statusDefinitions);
   }
@@ -1539,6 +1560,29 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       effectiveStatusOptions.length > 0
         ? effectiveStatusOptions
         : [{ key: completedStatus, text: completedStatus }];
+    const defaultStatusOptions: IPropertyPaneDropdownOption[] = [];
+    const defaultStatusKeys: Set<string> = new Set();
+    const addDefaultStatusOption = (status: string | undefined): void => {
+      const normalized: string = (status ?? '').trim();
+
+      if (!normalized) {
+        return;
+      }
+
+      const key: string = normalized.toLowerCase();
+
+      if (defaultStatusKeys.has(key)) {
+        return;
+      }
+
+      defaultStatusKeys.add(key);
+      defaultStatusOptions.push({ key: normalized, text: normalized });
+    };
+
+    effectiveStatusOptions.forEach((option) => {
+      addDefaultStatusOption(this._getDropdownOptionText(option));
+    });
+    addDefaultStatusOption(defaultStatus);
 
     return {
       pages: [
@@ -1687,11 +1731,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 PropertyPaneDropdown('defaultStatus', {
                   label: strings.DefaultStatusFieldLabel,
                   options:
-                    completedStatusOptions.length > 0
-                      ? completedStatusOptions
+                    defaultStatusOptions.length > 0
+                      ? defaultStatusOptions
                       : [{ key: defaultStatus, text: defaultStatus }],
                   selectedKey: defaultStatus,
-                  disabled: completedStatusOptions.length === 0
+                  disabled: defaultStatusOptions.length === 0
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
                   label: strings.SubcategoryListFieldLabel,
