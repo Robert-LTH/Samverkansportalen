@@ -22,7 +22,7 @@ define([], function() {
     "SubcategoryListFieldLabel": "Subcategory list",
     "SubcategoryListNoneOptionLabel": "Do not use subcategories",
     "StatusListFieldLabel": "Status list",
-    "StatusListDefaultOptionLabel": "Use manual statuses",
+    "StatusListDefaultOptionLabel": "Use predefined statuses",
     "CreateSuggestionsListButtonLabel": "Create or update suggestions list",
     "CreateVotesListButtonLabel": "Create or update votes list",
     "CreateCommentsListButtonLabel": "Create or update comments list",
@@ -149,6 +149,7 @@ define([], function() {
     "SearchPlaceholder": "Search by title or details",
     "AllCategoriesOptionLabel": "All categories",
     "AllSubcategoriesOptionLabel": "All subcategories",
+    "AllStatusesOptionLabel": "All statuses",
     "NoVotesRemainingForCategoryMessage": "You have used all of your votes for this category. Remove a vote to continue."
   }
 });

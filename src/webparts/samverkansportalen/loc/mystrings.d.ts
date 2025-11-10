@@ -139,6 +139,7 @@ declare interface ISamverkansportalenWebPartStrings {
   SearchPlaceholder: string;
   AllCategoriesOptionLabel: string;
   AllSubcategoriesOptionLabel: string;
+  AllStatusesOptionLabel: string;
   NoVotesRemainingForCategoryMessage: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
