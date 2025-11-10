@@ -163,7 +163,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
     );
     const normalizedStatusDefinitions: string = this._normalizeStatusDefinitions(
-      DEFAULT_STATUS_DEFINITIONS
+      this.properties.statusDefinitions
     );
     this.properties.statusDefinitions = normalizedStatusDefinitions;
     const statusList: string[] = this._parseStatusDefinitions(normalizedStatusDefinitions);
