@@ -2734,7 +2734,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
     }
 
-    return this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts);
+    return this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts).filter(
+      (item) => item.votes > 0
+    );
   }
 
   private _mapGraphItemsToSuggestions(
