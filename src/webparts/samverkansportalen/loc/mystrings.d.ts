@@ -87,6 +87,7 @@ declare interface ISamverkansportalenWebPartStrings {
   StatusListDefaultOptionLabel: string;
   CreateStatusListButtonLabel: string;
   CompletedStatusFieldLabel: string;
+  DefaultStatusFieldLabel: string;
   UseTableLayoutToggleLabel: string;
   UseTableLayoutToggleOnText: string;
   UseTableLayoutToggleOffText: string;

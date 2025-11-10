@@ -57,6 +57,7 @@ export interface ISamverkansportalenWebPartProps {
   headerSubtitle: string;
   statusDefinitions?: string;
   completedStatus?: string;
+  defaultStatus?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -92,6 +93,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   public render(): void {
     const statuses: string[] = this._getStatusDefinitions();
     const completedStatus: string = this._getCompletedStatus(statuses);
+    const defaultStatus: string = this._getDefaultStatus(statuses, completedStatus);
 
     const element: React.ReactElement<ISamverkansportalenProps> = React.createElement(
       Samverkansportalen,
@@ -120,7 +122,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
           DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
         ),
         statuses,
-        completedStatus
+        completedStatus,
+        defaultStatus
       }
     );
 
@@ -164,9 +167,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     );
     this.properties.statusDefinitions = normalizedStatusDefinitions;
     const statusList: string[] = this._parseStatusDefinitions(normalizedStatusDefinitions);
-    this.properties.completedStatus = this._normalizeCompletedStatus(
+    const completedStatus: string = this._normalizeCompletedStatus(
       this.properties.completedStatus,
       statusList
+    );
+    this.properties.completedStatus = completedStatus;
+    this.properties.defaultStatus = this._normalizeDefaultStatus(
+      this.properties.defaultStatus,
+      statusList,
+      completedStatus
     );
 
     return this._getEnvironmentMessage().then(message => {
@@ -306,10 +315,47 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       );
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'completedStatus') {
-      const statuses: string[] = this._getStatusDefinitions();
-      this.properties.completedStatus = this._normalizeCompletedStatus(
+      const statuses: string[] =
+        this._statusOptions.length > 0
+          ? this._statusOptions
+              .map((option) =>
+                typeof option.text === 'string' && option.text.trim().length > 0
+                  ? option.text.trim()
+                  : option.key.toString()
+              )
+              .filter((status) => status.length > 0)
+          : this._getStatusDefinitions();
+      const completedStatus: string = this._normalizeCompletedStatus(
         typeof newValue === 'string' ? newValue : undefined,
         statuses
+      );
+      this.properties.completedStatus = completedStatus;
+      this.properties.defaultStatus = this._normalizeDefaultStatus(
+        this.properties.defaultStatus,
+        statuses,
+        completedStatus
+      );
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'defaultStatus') {
+      const statuses: string[] =
+        this._statusOptions.length > 0
+          ? this._statusOptions
+              .map((option) =>
+                typeof option.text === 'string' && option.text.trim().length > 0
+                  ? option.text.trim()
+                  : option.key.toString()
+              )
+              .filter((status) => status.length > 0)
+          : this._getStatusDefinitions();
+      const completedStatus: string = this._normalizeCompletedStatus(
+        this.properties.completedStatus,
+        statuses
+      );
+      this.properties.completedStatus = completedStatus;
+      this.properties.defaultStatus = this._normalizeDefaultStatus(
+        typeof newValue === 'string' ? newValue : undefined,
+        statuses,
+        completedStatus
       );
       this.context.propertyPane.refresh();
     }
@@ -1357,12 +1403,44 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return statuses[statuses.length - 1];
   }
 
+  private _normalizeDefaultStatus(
+    value: string | undefined,
+    statuses: string[],
+    completedStatus: string
+  ): string {
+    if (statuses.length === 0) {
+      return completedStatus;
+    }
+
+    const trimmed: string = (value ?? '').trim();
+
+    if (trimmed.length > 0) {
+      const match: string | undefined = statuses.find(
+        (status) => status.toLowerCase() === trimmed.toLowerCase()
+      );
+
+      if (match) {
+        return match;
+      }
+    }
+
+    const firstActive: string | undefined = statuses.find(
+      (status) => status.toLowerCase() !== completedStatus.toLowerCase()
+    );
+
+    return firstActive ?? completedStatus;
+  }
+
   private _getStatusDefinitions(): string[] {
     return this._parseStatusDefinitions(this.properties.statusDefinitions);
   }
 
   private _getCompletedStatus(statuses: string[]): string {
     return this._normalizeCompletedStatus(this.properties.completedStatus, statuses);
+  }
+
+  private _getDefaultStatus(statuses: string[], completedStatus: string): string {
+    return this._normalizeDefaultStatus(this.properties.defaultStatus, statuses, completedStatus);
   }
 
   private get _selectedSubcategoryListTitle(): string | undefined {
@@ -1451,6 +1529,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       effectiveStatuses
     );
     this.properties.completedStatus = completedStatus;
+    const defaultStatus: string = this._normalizeDefaultStatus(
+      this.properties.defaultStatus,
+      effectiveStatuses,
+      completedStatus
+    );
+    this.properties.defaultStatus = defaultStatus;
     const completedStatusOptions: IPropertyPaneDropdownOption[] =
       effectiveStatusOptions.length > 0
         ? effectiveStatusOptions
@@ -1599,6 +1683,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneLabel('statusStatus', {
                   text: this._statusStatusMessage ?? ''
+                }),
+                PropertyPaneDropdown('defaultStatus', {
+                  label: strings.DefaultStatusFieldLabel,
+                  options:
+                    completedStatusOptions.length > 0
+                      ? completedStatusOptions
+                      : [{ key: defaultStatus, text: defaultStatus }],
+                  selectedKey: defaultStatus,
+                  disabled: completedStatusOptions.length === 0
                 }),
                 PropertyPaneDropdown('subcategoryListTitle', {
                   label: strings.SubcategoryListFieldLabel,

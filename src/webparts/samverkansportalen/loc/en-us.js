@@ -97,6 +97,7 @@ define([], function() {
     "CreateListPromptStatusLabel": "status list",
     "StatusDefinitionsFieldLabel": "Suggestion statuses (one per line)",
     "CompletedStatusFieldLabel": "Completed status",
+    "DefaultStatusFieldLabel": "Default status for new suggestions",
     "UseTableLayoutToggleLabel": "Suggestion layout",
     "UseTableLayoutToggleOnText": "Table",
     "UseTableLayoutToggleOffText": "Cards",

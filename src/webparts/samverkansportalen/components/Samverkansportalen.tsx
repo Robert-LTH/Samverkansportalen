@@ -1168,16 +1168,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _deriveStatusStateFromProps(
     props: ISamverkansportalenProps
   ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
-    return this._deriveStatusState(props.statuses, props.completedStatus);
+    return this._deriveStatusState(props.statuses, props.completedStatus, props.defaultStatus);
   }
 
   private _deriveStatusState(
     statusesInput: string[] | undefined,
-    completedStatusCandidate: string | undefined
+    completedStatusCandidate: string | undefined,
+    defaultStatusCandidate?: string
   ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
     const statuses: string[] = this._sanitizeStatuses(statusesInput);
     const completedStatus: string = this._resolveCompletedStatus(completedStatusCandidate, statuses);
-    const defaultStatus: string = this._resolveDefaultStatus(statuses, completedStatus);
+    const defaultStatus: string = this._resolveDefaultStatus(
+      defaultStatusCandidate,
+      statuses,
+      completedStatus
+    );
     return { statuses, completedStatus, defaultStatus };
   }
 
@@ -1230,9 +1235,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return statuses[statuses.length - 1];
   }
 
-  private _resolveDefaultStatus(statuses: string[], completedStatus: string): string {
+  private _resolveDefaultStatus(
+    candidate: string | undefined,
+    statuses: string[],
+    completedStatus: string
+  ): string {
     if (statuses.length === 0) {
       return completedStatus;
+    }
+
+    const normalizedCandidate: string = typeof candidate === 'string' ? candidate.trim() : '';
+
+    if (normalizedCandidate.length > 0) {
+      const match: string | undefined = statuses.find((status) =>
+        this._areStatusesEqual(status, normalizedCandidate)
+      );
+
+      if (match) {
+        return match;
+      }
     }
 
     const firstActive: string | undefined = statuses.find(
@@ -1290,13 +1311,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _applyStatusConfiguration(
     statusesOverride?: string[],
     completedStatusOverride?: string,
-    options: { reloadSuggestions?: boolean } = {}
+    options: { reloadSuggestions?: boolean; defaultStatusOverride?: string } = {}
   ): void {
+    const { reloadSuggestions = true, defaultStatusOverride } = options;
     const { statuses, completedStatus, defaultStatus } = this._deriveStatusState(
       statusesOverride ?? this.props.statuses,
-      completedStatusOverride ?? this.props.completedStatus
+      completedStatusOverride ?? this.props.completedStatus,
+      defaultStatusOverride ?? this.props.defaultStatus
     );
-    const shouldReload: boolean = options.reloadSuggestions !== false;
+    const shouldReload: boolean = reloadSuggestions;
 
     this._updateState(
       (prevState) => {
@@ -1367,12 +1390,20 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const statusesChanged: boolean =
       !this._areStatusCollectionsEqual(prevProps.statuses, this.props.statuses) ||
       !this._areStatusesEqual(prevProps.completedStatus, this.props.completedStatus);
+    const defaultStatusChanged: boolean = !this._areStatusesEqual(
+      prevProps.defaultStatus,
+      this.props.defaultStatus
+    );
 
-    if (statusesChanged) {
+    if (statusesChanged || defaultStatusChanged) {
       if (this._statusListTitle) {
-        this._applyStatusConfiguration(this.state.statuses, this.props.completedStatus);
+        this._applyStatusConfiguration(this.state.statuses, this.props.completedStatus, {
+          defaultStatusOverride: this.props.defaultStatus
+        });
       } else {
-        this._applyStatusConfiguration();
+        this._applyStatusConfiguration(undefined, undefined, {
+          defaultStatusOverride: this.props.defaultStatus
+        });
       }
     }
 
@@ -3757,7 +3788,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const payload: IGraphSuggestionItemFields = {
         Title: title,
         Details: description,
-        Status: 'Active',
+        Status: this.state.defaultStatus,
         Category: category
       };
 
