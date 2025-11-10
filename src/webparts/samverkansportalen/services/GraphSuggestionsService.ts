@@ -770,6 +770,26 @@ export class GraphSuggestionsService {
       .filter((item): item is IGraphStatusItem => !!item);
   }
 
+  public async addStatusItem(listId: string, fields: IGraphStatusItemFields): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items`)
+      .version('v1.0')
+      .post({ fields });
+  }
+
+  public async deleteStatusItem(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .delete();
+  }
+
   public async getCommentItems(
     listId: string,
     options: { suggestionIds?: number[] } = {}

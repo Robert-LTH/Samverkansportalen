@@ -32,6 +32,12 @@ import GraphSuggestionsService, {
 
 type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories' | 'statuses';
 
+interface IStatusDropdownOption extends IPropertyPaneDropdownOption {
+  data?: {
+    sortOrder?: number;
+  };
+}
+
 export interface ISamverkansportalenWebPartProps {
   description: string;
   listTitle?: string;
@@ -45,6 +51,8 @@ export interface ISamverkansportalenWebPartProps {
   newSubcategoryTitle?: string;
   selectedCategoryKey?: string;
   newCategoryTitle?: string;
+  selectedStatusKey?: string;
+  newStatusTitle?: string;
   headerTitle: string;
   headerSubtitle: string;
   statusDefinitions?: string;
@@ -74,8 +82,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   private _categoryStatusMessage?: string;
   private _resolvedCategoryListId?: string;
   private _resolvedCategoryListTitle?: string;
-  private _statusOptions: IPropertyPaneDropdownOption[] = [];
+  private _statusOptions: IStatusDropdownOption[] = [];
   private _isLoadingStatuses: boolean = false;
+  private _isMutatingStatuses: boolean = false;
   private _statusStatusMessage?: string;
   private _resolvedStatusListId?: string;
   private _resolvedStatusListTitle?: string;
@@ -394,6 +403,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     this._statusStatusMessage = undefined;
     this._resolvedStatusListId = undefined;
     this._resolvedStatusListTitle = undefined;
+    this.properties.selectedStatusKey = undefined;
+    this.properties.newStatusTitle = undefined;
   }
 
   private async _ensureSubcategoryOptions(): Promise<void> {
@@ -536,7 +547,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     const listTitle: string | undefined = this._selectedStatusListTitle;
 
     if (!listTitle) {
-      this._statusOptions = [];
+      this._resetStatusState();
       this._statusStatusMessage = strings.StatusListNotConfiguredMessage;
       this.context.propertyPane.refresh();
       return;
@@ -549,6 +560,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       if (!listId) {
         this._statusOptions = [];
+        this.properties.selectedStatusKey = undefined;
         if (!this._statusStatusMessage) {
           this._statusStatusMessage = strings.StatusLoadErrorMessage;
         }
@@ -557,9 +569,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
       const items = await this._getGraphService().getStatusItems(listId);
 
-      const definitions: Array<{ title: string; order: number | undefined }> = [];
+      const definitions: Array<{ id: number; title: string; order: number | undefined }> = [];
 
       items.forEach((item) => {
+        const id: number = item.id;
         const rawTitle: unknown = item.fields?.Title;
 
         if (typeof rawTitle !== 'string') {
@@ -584,7 +597,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
           }
         }
 
-        definitions.push({ title, order });
+        definitions.push({ id, title, order });
       });
 
       definitions.sort((a, b) => {
@@ -603,9 +616,31 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return a.title.localeCompare(b.title);
       });
 
-      this._statusOptions = definitions.map(({ title }) => ({ key: title, text: title }));
+      this._statusOptions = definitions.map(({ id, title, order }) => ({
+        key: id.toString(),
+        text: title,
+        data: { sortOrder: order }
+      }));
 
-      const availableStatuses: string[] = this._statusOptions.map((option) => option.text);
+      if (this._statusOptions.length > 0) {
+        const availableKeys: Set<string> = new Set(
+          this._statusOptions.map((option) => option.key.toString())
+        );
+        const currentKey: string | undefined = this.properties.selectedStatusKey;
+
+        if (!currentKey || !availableKeys.has(currentKey)) {
+          const firstKey: string | undefined = this._statusOptions[0]?.key?.toString();
+          this.properties.selectedStatusKey = firstKey;
+        }
+      } else {
+        this.properties.selectedStatusKey = undefined;
+      }
+
+      const availableStatuses: string[] = this._statusOptions.map((option) =>
+        typeof option.text === 'string' && option.text.trim().length > 0
+          ? option.text
+          : option.key.toString()
+      );
       this.properties.completedStatus = this._normalizeCompletedStatus(
         this.properties.completedStatus,
         availableStatuses
@@ -780,6 +815,57 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
   }
 
+  private async _mutateStatusList(
+    executor: (listId: string) => Promise<string | undefined>
+  ): Promise<void> {
+    if (this._isMutatingStatuses) {
+      return;
+    }
+
+    const listId: string | undefined = await this._getResolvedStatusListId();
+
+    if (!listId) {
+      this._statusStatusMessage = strings.StatusListNotConfiguredMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    this._isMutatingStatuses = true;
+    this._statusStatusMessage = strings.StatusUpdateProgressMessage;
+    this.context.propertyPane.refresh();
+
+    try {
+      const message: string | undefined = await executor(listId);
+      const previousStatus: string | undefined = this._statusStatusMessage;
+      await this._ensureStatusOptions();
+      if (this._statusStatusMessage === previousStatus) {
+        this._statusStatusMessage = message ?? strings.StatusUpdateSuccessMessage;
+      }
+    } catch (error) {
+      console.error('Failed to update the status list.', error);
+      this._statusStatusMessage = strings.StatusUpdateErrorMessage;
+    } finally {
+      this._isMutatingStatuses = false;
+      this.context.propertyPane.refresh();
+    }
+  }
+
+  private _getNextStatusSortOrder(): number | undefined {
+    const orders: number[] = this._statusOptions
+      .map((option) => option.data?.sortOrder)
+      .filter((order): order is number => typeof order === 'number' && Number.isFinite(order));
+
+    if (orders.length > 0) {
+      return Math.max(...orders) + 1;
+    }
+
+    if (this._statusOptions.length > 0) {
+      return this._statusOptions.length;
+    }
+
+    return 0;
+  }
+
   private _handleAddSubcategoryClick = (): void => {
     this._addSubcategory().catch(() => {
       // Errors are handled in _mutateSubcategoryList.
@@ -824,6 +910,35 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     });
   }
 
+  private _handleAddStatusClick = (): void => {
+    this._addStatus().catch(() => {
+      // Errors are handled in _mutateStatusList.
+    });
+  };
+
+  private async _addStatus(): Promise<void> {
+    const title: string = (this.properties.newStatusTitle ?? '').trim();
+
+    if (!title) {
+      this._statusStatusMessage = strings.StatusNameMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    await this._mutateStatusList(async (listId) => {
+      const nextOrder: number | undefined = this._getNextStatusSortOrder();
+      const fields: { Title: string; SortOrder?: number } = { Title: title };
+
+      if (typeof nextOrder === 'number' && Number.isFinite(nextOrder)) {
+        fields.SortOrder = nextOrder;
+      }
+
+      await this._getGraphService().addStatusItem(listId, fields);
+      this.properties.newStatusTitle = undefined;
+      return strings.StatusAddedMessage.replace('{0}', title);
+    });
+  }
+
   private _handleRemoveCategoryClick = (): void => {
     this._removeCategory().catch(() => {
       // Errors are handled in _mutateCategoryList.
@@ -850,6 +965,35 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     await this._mutateCategoryList(async (listId) => {
       await this._getGraphService().deleteCategoryItem(listId, parsedId);
       return strings.CategoryRemovedMessage;
+    });
+  }
+
+  private _handleRemoveStatusClick = (): void => {
+    this._removeStatus().catch(() => {
+      // Errors are handled in _mutateStatusList.
+    });
+  };
+
+  private async _removeStatus(): Promise<void> {
+    const key: string | undefined = this.properties.selectedStatusKey;
+
+    if (!key) {
+      this._statusStatusMessage = strings.StatusSelectionMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    const parsedId: number = parseInt(key, 10);
+
+    if (!Number.isFinite(parsedId)) {
+      this._statusStatusMessage = strings.StatusSelectionMissingMessage;
+      this.context.propertyPane.refresh();
+      return;
+    }
+
+    await this._mutateStatusList(async (listId) => {
+      await this._getGraphService().deleteStatusItem(listId, parsedId);
+      return strings.StatusRemovedMessage;
     });
   }
 
@@ -1275,10 +1419,27 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       canMutateCategories && (this.properties.newCategoryTitle ?? '').trim().length > 0;
     const canRemoveCategory: boolean =
       canMutateCategories && !!this.properties.selectedCategoryKey && this._categoryOptions.length > 0;
+    const hasStatusListConfigured: boolean = !!this._selectedStatusListTitle;
+    const statusDropdownOptions: IPropertyPaneDropdownOption[] =
+      this._statusOptions.length > 0
+        ? this._statusOptions
+        : [{ key: '__no_statuses__', text: strings.StatusDropdownPlaceholder }];
+    const canMutateStatuses: boolean =
+      hasStatusListConfigured && !this._isLoadingStatuses && !this._isMutatingStatuses;
+    const canAddStatus: boolean =
+      canMutateStatuses && (this.properties.newStatusTitle ?? '').trim().length > 0;
+    const canRemoveStatus: boolean =
+      canMutateStatuses && !!this.properties.selectedStatusKey && this._statusOptions.length > 0;
     const fallbackStatusDefinitions: string[] = this._getStatusDefinitions();
     const effectiveStatusOptions: IPropertyPaneDropdownOption[] =
       this._statusOptions.length > 0
-        ? this._statusOptions
+        ? this._statusOptions.map((option) => {
+            const text: string =
+              typeof option.text === 'string' && option.text.trim().length > 0
+                ? option.text
+                : option.key.toString();
+            return { key: text, text };
+          })
         : fallbackStatusDefinitions.map((status) => ({ key: status, text: status }));
     const effectiveStatuses: string[] = effectiveStatusOptions.map((option) =>
       typeof option.text === 'string' && option.text.trim().length > 0
@@ -1404,6 +1565,37 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   buttonType: PropertyPaneButtonType.Primary,
                   onClick: this._handleEnsureStatusListClick,
                   disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneLabel('statusManagementLabel', {
+                  text: strings.StatusManagementLabel
+                }),
+                PropertyPaneDropdown('selectedStatusKey', {
+                  label: strings.StatusItemsFieldLabel,
+                  options: statusDropdownOptions,
+                  selectedKey: this._statusOptions.length > 0
+                    ? this.properties.selectedStatusKey
+                    : '__no_statuses__',
+                  disabled: !canMutateStatuses || this._statusOptions.length === 0
+                }),
+                PropertyPaneTextField('newStatusTitle', {
+                  label: strings.NewStatusFieldLabel,
+                  value: this.properties.newStatusTitle ?? '',
+                  placeholder: strings.NewStatusFieldPlaceholder,
+                  disabled: !canMutateStatuses
+                }),
+                PropertyPaneButton('addStatusButton', {
+                  text: '+',
+                  ariaLabel: strings.AddStatusButtonAriaLabel,
+                  buttonType: PropertyPaneButtonType.Primary,
+                  onClick: this._handleAddStatusClick,
+                  disabled: !canAddStatus
+                }),
+                PropertyPaneButton('removeStatusButton', {
+                  text: '-',
+                  ariaLabel: strings.RemoveStatusButtonAriaLabel,
+                  buttonType: PropertyPaneButtonType.Normal,
+                  onClick: this._handleRemoveStatusClick,
+                  disabled: !canRemoveStatus
                 }),
                 PropertyPaneLabel('statusStatus', {
                   text: this._statusStatusMessage ?? ''
