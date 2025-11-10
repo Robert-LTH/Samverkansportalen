@@ -22,7 +22,7 @@ define([], function() {
     "SubcategoryListFieldLabel": "Underkategorilista",
     "SubcategoryListNoneOptionLabel": "Använd inte underkategorier",
     "StatusListFieldLabel": "Statuslista",
-    "StatusListDefaultOptionLabel": "Hantera statusar manuellt",
+    "StatusListDefaultOptionLabel": "Använd fördefinierade statusar",
     "CreateSuggestionsListButtonLabel": "Skapa eller uppdatera förslagslistan",
     "CreateVotesListButtonLabel": "Skapa eller uppdatera röstlistan",
     "CreateCommentsListButtonLabel": "Skapa eller uppdatera kommentarslistan",
@@ -149,6 +149,7 @@ define([], function() {
     "SearchPlaceholder": "Sök efter titel eller detaljer",
     "AllCategoriesOptionLabel": "Alla kategorier",
     "AllSubcategoriesOptionLabel": "Alla underkategorier",
+    "AllStatusesOptionLabel": "Alla statusar",
     "NoVotesRemainingForCategoryMessage": "Du har använt alla dina röster för den här kategorin. Ta bort en röst för att fortsätta."
   }
 });

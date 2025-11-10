@@ -151,7 +151,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
     );
     const normalizedStatusDefinitions: string = this._normalizeStatusDefinitions(
-      this.properties.statusDefinitions
+      DEFAULT_STATUS_DEFINITIONS
     );
     this.properties.statusDefinitions = normalizedStatusDefinitions;
     const statusList: string[] = this._parseStatusDefinitions(normalizedStatusDefinitions);
@@ -294,17 +294,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       this.properties.headerSubtitle = this._normalizeHeaderText(
         typeof newValue === 'string' ? newValue : undefined,
         DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
-      );
-      this.context.propertyPane.refresh();
-    } else if (propertyPath === 'statusDefinitions') {
-      const normalized: string = this._normalizeStatusDefinitions(
-        typeof newValue === 'string' ? newValue : undefined
-      );
-      this.properties.statusDefinitions = normalized;
-      const statuses: string[] = this._parseStatusDefinitions(normalized);
-      this.properties.completedStatus = this._normalizeCompletedStatus(
-        this.properties.completedStatus,
-        statuses
       );
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'completedStatus') {
@@ -1470,12 +1459,6 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                 }),
                 PropertyPaneLabel('createListStatus', {
                   text: this._listCreationMessage ?? ''
-                }),
-                PropertyPaneTextField('statusDefinitions', {
-                  label: strings.StatusDefinitionsFieldLabel,
-                  multiline: true,
-                  rows: 3,
-                  value: this.properties.statusDefinitions ?? DEFAULT_STATUS_DEFINITIONS
                 }),
                 PropertyPaneDropdown('completedStatus', {
                   label: strings.CompletedStatusFieldLabel,

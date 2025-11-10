@@ -1053,6 +1053,7 @@ const FALLBACK_CATEGORIES: SuggestionCategory[] = [
 const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
+const ALL_STATUS_FILTER_KEY: string = '__all_statuses__';
 const SUGGESTIONS_PAGE_SIZE: number = 5;
 const ADMIN_TOP_SUGGESTIONS_COUNT: number = 10;
 const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
@@ -1251,13 +1252,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this._areStatusesEqual(status, completedStatus);
   }
 
-  private _isActiveStatusValue(status: string | undefined, statuses: string[], completedStatus: string): boolean {
+  private _normalizeActiveStatusValue(
+    status: string | undefined,
+    statuses: string[],
+    completedStatus: string
+  ): string | undefined {
     if (!status) {
-      return false;
+      return undefined;
     }
 
-    const exists: boolean = statuses.some((entry) => this._areStatusesEqual(entry, status));
-    return exists && !this._isCompletedStatusValue(status, completedStatus);
+    const match: string | undefined = statuses.find((entry) => this._areStatusesEqual(entry, status));
+
+    if (!match) {
+      return undefined;
+    }
+
+    if (this._areStatusesEqual(match, completedStatus)) {
+      return undefined;
+    }
+
+    return match;
   }
 
   private _areStatusCollectionsEqual(left: string[] | undefined, right: string[] | undefined): boolean {
@@ -1286,20 +1300,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this._updateState(
       (prevState) => {
-        const activeStatus: string | undefined = this._isActiveStatusValue(
+        const activeStatus: string | undefined = this._normalizeActiveStatusValue(
           prevState.activeFilter.status,
           statuses,
           completedStatus
-        )
-          ? prevState.activeFilter.status
-          : undefined;
+        );
+        const adminStatus: string | undefined = this._normalizeActiveStatusValue(
+          prevState.adminFilter.status,
+          statuses,
+          completedStatus
+        );
 
         return {
           statuses,
           completedStatus,
           defaultStatus,
           activeFilter: { ...prevState.activeFilter, status: activeStatus },
-          completedFilter: { ...prevState.completedFilter, status: completedStatus }
+          completedFilter: { ...prevState.completedFilter, status: completedStatus },
+          adminFilter: { ...prevState.adminFilter, status: adminStatus }
         } as Partial<ISamverkansportalenState>;
       },
       () => {
@@ -1315,6 +1333,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this.state.statuses.filter(
       (status) => !this._isCompletedStatusValue(status, this.state.completedStatus)
     );
+  }
+
+  private _normalizeAdminFilterStatus(status: string | undefined): string | undefined {
+    return this._normalizeActiveStatusValue(status, this.state.statuses, this.state.completedStatus);
   }
 
   private _isStatusInCollection(status: string | undefined, collection: string[]): boolean {
@@ -1413,11 +1435,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       adminFilter.category,
       subcategories
     );
+    const adminFilterStatusOptions: IDropdownOption[] = this._getFilterStatusOptions();
 
     const isFilterCategoryLimited: boolean = filterCategoryOptions.length <= 1;
     const isActiveFilterSubcategoryLimited: boolean = activeFilterSubcategoryOptions.length <= 1;
     const isCompletedFilterSubcategoryLimited: boolean = completedFilterSubcategoryOptions.length <= 1;
     const isAdminFilterSubcategoryLimited: boolean = adminFilterSubcategoryOptions.length <= 1;
+    const isAdminFilterStatusLimited: boolean = adminFilterStatusOptions.length <= 1;
     const activeFilterSubcategoryPlaceholder: string = isActiveFilterSubcategoryLimited
       ? strings.NoSubcategoriesAvailablePlaceholder
       : strings.SelectSubcategoryPlaceholder;
@@ -1668,6 +1692,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                       onChange={this._onAdminFilterSubcategoryChange}
                       disabled={isAdminFilterSubcategoryLimited}
                       placeholder={adminFilterSubcategoryPlaceholder}
+                      className={styles.filterDropdown}
+                    />
+                    <Dropdown
+                      label={strings.StatusLabel}
+                      options={adminFilterStatusOptions}
+                      selectedKey={adminFilter.status ?? ALL_STATUS_FILTER_KEY}
+                      onChange={this._onAdminFilterStatusChange}
+                      disabled={isAdminFilterStatusLimited}
                       className={styles.filterDropdown}
                     />
                   </div>
@@ -1994,6 +2026,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return [{ key: ALL_CATEGORY_FILTER_KEY, text: strings.AllCategoriesOptionLabel }, ...this._getCategoryOptions(categories)];
   }
 
+  private _getFilterStatusOptions(): IDropdownOption[] {
+    const options: IDropdownOption[] = this._getActiveStatuses().map((status) => ({
+      key: status,
+      text: status
+    }));
+
+    return [{ key: ALL_STATUS_FILTER_KEY, text: strings.AllStatusesOptionLabel }, ...options];
+  }
+
   private _getSubcategoriesForCategory(
     category: SuggestionCategory | undefined,
     definitions: ISubcategoryDefinition[] = this.state.subcategories
@@ -2190,7 +2231,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const normalizedFilter: IFilterState = {
       ...filter,
       category: resolvedCategory,
-      subcategory: resolvedSubcategory
+      subcategory: resolvedSubcategory,
+      status: this._normalizeAdminFilterStatus(filter.status)
     };
 
     this._updateState({
@@ -2703,8 +2745,19 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _getTopSuggestionsByVotes(filter: IFilterState): Promise<ISuggestionItem[]> {
     const listId: string = this._getResolvedListId();
+    const activeStatuses: string[] = this._getActiveStatuses();
+    const filterStatus: string | undefined = this._normalizeAdminFilterStatus(filter.status);
+    const statuses: string[] =
+      filterStatus && this._isStatusInCollection(filterStatus, activeStatuses)
+        ? [filterStatus]
+        : activeStatuses;
+
+    if (statuses.length === 0) {
+      return [];
+    }
 
     const response = await this.props.graphService.getSuggestionItems(listId, {
+      statuses,
       top: ADMIN_TOP_SUGGESTIONS_COUNT,
       category: filter.category,
       subcategory: filter.subcategory,
@@ -2734,8 +2787,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
     }
 
-    return this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts).filter(
-      (item) => item.votes > 0
+    const suggestions = this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts);
+
+    return suggestions.filter(
+      (item) => !this._isCompletedStatusValue(item.status, this.state.completedStatus)
     );
   }
 
@@ -3612,6 +3667,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       key === ALL_SUBCATEGORY_FILTER_KEY
         ? { ...this.state.adminFilter, subcategory: undefined, suggestionId: undefined }
         : { ...this.state.adminFilter, subcategory: key, suggestionId: undefined };
+
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._loadAdminSuggestions(nextFilter);
+  };
+
+  private _onAdminFilterStatusChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    if (!option) {
+      return;
+    }
+
+    const key: string = String(option.key);
+    const nextFilter: IFilterState =
+      key === ALL_STATUS_FILTER_KEY
+        ? { ...this.state.adminFilter, status: undefined, suggestionId: undefined }
+        : { ...this.state.adminFilter, status: key, suggestionId: undefined };
 
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this._loadAdminSuggestions(nextFilter);
