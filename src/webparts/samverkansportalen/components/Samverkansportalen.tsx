@@ -2789,9 +2789,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const suggestions = this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts);
 
-    return suggestions.filter(
-      (item) => !this._isCompletedStatusValue(item.status, this.state.completedStatus)
-    );
+    return suggestions.filter((item) => {
+      const isCompleted: boolean = this._isCompletedStatusValue(
+        item.status,
+        this.state.completedStatus
+      );
+
+      return item.votes > 0 && !isCompleted;
+    });
   }
 
   private _mapGraphItemsToSuggestions(
