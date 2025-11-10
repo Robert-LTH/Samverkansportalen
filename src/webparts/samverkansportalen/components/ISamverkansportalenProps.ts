@@ -25,4 +25,5 @@ export interface ISamverkansportalenProps {
   headerSubtitle: string;
   statuses: string[];
   completedStatus: string;
+  defaultStatus: string;
 }

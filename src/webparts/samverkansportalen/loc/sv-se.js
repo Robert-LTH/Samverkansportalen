@@ -97,6 +97,7 @@ define([], function() {
     "CreateListPromptStatusLabel": "statuslistan",
     "StatusDefinitionsFieldLabel": "Förslagsstatusar (en per rad)",
     "CompletedStatusFieldLabel": "Status för slutfört",
+    "DefaultStatusFieldLabel": "Standardstatus för nya förslag",
     "UseTableLayoutToggleLabel": "Förslagslayout",
     "UseTableLayoutToggleOnText": "Tabell",
     "UseTableLayoutToggleOffText": "Kort",
