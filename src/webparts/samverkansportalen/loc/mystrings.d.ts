@@ -120,6 +120,11 @@ declare interface ISamverkansportalenWebPartStrings {
   HideCommentInputButtonText: string;
   CommentInputLabel: string;
   CommentInputPlaceholder: string;
+  RichTextEditorBoldButtonLabel: string;
+  RichTextEditorItalicButtonLabel: string;
+  RichTextEditorUnderlineButtonLabel: string;
+  RichTextEditorBulletListButtonLabel: string;
+  RichTextEditorPlaceholder: string;
   SubmitCommentButtonText: string;
   DeleteCommentButtonLabel: string;
   VoteSingularLabel: string;
@@ -142,7 +147,8 @@ declare interface ISamverkansportalenWebPartStrings {
   TopSuggestionsLoadErrorMessage: string;
   ActiveSuggestionsSectionTitle: string;
   CompletedSuggestionsSectionTitle: string;
-  AllSuggestionsTabLabel: string;
+  ActiveSuggestionsTabLabel: string;
+  CompletedSuggestionsTabLabel: string;
   AdminTopSuggestionsTabLabel: string;
   MyVotesTabLabel: string;
   ClearFiltersButtonText: string;
