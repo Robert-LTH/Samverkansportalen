@@ -278,32 +278,6 @@ const SuggestionTimestamps: React.FC<ISuggestionTimestampsProps> = ({ item, form
   );
 };
 
-interface IActionButtonsProps {
-  interaction: ISuggestionInteractionState;
-  containerClassName: string;
-  isLoading: boolean;
-  onDeleteSuggestion: () => void;
-}
-
-const ActionButtons: React.FC<IActionButtonsProps> = ({
-  interaction,
-  containerClassName,
-  isLoading,
-  onDeleteSuggestion
-}) => (
-  <div className={containerClassName}>
-    {interaction.canDeleteSuggestion && (
-      <IconButton
-        iconProps={{ iconName: 'Delete' }}
-        title={strings.RemoveSuggestionButtonLabel}
-        ariaLabel={strings.RemoveSuggestionButtonLabel}
-        onClick={onDeleteSuggestion}
-        disabled={isLoading}
-      />
-    )}
-  </div>
-);
-
 interface IRichTextEditorProps {
   label: string;
   value: string;
@@ -496,8 +470,10 @@ interface ICommentSectionProps {
   onCommentDraftChange: (value: string) => void;
   onSubmitComment: () => void;
   onDeleteComment: (comment: ISuggestionComment) => void;
+  onDeleteSuggestion: () => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
+  canDeleteSuggestion: boolean;
 }
 
 const CommentSection: React.FC<ICommentSectionProps> = ({
@@ -507,8 +483,10 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
   onCommentDraftChange,
   onSubmitComment,
   onDeleteComment,
+  onDeleteSuggestion,
   formatDateTime,
-  isLoading
+  isLoading,
+  canDeleteSuggestion
 }) => {
   const isDraftEmpty: boolean = isRichTextValueEmpty(comment.draftText);
   const isSubmitDisabled: boolean = isDraftEmpty || comment.isSubmitting || isLoading;
@@ -528,17 +506,31 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
           <span className={styles.commentHeading}>{strings.CommentsLabel}</span>
           <span className={styles.commentCount}>({comment.resolvedCount})</span>
         </button>
-        {comment.canAddComment && (
-          <DefaultButton
-            className={styles.commentAddButton}
-            text={
-              comment.isComposerVisible
-                ? strings.HideCommentInputButtonText
-                : strings.AddCommentButtonText
-            }
-            onClick={onToggleComposer}
-            disabled={isLoading || comment.isSubmitting}
-          />
+        {(comment.canAddComment || canDeleteSuggestion) && (
+          <div className={styles.commentActions}>
+            {comment.canAddComment && (
+              <DefaultButton
+                className={styles.commentAddButton}
+                text={
+                  comment.isComposerVisible
+                    ? strings.HideCommentInputButtonText
+                    : strings.AddCommentButtonText
+                }
+                onClick={onToggleComposer}
+                disabled={isLoading || comment.isSubmitting}
+              />
+            )}
+            {canDeleteSuggestion && (
+              <IconButton
+                iconProps={{ iconName: 'Delete' }}
+                className={styles.commentDeleteSuggestionButton}
+                title={strings.RemoveSuggestionButtonLabel}
+                ariaLabel={strings.RemoveSuggestionButtonLabel}
+                onClick={onDeleteSuggestion}
+                disabled={isLoading}
+              />
+            )}
+          </div>
         )}
       </div>
       <div
@@ -709,14 +701,10 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
           onCommentDraftChange={(value) => onCommentDraftChange(item, value)}
           onSubmitComment={() => onSubmitComment(item)}
           onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
+          onDeleteSuggestion={() => onDeleteSuggestion(item)}
           formatDateTime={formatDateTime}
           isLoading={isLoading}
-        />
-        <ActionButtons
-          interaction={interaction}
-          containerClassName={styles.cardActions}
-          isLoading={isLoading}
-          onDeleteSuggestion={() => onDeleteSuggestion(item)}
+          canDeleteSuggestion={interaction.canDeleteSuggestion}
         />
       </li>
     ))}
@@ -849,12 +837,6 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 className={styles.tableCellActions}
                 data-label={strings.SuggestionTableActionsColumnLabel}
               >
-                  <ActionButtons
-                    interaction={interaction}
-                    containerClassName={styles.tableActions}
-                    isLoading={isLoading}
-                    onDeleteSuggestion={() => onDeleteSuggestion(item)}
-                  />
               </td>
             </tr>
             <tr className={styles.metaRow}>
@@ -872,8 +854,10 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                     onCommentDraftChange={(value) => onCommentDraftChange(item, value)}
                     onSubmitComment={() => onSubmitComment(item)}
                     onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
+                    onDeleteSuggestion={() => onDeleteSuggestion(item)}
                     formatDateTime={formatDateTime}
                     isLoading={isLoading}
+                    canDeleteSuggestion={interaction.canDeleteSuggestion}
                   />
                 </div>
               </td>

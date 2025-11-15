@@ -384,13 +384,6 @@
   width: 12rem;
 }
 
-.tableActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
 .suggestionRow {
   background: "[theme:white, default: #ffffff]";
 }
@@ -603,6 +596,13 @@
   margin-bottom: 0.5rem;
 }
 
+.commentActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .commentComposer {
   margin-bottom: 1rem;
   display: grid;
@@ -653,8 +653,17 @@
 }
 
 .commentAddButton {
-  margin-left: auto;
   white-space: nowrap;
+}
+
+.commentDeleteSuggestionButton {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  padding: 0.1rem;
+}
+
+.commentDeleteSuggestionButton:hover,
+.commentDeleteSuggestionButton:focus {
+  color: var(--accentColor);
 }
 
 .commentContent {
@@ -791,17 +800,6 @@
   width: 100%;
 }
 
-.cardActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  margin-left: auto;
-  width: 100%;
-  padding-top: 0.5rem;
-  border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
-}
-
 .paginationControls {
   margin-top: 1rem;
   display: flex;
@@ -860,10 +858,6 @@
       color: "[theme:neutralSecondary, default: #605e5c]";
       margin-bottom: 0.25rem;
     }
-  }
-
-  .tableActions {
-    justify-content: flex-start;
   }
 
   .tableCellVotes .voteBadge {
