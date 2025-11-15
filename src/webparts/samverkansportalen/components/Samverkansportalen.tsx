@@ -102,7 +102,7 @@ interface ISamverkansportalenState {
   adminSuggestions: ISuggestionItem[];
   isAdminSuggestionsLoading: boolean;
   adminFilter: IFilterState;
-  selectedMainTab: 'all' | 'myVotes' | 'admin';
+  selectedMainTab: 'active' | 'completed' | 'myVotes' | 'admin';
   error?: string;
   success?: string;
   isAddSuggestionExpanded: boolean;
@@ -160,6 +160,26 @@ interface ISuggestionViewModel {
   interaction: ISuggestionInteractionState;
   comment: ISuggestionCommentState;
 }
+
+const getPlainTextFromHtml = (value: string | undefined): string => {
+  if (!value) {
+    return '';
+  }
+
+  return value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const isRichTextValueEmpty = (value: string): boolean => getPlainTextFromHtml(value).length === 0;
+
+let richTextEditorIdCounter: number = 0;
+const getNextRichTextEditorId = (): string => {
+  richTextEditorIdCounter += 1;
+  return `richTextEditor-${richTextEditorIdCounter}`;
+};
 
 type SuggestionAction = (item: ISuggestionItem) => void | Promise<void>;
 type CommentAction = (item: ISuggestionItem, comment: ISuggestionComment) => void | Promise<void>;
@@ -284,6 +304,108 @@ const ActionButtons: React.FC<IActionButtonsProps> = ({
   </div>
 );
 
+interface IRichTextEditorProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}
+
+const RichTextEditor: React.FC<IRichTextEditorProps> = ({
+  label,
+  value,
+  onChange,
+  disabled,
+  placeholder
+}) => {
+  const editorRef = React.useRef<HTMLDivElement | null>(null);
+  const editorIdRef = React.useRef<string>(getNextRichTextEditorId());
+  const labelId: string = `${editorIdRef.current}-label`;
+
+  const handleInput = React.useCallback(() => {
+    const nextValue: string = editorRef.current?.innerHTML ?? '';
+    onChange(nextValue);
+  }, [onChange]);
+
+  const applyCommand = React.useCallback(
+    (command: string): void => {
+      if (disabled) {
+        return;
+      }
+
+      editorRef.current?.focus();
+      document.execCommand(command);
+      handleInput();
+    },
+    [disabled, handleInput]
+  );
+
+  React.useEffect(() => {
+    if (!editorRef.current) {
+      return;
+    }
+
+    const currentHtml: string = editorRef.current.innerHTML;
+    const nextValue: string = value ?? '';
+
+    if (currentHtml !== nextValue) {
+      editorRef.current.innerHTML = nextValue;
+    }
+  }, [value]);
+
+  const toolbarButtons: { key: string; icon: string; label: string; command: string }[] = [
+    { key: 'bold', icon: 'Bold', label: strings.RichTextEditorBoldButtonLabel, command: 'bold' },
+    { key: 'italic', icon: 'Italic', label: strings.RichTextEditorItalicButtonLabel, command: 'italic' },
+    {
+      key: 'underline',
+      icon: 'Underline',
+      label: strings.RichTextEditorUnderlineButtonLabel,
+      command: 'underline'
+    },
+    {
+      key: 'bullets',
+      icon: 'BulletedList',
+      label: strings.RichTextEditorBulletListButtonLabel,
+      command: 'insertUnorderedList'
+    }
+  ];
+
+  return (
+    <div className={styles.richTextEditor}>
+      <label id={labelId} className={styles.richTextLabel} htmlFor={editorIdRef.current}>
+        {label}
+      </label>
+      <div className={styles.richTextToolbar} role="toolbar" aria-label={label}>
+        {toolbarButtons.map((button) => (
+          <IconButton
+            key={button.key}
+            iconProps={{ iconName: button.icon }}
+            title={button.label}
+            ariaLabel={button.label}
+            className={styles.richTextToolbarButton}
+            onClick={() => applyCommand(button.command)}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+      <div
+        id={editorIdRef.current}
+        ref={editorRef}
+        className={`${styles.richTextArea} ${disabled ? styles.richTextAreaDisabled : ''}`}
+        role="textbox"
+        aria-multiline="true"
+        aria-labelledby={labelId}
+        contentEditable={!disabled}
+        suppressContentEditableWarning={true}
+        onInput={handleInput}
+        onBlur={handleInput}
+        data-placeholder={placeholder}
+      />
+    </div>
+  );
+};
+
 interface ISuggestionStatusControlProps {
   statuses: string[];
   value: string;
@@ -388,7 +510,8 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
   formatDateTime,
   isLoading
 }) => {
-  const isSubmitDisabled: boolean = comment.draftText.trim().length === 0 || comment.isSubmitting || isLoading;
+  const isDraftEmpty: boolean = isRichTextValueEmpty(comment.draftText);
+  const isSubmitDisabled: boolean = isDraftEmpty || comment.isSubmitting || isLoading;
 
   return (
     <div className={styles.commentSection}>
@@ -432,12 +555,10 @@ const CommentSection: React.FC<ICommentSectionProps> = ({
             <>
               {comment.canAddComment && comment.isComposerVisible && (
                 <div className={styles.commentComposer}>
-                  <TextField
+                  <RichTextEditor
                     label={strings.CommentInputLabel}
-                    multiline
-                    rows={3}
                     value={comment.draftText}
-                    onChange={(_event, newValue) => onCommentDraftChange(newValue ?? '')}
+                    onChange={(newValue) => onCommentDraftChange(newValue)}
                     placeholder={strings.CommentInputPlaceholder}
                     disabled={comment.isSubmitting || isLoading}
                   />
@@ -581,12 +702,6 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
             </div>
           </div>
         </div>
-        <ActionButtons
-          interaction={interaction}
-          containerClassName={styles.cardActions}
-          isLoading={isLoading}
-          onDeleteSuggestion={() => onDeleteSuggestion(item)}
-        />
         <CommentSection
           comment={comment}
           onToggle={() => onToggleComments(item.id)}
@@ -596,6 +711,12 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
           onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
           formatDateTime={formatDateTime}
           isLoading={isLoading}
+        />
+        <ActionButtons
+          interaction={interaction}
+          containerClassName={styles.cardActions}
+          isLoading={isLoading}
+          onDeleteSuggestion={() => onDeleteSuggestion(item)}
         />
       </li>
     ))}
@@ -1245,7 +1366,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isMyVotesLoading: false,
       adminSuggestions: [],
       isAdminSuggestionsLoading: false,
-      selectedMainTab: 'all',
+      selectedMainTab: 'active',
       isAddSuggestionExpanded: true,
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
@@ -1608,6 +1729,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       false,
       { allowVoting: true }
     );
+    const voteSummaryOptions: IDropdownOption[] = this._getVoteSummaryOptions(categories);
 
     return (
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
@@ -1617,10 +1739,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             <p className={styles.subtitle}>{this.props.headerSubtitle}</p>
           </div>
           <div className={styles.voteSummary} aria-live="polite">
-            <span className={styles.voteLabel}>{strings.VotesRemainingLabel}</span>
-            <span className={styles.voteValue}>
-              {this._getVoteSummaryLabel(categories)}
-            </span>
+            <Dropdown
+              className={styles.voteSummaryDropdown}
+              label={strings.VotesRemainingLabel}
+              options={voteSummaryOptions}
+              defaultSelectedKey={voteSummaryOptions[0]?.key}
+              disabled={voteSummaryOptions.length === 0}
+            />
           </div>
         </header>
 
@@ -1647,7 +1772,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         )}
 
         <Pivot selectedKey={selectedMainTab} onLinkClick={this._onSuggestionTabChange}>
-          <PivotItem headerText={strings.AllSuggestionsTabLabel} itemKey="all">
+          <PivotItem headerText={strings.ActiveSuggestionsTabLabel} itemKey="active">
             <div className={styles.pivotContent}>
               <div className={styles.addSuggestion}>
                 <SectionHeader
@@ -1675,12 +1800,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                         onChange={this._onTitleChange}
                         disabled={isLoading}
                       />
-                      <TextField
+                      <RichTextEditor
                         label={strings.AddSuggestionDetailsLabel}
-                        multiline
-                        rows={3}
                         value={newDescription}
-                        onChange={this._onDescriptionChange}
+                        onChange={this._onDescriptionEditorChange}
+                        placeholder={strings.RichTextEditorPlaceholder}
                         disabled={isLoading}
                       />
                       <Dropdown
@@ -1773,6 +1897,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onNext={this._goToNextActivePage}
               />
 
+            </div>
+          </PivotItem>
+
+          <PivotItem headerText={strings.CompletedSuggestionsTabLabel} itemKey="completed">
+            <div className={styles.pivotContent}>
               <SuggestionSection
                 title={strings.CompletedSuggestionsSectionTitle}
                 titleId={this._sectionIds.completed.title}
@@ -2683,9 +2812,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return category.trim().toLowerCase();
   }
 
-  private _getVoteSummaryLabel(categories: SuggestionCategory[]): string {
+  private _getVoteSummaryOptions(categories: SuggestionCategory[]): IDropdownOption[] {
     if (this.state.isUnlimitedVotes) {
-      return strings.VotesUnlimitedLabel;
+      return [
+        {
+          key: 'unlimited',
+          text: strings.VotesUnlimitedLabel,
+          disabled: true
+        }
+      ];
     }
 
     const categoryKeys: Set<string> = new Set();
@@ -2693,22 +2828,31 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     Object.keys(this.state.availableVotesByCategory).forEach((key) => categoryKeys.add(key));
 
     if (categoryKeys.size === 0) {
-      return strings.VotesPerCategoryDefaultLabel.replace(
-        '{0}',
-        MAX_VOTES_PER_CATEGORY.toString()
-      );
+      return [
+        {
+          key: 'default',
+          text: strings.VotesPerCategoryDefaultLabel.replace(
+            '{0}',
+            MAX_VOTES_PER_CATEGORY.toString()
+          ),
+          disabled: true
+        }
+      ];
     }
 
-    const summaryEntries: string[] = [];
+    const summaryEntries: IDropdownOption[] = [];
 
     categoryKeys.forEach((key) => {
       const displayName: string =
         categories.find((category) => this._getCategoryKey(category) === key) ?? key;
       const remaining: number = this.state.availableVotesByCategory[key] ?? MAX_VOTES_PER_CATEGORY;
-      summaryEntries.push(`${displayName}: ${remaining}/${MAX_VOTES_PER_CATEGORY}`);
+      summaryEntries.push({
+        key,
+        text: `${displayName}: ${remaining}/${MAX_VOTES_PER_CATEGORY}`
+      });
     });
 
-    return summaryEntries.join(' • ');
+    return summaryEntries;
   }
 
   private _getRemainingVotesForCategory(category: SuggestionCategory): number {
@@ -3233,14 +3377,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
   };
 
-  private _onDescriptionChange = (
-    _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
-    newValue?: string
-  ): void => {
-    this._updateState({ newDescription: newValue ?? '' }, () => {
-      this._handleSimilarSuggestionsInput(this.state.newTitle, this.state.newDescription);
-    });
+  private _onDescriptionEditorChange = (value: string): void => {
+    this._setDescriptionValue(value);
   };
+
+  private _setDescriptionValue(value: string): void {
+    this._updateState({ newDescription: value }, () => {
+      this._handleSimilarSuggestionsInput(this.state.newTitle, value);
+    });
+  }
 
   private _areSimilarSuggestionQueriesEqual(
     left: ISimilarSuggestionsQuery,
@@ -3251,7 +3396,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private _handleSimilarSuggestionsInput(title: string, description: string): void {
     const normalizedTitle: string = (title ?? '').replace(/\s+/g, ' ').trim();
-    const normalizedDescription: string = (description ?? '').replace(/\s+/g, ' ').trim();
+    const normalizedDescription: string = getPlainTextFromHtml(description ?? '');
     const hasTitleQuery: boolean = normalizedTitle.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH;
     const hasDescriptionQuery: boolean =
       normalizedDescription.length >= MIN_SIMILAR_SUGGESTION_QUERY_LENGTH;
@@ -4308,9 +4453,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _submitCommentForSuggestion(item: ISuggestionItem): Promise<void> {
     const draft: string = this._getCommentDraft(item.id);
-    const commentText: string = draft.trim();
-
-    if (commentText.length === 0) {
+    if (isRichTextValueEmpty(draft)) {
       this._handleError('Please enter a comment before submitting.');
       return;
     }
@@ -4331,7 +4474,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       await this.props.graphService.addCommentItem(commentListId, {
         Title: title.length > 255 ? title.slice(0, 255) : title,
         SuggestionId: item.id,
-        Comment: commentText
+        Comment: draft
       });
 
       await this._refreshActiveSuggestions();
@@ -4690,8 +4833,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string | undefined = item.props.itemKey;
-    const normalized: 'all' | 'myVotes' | 'admin' =
-      key === 'myVotes' ? 'myVotes' : key === 'admin' ? 'admin' : 'all';
+    const normalized: 'active' | 'completed' | 'myVotes' | 'admin' =
+      key === 'myVotes'
+        ? 'myVotes'
+        : key === 'admin'
+        ? 'admin'
+        : key === 'completed'
+        ? 'completed'
+        : 'active';
 
     if (normalized === this.state.selectedMainTab) {
       return;

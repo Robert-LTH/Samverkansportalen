@@ -70,24 +70,25 @@
 
 .voteSummary {
   min-width: 12rem;
-  padding: 0.75rem 1rem;
+}
+
+.voteSummaryDropdown {
+  width: 100%;
+}
+
+.voteSummaryDropdown :global(.ms-Dropdown) {
+  width: 100%;
+}
+
+.voteSummaryDropdown :global(.ms-Dropdown-title) {
   border-radius: 0.5rem;
-  background: var(--accentColorTint);
-  text-align: right;
-}
-
-.voteLabel {
-  display: block;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: "[theme:neutralPrimary, default: #323130]";
-}
-
-.voteValue {
-  display: block;
-  font-size: 1.5rem;
+  border-color: var(--accentColorTint);
+  background: var(--accentColorLightest);
   font-weight: 600;
+}
+
+.voteSummaryDropdown :global(.ms-Dropdown-caretDownWrapper) {
+  color: var(--accentColorDark);
 }
 
 .sectionTitle {
@@ -148,6 +149,60 @@
 .addForm {
   display: grid;
   gap: 1rem;
+}
+
+.richTextEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.richTextLabel {
+  font-weight: 600;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.richTextToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.richTextToolbarButton {
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.25rem;
+  background: "[theme:white, default: #ffffff]";
+}
+
+.richTextToolbarButton :global(.ms-Button-icon) {
+  color: var(--accentColorDark);
+}
+
+.richTextArea {
+  min-height: 8rem;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: "[theme:white, default: #ffffff]";
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: "[theme:neutralPrimary, default: #323130]";
+}
+
+.richTextArea:focus-visible {
+  outline: 2px solid var(--accentColor);
+  outline-offset: 2px;
+}
+
+.richTextArea[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.richTextAreaDisabled {
+  background: "[theme:neutralLighterAlt, default: #f3f2f1]";
+  color: "[theme:neutralSecondary, default: #605e5c]";
 }
 
 .similarSuggestions {
@@ -678,6 +733,12 @@
   margin: 0;
   color: "[theme:neutralPrimary, default: #323130]";
   word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+
+  :global(*) {
+    max-width: 100%;
+  }
 
   :global(p:first-child),
   :global(ul:first-child),
@@ -734,6 +795,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: flex-end;
+  margin-left: auto;
+  width: 100%;
+  padding-top: 0.5rem;
+  border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
 }
 
 .paginationControls {
