@@ -117,6 +117,10 @@ declare interface ISamverkansportalenWebPartStrings {
   RemoveSuggestionButtonLabel: string;
   CommentsLabel: string;
   AddCommentButtonText: string;
+  HideCommentInputButtonText: string;
+  CommentInputLabel: string;
+  CommentInputPlaceholder: string;
+  SubmitCommentButtonText: string;
   DeleteCommentButtonLabel: string;
   VoteSingularLabel: string;
   VotesLabel: string;
@@ -141,6 +145,7 @@ declare interface ISamverkansportalenWebPartStrings {
   AllSuggestionsTabLabel: string;
   AdminTopSuggestionsTabLabel: string;
   MyVotesTabLabel: string;
+  ClearFiltersButtonText: string;
   SuggestionTableSuggestionColumnLabel: string;
   SuggestionTableActionsColumnLabel: string;
   SuggestionTableEntryColumnLabel: string;
