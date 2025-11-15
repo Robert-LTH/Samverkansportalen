@@ -137,6 +137,12 @@
   margin-top: 2rem;
   display: grid;
   gap: 2rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.pivotContent > * {
+  min-width: 0;
 }
 
 .addForm {
@@ -211,6 +217,11 @@
   min-width: 12rem;
 }
 
+.filterButton {
+  align-self: end;
+  min-width: 10rem;
+}
+
 .filterSearch {
   min-width: 16rem;
 }
@@ -231,6 +242,8 @@
   margin: 0;
   padding: 0;
   overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
 }
 
 .suggestionTable {
@@ -247,6 +260,7 @@
     padding: 0.85rem 1rem;
     text-align: left;
     vertical-align: top;
+    word-break: break-word;
   }
 
   thead th {
@@ -474,6 +488,19 @@
 .suggestionDescription {
   margin: 0.5rem 0 0;
   color: "[theme:neutralSecondary, default: #605e5c]";
+  word-break: break-word;
+
+  :global(p:first-child),
+  :global(ul:first-child),
+  :global(ol:first-child) {
+    margin-top: 0;
+  }
+
+  :global(p:last-child),
+  :global(ul:last-child),
+  :global(ol:last-child) {
+    margin-bottom: 0;
+  }
 }
 
 .timestampRow {
@@ -519,6 +546,16 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.commentComposer {
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.commentComposerSubmit {
+  width: fit-content;
 }
 
 .commentToggleButton {
@@ -640,8 +677,19 @@
 .commentText {
   margin: 0;
   color: "[theme:neutralPrimary, default: #323130]";
-  white-space: pre-wrap;
   word-break: break-word;
+
+  :global(p:first-child),
+  :global(ul:first-child),
+  :global(ol:first-child) {
+    margin-top: 0;
+  }
+
+  :global(p:last-child),
+  :global(ul:last-child),
+  :global(ol:last-child) {
+    margin-bottom: 0;
+  }
 }
 
 .voteBadge {

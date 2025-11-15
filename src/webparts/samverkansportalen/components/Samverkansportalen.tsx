@@ -110,6 +110,9 @@ interface ISamverkansportalenState {
   isCompletedSuggestionsExpanded: boolean;
   expandedCommentIds: number[];
   loadingCommentIds: number[];
+  commentDrafts: Record<number, string>;
+  commentComposerIds: number[];
+  submittingCommentIds: number[];
 }
 
 interface IFilterState {
@@ -147,6 +150,9 @@ interface ISuggestionCommentState {
   canDeleteComments: boolean;
   regionId: string;
   toggleId: string;
+  isComposerVisible: boolean;
+  draftText: string;
+  isSubmitting: boolean;
 }
 
 interface ISuggestionViewModel {
@@ -362,109 +368,150 @@ const SuggestionStatusControl: React.FC<ISuggestionStatusControlProps> = ({
 };
 
 interface ICommentSectionProps {
-  item: ISuggestionItem;
   comment: ISuggestionCommentState;
   onToggle: () => void;
-  onAddComment: () => void;
+  onToggleComposer: () => void;
+  onCommentDraftChange: (value: string) => void;
+  onSubmitComment: () => void;
   onDeleteComment: (comment: ISuggestionComment) => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
 }
 
 const CommentSection: React.FC<ICommentSectionProps> = ({
-  item,
   comment,
   onToggle,
-  onAddComment,
+  onToggleComposer,
+  onCommentDraftChange,
+  onSubmitComment,
   onDeleteComment,
   formatDateTime,
   isLoading
-}) => (
-  <div className={styles.commentSection}>
-    <div className={styles.commentHeader}>
-      <button
-        type="button"
-        id={comment.toggleId}
-        className={styles.commentToggleButton}
-        onClick={onToggle}
-        aria-expanded={comment.isExpanded}
-        aria-controls={comment.regionId}
-      >
-        <Icon iconName={comment.isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'} className={styles.commentToggleIcon} />
-        <span className={styles.commentHeading}>{strings.CommentsLabel}</span>
-        <span className={styles.commentCount}>({comment.resolvedCount})</span>
-      </button>
-      {comment.canAddComment && (
-        <DefaultButton
-          className={styles.commentAddButton}
-          text={strings.AddCommentButtonText}
-          onClick={onAddComment}
-          disabled={isLoading}
-        />
-      )}
-    </div>
-    <div
-      id={comment.regionId}
-      role="region"
-      aria-labelledby={comment.toggleId}
-      className={`${styles.commentContent} ${comment.isExpanded ? '' : styles.commentContentCollapsed}`}
-      hidden={!comment.isExpanded}
-    >
-      {comment.isExpanded && (
-        comment.isLoading ? (
-          <Spinner label={strings.LoadingCommentsLabel} size={SpinnerSize.small} />
-        ) : !comment.hasLoaded ? null : comment.comments.length === 0 ? (
-          <p className={styles.commentEmpty}>{strings.NoCommentsLabel}</p>
-        ) : (
-          <ul className={styles.commentList}>
-            {comment.comments.map((commentItem) => {
-              const hasMeta: boolean = !!commentItem.author || !!commentItem.createdDateTime;
+}) => {
+  const isSubmitDisabled: boolean = comment.draftText.trim().length === 0 || comment.isSubmitting || isLoading;
 
-              return (
-                <li key={commentItem.id} className={styles.commentItem}>
-                  {(hasMeta || comment.canDeleteComments) && (
-                    <div className={styles.commentItemTopRow}>
-                      {hasMeta ? (
-                        <div className={styles.commentMeta}>
-                          {commentItem.author && <span className={styles.commentAuthor}>{commentItem.author}</span>}
-                          {commentItem.createdDateTime && (
-                            <span className={styles.commentTimestamp}>{formatDateTime(commentItem.createdDateTime)}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className={styles.commentMetaPlaceholder} aria-hidden={true} />
-                      )}
-                      {comment.canDeleteComments && (
-                        <IconButton
-                          className={styles.commentDeleteButton}
-                          iconProps={{ iconName: 'Delete' }}
-                          title={strings.DeleteCommentButtonLabel}
-                          ariaLabel={strings.DeleteCommentButtonLabel}
-                          onClick={() => onDeleteComment(commentItem)}
-                          disabled={isLoading}
-                        />
-                      )}
-                    </div>
-                  )}
-                  <p className={styles.commentText}>{commentItem.text}</p>
-                </li>
-              );
-            })}
-          </ul>
-        )
-      )}
+  return (
+    <div className={styles.commentSection}>
+      <div className={styles.commentHeader}>
+        <button
+          type="button"
+          id={comment.toggleId}
+          className={styles.commentToggleButton}
+          onClick={onToggle}
+          aria-expanded={comment.isExpanded}
+          aria-controls={comment.regionId}
+        >
+          <Icon iconName={comment.isExpanded ? 'ChevronDownSmall' : 'ChevronRightSmall'} className={styles.commentToggleIcon} />
+          <span className={styles.commentHeading}>{strings.CommentsLabel}</span>
+          <span className={styles.commentCount}>({comment.resolvedCount})</span>
+        </button>
+        {comment.canAddComment && (
+          <DefaultButton
+            className={styles.commentAddButton}
+            text={
+              comment.isComposerVisible
+                ? strings.HideCommentInputButtonText
+                : strings.AddCommentButtonText
+            }
+            onClick={onToggleComposer}
+            disabled={isLoading || comment.isSubmitting}
+          />
+        )}
+      </div>
+      <div
+        id={comment.regionId}
+        role="region"
+        aria-labelledby={comment.toggleId}
+        className={`${styles.commentContent} ${comment.isExpanded ? '' : styles.commentContentCollapsed}`}
+        hidden={!comment.isExpanded}
+      >
+        {comment.isExpanded && (
+          comment.isLoading ? (
+            <Spinner label={strings.LoadingCommentsLabel} size={SpinnerSize.small} />
+          ) : !comment.hasLoaded ? null : (
+            <>
+              {comment.canAddComment && comment.isComposerVisible && (
+                <div className={styles.commentComposer}>
+                  <TextField
+                    label={strings.CommentInputLabel}
+                    multiline
+                    rows={3}
+                    value={comment.draftText}
+                    onChange={(_event, newValue) => onCommentDraftChange(newValue ?? '')}
+                    placeholder={strings.CommentInputPlaceholder}
+                    disabled={comment.isSubmitting || isLoading}
+                  />
+                  <PrimaryButton
+                    className={styles.commentComposerSubmit}
+                    text={strings.SubmitCommentButtonText}
+                    onClick={onSubmitComment}
+                    disabled={isSubmitDisabled}
+                  />
+                </div>
+              )}
+              {comment.comments.length === 0 ? (
+                <p className={styles.commentEmpty}>{strings.NoCommentsLabel}</p>
+              ) : (
+                <ul className={styles.commentList}>
+                  {comment.comments.map((commentItem) => {
+                    const hasMeta: boolean = !!commentItem.author || !!commentItem.createdDateTime;
+
+                    return (
+                      <li key={commentItem.id} className={styles.commentItem}>
+                        {(hasMeta || comment.canDeleteComments) && (
+                          <div className={styles.commentItemTopRow}>
+                            {hasMeta ? (
+                              <div className={styles.commentMeta}>
+                                {commentItem.author && <span className={styles.commentAuthor}>{commentItem.author}</span>}
+                                {commentItem.createdDateTime && (
+                                  <span className={styles.commentTimestamp}>{formatDateTime(commentItem.createdDateTime)}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className={styles.commentMetaPlaceholder} aria-hidden={true} />
+                            )}
+
+                            {comment.canDeleteComments && (
+                              <IconButton
+                                iconProps={{ iconName: 'Delete' }}
+                                className={styles.commentDeleteButton}
+                                title={strings.DeleteCommentButtonLabel}
+                                ariaLabel={strings.DeleteCommentButtonLabel}
+                                onClick={() => onDeleteComment(commentItem)}
+                                disabled={isLoading}
+                              />
+                            )}
+                          </div>
+                        )}
+                        {commentItem.text && (
+                          <div
+                            className={styles.commentText}
+                            dangerouslySetInnerHTML={{ __html: commentItem.text }}
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          )
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface ISuggestionCardsProps {
   viewModels: ISuggestionViewModel[];
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
-  onAddComment: SuggestionAction;
+  onSubmitComment: SuggestionAction;
+  onCommentDraftChange: (item: ISuggestionItem, value: string) => void;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
+  onToggleCommentComposer: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
   statuses: string[];
@@ -475,9 +522,11 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
-  onAddComment,
+  onSubmitComment,
+  onCommentDraftChange,
   onDeleteComment,
   onToggleComments,
+  onToggleCommentComposer,
   formatDateTime,
   isLoading,
   statuses
@@ -506,7 +555,12 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
             </div>
             <h4 className={styles.suggestionTitle}>{item.title}</h4>
             <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
-            {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
+            {item.description && (
+              <div
+                className={styles.suggestionDescription}
+                dangerouslySetInnerHTML={{ __html: item.description }}
+              />
+            )}
           </div>
           <div
             className={styles.voteBadge}
@@ -534,10 +588,11 @@ const SuggestionCards: React.FC<ISuggestionCardsProps> = ({
           onDeleteSuggestion={() => onDeleteSuggestion(item)}
         />
         <CommentSection
-          item={item}
           comment={comment}
           onToggle={() => onToggleComments(item.id)}
-          onAddComment={() => onAddComment(item)}
+          onToggleComposer={() => onToggleCommentComposer(item.id)}
+          onCommentDraftChange={(value) => onCommentDraftChange(item, value)}
+          onSubmitComment={() => onSubmitComment(item)}
           onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
           formatDateTime={formatDateTime}
           isLoading={isLoading}
@@ -552,9 +607,11 @@ interface ISuggestionTableProps {
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
-  onAddComment: SuggestionAction;
+  onSubmitComment: SuggestionAction;
+  onCommentDraftChange: (item: ISuggestionItem, value: string) => void;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
+  onToggleCommentComposer: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isLoading: boolean;
   statuses: string[];
@@ -565,9 +622,11 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
-  onAddComment,
+  onSubmitComment,
+  onCommentDraftChange,
   onDeleteComment,
   onToggleComments,
+  onToggleCommentComposer,
   formatDateTime,
   isLoading,
   statuses
@@ -617,7 +676,12 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
               >
                 <h4 className={styles.suggestionTitle}>{item.title}</h4>
                 <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
-                {item.description && <p className={styles.suggestionDescription}>{item.description}</p>}
+                {item.description && (
+                  <div
+                    className={styles.suggestionDescription}
+                    dangerouslySetInnerHTML={{ __html: item.description }}
+                  />
+                )}
               </td>
               <td className={styles.tableCellCategory} data-label={strings.CategoryLabel}>
                 <span className={styles.categoryBadge}>{item.category}</span>
@@ -681,10 +745,11 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 <div className={styles.metaContent}>
                   <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
                   <CommentSection
-                    item={item}
                     comment={comment}
                     onToggle={() => onToggleComments(item.id)}
-                    onAddComment={() => onAddComment(item)}
+                    onToggleComposer={() => onToggleCommentComposer(item.id)}
+                    onCommentDraftChange={(value) => onCommentDraftChange(item, value)}
+                    onSubmitComment={() => onSubmitComment(item)}
                     onDeleteComment={(commentItem) => onDeleteComment(item, commentItem)}
                     formatDateTime={formatDateTime}
                     isLoading={isLoading}
@@ -706,9 +771,11 @@ interface ISuggestionListProps {
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
-  onAddComment: SuggestionAction;
+  onSubmitComment: SuggestionAction;
+  onCommentDraftChange: (item: ISuggestionItem, value: string) => void;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
+  onToggleCommentComposer: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   statuses: string[];
 }
@@ -720,9 +787,11 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
-  onAddComment,
+  onSubmitComment,
+  onCommentDraftChange,
   onDeleteComment,
   onToggleComments,
+  onToggleCommentComposer,
   formatDateTime,
   statuses
 }) => {
@@ -736,9 +805,11 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
       onToggleVote={onToggleVote}
       onChangeStatus={onChangeStatus}
       onDeleteSuggestion={onDeleteSuggestion}
-      onAddComment={onAddComment}
+      onSubmitComment={onSubmitComment}
+      onCommentDraftChange={onCommentDraftChange}
       onDeleteComment={onDeleteComment}
       onToggleComments={onToggleComments}
+      onToggleCommentComposer={onToggleCommentComposer}
       formatDateTime={formatDateTime}
       isLoading={isLoading}
       statuses={statuses}
@@ -749,9 +820,11 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
       onToggleVote={onToggleVote}
       onChangeStatus={onChangeStatus}
       onDeleteSuggestion={onDeleteSuggestion}
-      onAddComment={onAddComment}
+      onSubmitComment={onSubmitComment}
+      onCommentDraftChange={onCommentDraftChange}
       onDeleteComment={onDeleteComment}
       onToggleComments={onToggleComments}
+      onToggleCommentComposer={onToggleCommentComposer}
       formatDateTime={formatDateTime}
       isLoading={isLoading}
       statuses={statuses}
@@ -781,14 +854,18 @@ interface ISuggestionSectionProps {
   onSubcategoryChange: (event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption) => void;
   disableSubcategoryDropdown: boolean;
   subcategoryPlaceholder: string;
+  onClearFilters: () => void;
+  isClearFiltersDisabled: boolean;
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
-  onAddComment: SuggestionAction;
+  onSubmitComment: SuggestionAction;
+  onCommentDraftChange: (item: ISuggestionItem, value: string) => void;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
+  onToggleCommentComposer: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   statuses: string[];
   page: number;
@@ -817,14 +894,18 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   onSubcategoryChange,
   disableSubcategoryDropdown,
   subcategoryPlaceholder,
+  onClearFilters,
+  isClearFiltersDisabled,
   viewModels,
   useTableLayout,
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
-  onAddComment,
+  onSubmitComment,
+  onCommentDraftChange,
   onDeleteComment,
   onToggleComments,
+  onToggleCommentComposer,
   formatDateTime,
   statuses,
   page,
@@ -876,6 +957,12 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
               className={styles.filterDropdown}
               placeholder={subcategoryPlaceholder}
             />
+            <DefaultButton
+              text={strings.ClearFiltersButtonText}
+              className={styles.filterButton}
+              onClick={onClearFilters}
+              disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
+            />
           </div>
           {isLoading || isSectionLoading ? (
             <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
@@ -888,9 +975,11 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
                 onToggleVote={onToggleVote}
                 onChangeStatus={onChangeStatus}
                 onDeleteSuggestion={onDeleteSuggestion}
-                onAddComment={onAddComment}
+                onSubmitComment={onSubmitComment}
+                onCommentDraftChange={onCommentDraftChange}
                 onDeleteComment={onDeleteComment}
                 onToggleComments={onToggleComments}
+                onToggleCommentComposer={onToggleCommentComposer}
                 formatDateTime={formatDateTime}
                 statuses={statuses}
               />
@@ -921,9 +1010,11 @@ interface ISimilarSuggestionsProps {
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
-  onAddComment: SuggestionAction;
+  onSubmitComment: SuggestionAction;
+  onCommentDraftChange: (item: ISuggestionItem, value: string) => void;
   onDeleteComment: CommentAction;
   onToggleComments: (itemId: number) => void;
+  onToggleCommentComposer: (itemId: number) => void;
   formatDateTime: (value: string) => string;
   isProcessing: boolean;
   statuses: string[];
@@ -941,9 +1032,11 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
-  onAddComment,
+  onSubmitComment,
+  onCommentDraftChange,
   onDeleteComment,
   onToggleComments,
+  onToggleCommentComposer,
   formatDateTime,
   isProcessing,
   statuses
@@ -1022,9 +1115,11 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
               onToggleVote={onToggleVote}
               onChangeStatus={onChangeStatus}
               onDeleteSuggestion={onDeleteSuggestion}
-              onAddComment={onAddComment}
+              onSubmitComment={onSubmitComment}
+              onCommentDraftChange={onCommentDraftChange}
               onDeleteComment={onDeleteComment}
               onToggleComments={onToggleComments}
+              onToggleCommentComposer={onToggleCommentComposer}
               formatDateTime={formatDateTime}
               statuses={statuses}
             />
@@ -1155,7 +1250,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       isActiveSuggestionsExpanded: true,
       isCompletedSuggestionsExpanded: true,
       expandedCommentIds: [],
-      loadingCommentIds: []
+      loadingCommentIds: [],
+      commentDrafts: {},
+      commentComposerIds: [],
+      submittingCommentIds: []
     };
   }
 
@@ -1483,6 +1581,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? strings.NoSubcategoriesAvailablePlaceholder
       : strings.SelectSubcategoryPlaceholder;
 
+    const hasActiveFilters: boolean = this._hasSearchFilters(activeFilter);
+    const hasCompletedFilters: boolean = this._hasSearchFilters(completedFilter);
+    const hasAdminFiltersApplied: boolean = this._hasAdminFilters(adminFilter);
+
     const activeSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
       activeSuggestions.items,
       false
@@ -1581,25 +1683,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                         onChange={this._onDescriptionChange}
                         disabled={isLoading}
                       />
-                      <SimilarSuggestions
-                        viewModels={similarSuggestionViewModels}
-                        isLoading={isSimilarSuggestionsLoading}
-                        query={similarSuggestionsQuery}
-                        page={similarSuggestions.page}
-                        hasPrevious={similarSuggestions.previousTokens.length > 0}
-                        hasNext={!!similarSuggestions.nextToken}
-                        onPrevious={this._goToPreviousSimilarPage}
-                        onNext={this._goToNextSimilarPage}
-                        onToggleVote={(item) => this._toggleVote(item)}
-                        onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
-                        onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                        onAddComment={(item) => this._addCommentToSuggestion(item)}
-                        onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
-                        onToggleComments={(id) => this._toggleCommentsSection(id)}
-                        formatDateTime={(value) => this._formatDateTime(value)}
-                        isProcessing={isLoading}
-                        statuses={this.state.statuses}
-                      />
                       <Dropdown
                         label={strings.CategoryLabel}
                         options={categoryOptions}
@@ -1623,6 +1706,27 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                         text={strings.SubmitSuggestionButtonText}
                         onClick={this._addSuggestion}
                         disabled={isLoading || newTitle.trim().length === 0}
+                      />
+                      <SimilarSuggestions
+                        viewModels={similarSuggestionViewModels}
+                        isLoading={isSimilarSuggestionsLoading}
+                        query={similarSuggestionsQuery}
+                        page={similarSuggestions.page}
+                        hasPrevious={similarSuggestions.previousTokens.length > 0}
+                        hasNext={!!similarSuggestions.nextToken}
+                        onPrevious={this._goToPreviousSimilarPage}
+                        onNext={this._goToNextSimilarPage}
+                        onToggleVote={(item) => this._toggleVote(item)}
+                        onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
+                        onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                        onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                        onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
+                        onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                        onToggleComments={(id) => this._toggleCommentsSection(id)}
+                        onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
+                        formatDateTime={(value) => this._formatDateTime(value)}
+                        isProcessing={isLoading}
+                        statuses={this.state.statuses}
                       />
                     </div>
                   )}
@@ -1648,14 +1752,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onSubcategoryChange={this._onActiveFilterSubcategoryChange}
                 disableSubcategoryDropdown={isActiveFilterSubcategoryLimited}
                 subcategoryPlaceholder={activeFilterSubcategoryPlaceholder}
+                onClearFilters={this._clearActiveFilters}
+                isClearFiltersDisabled={!hasActiveFilters}
                 viewModels={activeSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                onAddComment={(item) => this._addCommentToSuggestion(item)}
+                onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
                 onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                 onToggleComments={(id) => this._toggleCommentsSection(id)}
+                onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
                 formatDateTime={(value) => this._formatDateTime(value)}
                 statuses={this.state.statuses}
                 page={activeSuggestions.page}
@@ -1684,14 +1792,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onSubcategoryChange={this._onCompletedFilterSubcategoryChange}
                 disableSubcategoryDropdown={isCompletedFilterSubcategoryLimited}
                 subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
+                onClearFilters={this._clearCompletedFilters}
+                isClearFiltersDisabled={!hasCompletedFilters}
                 viewModels={completedSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                onAddComment={(item) => this._addCommentToSuggestion(item)}
+                onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
                 onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                 onToggleComments={(id) => this._toggleCommentsSection(id)}
+                onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
                 formatDateTime={(value) => this._formatDateTime(value)}
                 statuses={this.state.statuses}
                 page={completedSuggestions.page}
@@ -1733,6 +1845,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                       disabled={isAdminFilterStatusLimited}
                       className={styles.filterDropdown}
                     />
+                    <DefaultButton
+                      text={strings.ClearFiltersButtonText}
+                      className={styles.filterButton}
+                      onClick={this._clearAdminFilters}
+                      disabled={isLoading || isAdminSuggestionsLoading || !hasAdminFiltersApplied}
+                    />
                   </div>
                 </div>
 
@@ -1748,9 +1866,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                     onToggleVote={(item) => this._toggleVote(item)}
                     onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                     onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                    onAddComment={(item) => this._addCommentToSuggestion(item)}
+                    onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                    onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
                     onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                     onToggleComments={(id) => this._toggleCommentsSection(id)}
+                    onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
                     formatDateTime={(value) => this._formatDateTime(value)}
                     statuses={this.state.statuses}
                   />
@@ -1773,9 +1893,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   onToggleVote={(item) => this._toggleVote(item)}
                   onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                   onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                  onAddComment={(item) => this._addCommentToSuggestion(item)}
+                  onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                  onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
                   onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
                   onToggleComments={(id) => this._toggleCommentsSection(id)}
+                  onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
                   formatDateTime={(value) => this._formatDateTime(value)}
                   statuses={this.state.statuses}
                 />
@@ -1811,6 +1933,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const renderedComments: ISuggestionComment[] = hasLoadedComments ? item.comments : [];
       const regionId: string = `${this._commentSectionPrefix}-${item.id}`;
       const toggleId: string = `${regionId}-toggle`;
+      const isComposerVisible: boolean = this._isCommentComposerVisible(item.id);
+      const draftText: string = this._getCommentDraft(item.id);
+      const isSubmittingComment: boolean = this._isCommentSubmitting(item.id);
 
       return {
         item,
@@ -1824,7 +1949,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           canAddComment: interaction.canAddComment,
           canDeleteComments: this.props.isCurrentUserAdmin,
           regionId,
-          toggleId
+          toggleId,
+          isComposerVisible,
+          draftText,
+          isSubmitting: isSubmittingComment
         }
       };
     });
@@ -3726,6 +3854,74 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._loadAdminSuggestions(nextFilter);
   };
 
+  private _getDefaultActiveFilter(): IFilterState {
+    return {
+      searchQuery: '',
+      category: undefined,
+      subcategory: undefined,
+      suggestionId: undefined,
+      status: undefined
+    };
+  }
+
+  private _getDefaultCompletedFilter(): IFilterState {
+    return {
+      searchQuery: '',
+      category: undefined,
+      subcategory: undefined,
+      suggestionId: undefined,
+      status: this.state.completedStatus
+    };
+  }
+
+  private _getDefaultAdminFilter(): IFilterState {
+    return {
+      searchQuery: '',
+      category: undefined,
+      subcategory: undefined,
+      suggestionId: undefined,
+      status: undefined
+    };
+  }
+
+  private _hasSearchFilters(filter: IFilterState): boolean {
+    return (
+      (filter.searchQuery ?? '').trim().length > 0 ||
+      !!filter.category ||
+      !!filter.subcategory ||
+      typeof filter.suggestionId === 'number'
+    );
+  }
+
+  private _hasAdminFilters(filter: IFilterState): boolean {
+    return this._hasSearchFilters(filter) || !!filter.status;
+  }
+
+  private _clearActiveFilters = (): void => {
+    if (!this._hasSearchFilters(this.state.activeFilter)) {
+      return;
+    }
+
+    this._applyActiveFilter(this._getDefaultActiveFilter());
+  };
+
+  private _clearCompletedFilters = (): void => {
+    if (!this._hasSearchFilters(this.state.completedFilter)) {
+      return;
+    }
+
+    this._applyCompletedFilter(this._getDefaultCompletedFilter());
+  };
+
+  private _clearAdminFilters = (): void => {
+    if (!this._hasAdminFilters(this.state.adminFilter)) {
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    this._loadAdminSuggestions(this._getDefaultAdminFilter());
+  };
+
   private _dismissError = (): void => {
     this._updateState({ error: undefined });
   };
@@ -3877,8 +4073,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _canCurrentUserDeleteSuggestion(item: ISuggestionItem): boolean {
+    const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
+
     if (this.props.isCurrentUserAdmin) {
       return true;
+    }
+
+    if (isCompleted) {
+      return false;
     }
 
     return this._isCurrentUserSuggestionOwner(item);
@@ -3904,6 +4106,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return this.state.expandedCommentIds.indexOf(suggestionId) !== -1;
   }
 
+  private _isCommentComposerVisible(suggestionId: number): boolean {
+    return this.state.commentComposerIds.indexOf(suggestionId) !== -1;
+  }
+
+  private _isCommentSubmitting(suggestionId: number): boolean {
+    return this.state.submittingCommentIds.indexOf(suggestionId) !== -1;
+  }
+
+  private _getCommentDraft(suggestionId: number): string {
+    return this.state.commentDrafts[suggestionId] ?? '';
+  }
+
   private _toggleCommentsSection = (suggestionId: number): void => {
     if (!this._isMounted) {
       return;
@@ -3925,6 +4139,65 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         }
       }
     );
+  };
+
+  private _toggleCommentComposer = (suggestionId: number): void => {
+    this._updateState(
+      (prevState) => {
+        const isVisible: boolean = prevState.commentComposerIds.indexOf(suggestionId) !== -1;
+        const nextComposerIds: number[] = isVisible
+          ? prevState.commentComposerIds.filter((id) => id !== suggestionId)
+          : [...prevState.commentComposerIds, suggestionId];
+
+        return { commentComposerIds: nextComposerIds };
+      },
+      () => {
+        if (this._isCommentComposerVisible(suggestionId)) {
+          this._ensureCommentSectionExpanded(suggestionId);
+        }
+      }
+    );
+  };
+
+  private _setCommentDraft(suggestionId: number, value: string): void {
+    const nextValue: string = value ?? '';
+    const hasExistingDraft: boolean = Object.prototype.hasOwnProperty.call(
+      this.state.commentDrafts,
+      suggestionId
+    );
+
+    if (nextValue.length === 0 && !hasExistingDraft) {
+      return;
+    }
+
+    this._updateState((prevState) => {
+      const drafts: Record<number, string> = { ...prevState.commentDrafts };
+
+      if (nextValue.length === 0) {
+        delete drafts[suggestionId];
+      } else {
+        drafts[suggestionId] = nextValue;
+      }
+
+      return { commentDrafts: drafts };
+    });
+  }
+
+  private _omitCommentDraft(
+    drafts: Record<number, string>,
+    suggestionId: number
+  ): Record<number, string> {
+    if (!Object.prototype.hasOwnProperty.call(drafts, suggestionId)) {
+      return drafts;
+    }
+
+    const nextDrafts: Record<number, string> = { ...drafts };
+    delete nextDrafts[suggestionId];
+    return nextDrafts;
+  }
+
+  private _handleCommentDraftChange = (item: ISuggestionItem, value: string): void => {
+    this._setCommentDraft(item.id, value);
   };
 
   private _ensureCommentSectionExpanded(suggestionId: number): void {
@@ -4033,21 +4306,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return { ...source, items };
   }
 
-  private async _addCommentToSuggestion(item: ISuggestionItem): Promise<void> {
-    const commentInput: string | null = window.prompt('Add a comment for this suggestion.', '');
-
-    if (commentInput === null) {
-      return;
-    }
-
-    const commentText: string = commentInput.trim();
+  private async _submitCommentForSuggestion(item: ISuggestionItem): Promise<void> {
+    const draft: string = this._getCommentDraft(item.id);
+    const commentText: string = draft.trim();
 
     if (commentText.length === 0) {
       this._handleError('Please enter a comment before submitting.');
       return;
     }
 
-    this._updateState({ isLoading: true, error: undefined, success: undefined });
+    this._updateState((prevState) => {
+      const isAlreadySubmitting: boolean = prevState.submittingCommentIds.indexOf(item.id) !== -1;
+      const submittingCommentIds: number[] = isAlreadySubmitting
+        ? prevState.submittingCommentIds
+        : [...prevState.submittingCommentIds, item.id];
+
+      return { isLoading: true, error: undefined, success: undefined, submittingCommentIds };
+    });
 
     try {
       const commentListId: string = this._getResolvedCommentsListId();
@@ -4067,11 +4342,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this._ensureCommentSectionExpanded(item.id);
       }
 
-      this._updateState({ success: 'Your comment has been added.' });
+      this._updateState((prevState) => ({
+        success: 'Your comment has been added.',
+        commentDrafts: this._omitCommentDraft(prevState.commentDrafts, item.id),
+        commentComposerIds: prevState.commentComposerIds.filter((id) => id !== item.id)
+      }));
     } catch (error) {
       this._handleError('We could not add your comment. Please try again.', error);
     } finally {
-      this._updateState({ isLoading: false });
+      this._updateState((prevState) => ({
+        isLoading: false,
+        submittingCommentIds: prevState.submittingCommentIds.filter((id) => id !== item.id)
+      }));
     }
   }
 
