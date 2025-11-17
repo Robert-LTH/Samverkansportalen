@@ -18,7 +18,11 @@ import {
 } from '@fluentui/react';
 import { debounce } from '@microsoft/sp-lodash-subset';
 import styles from './Samverkansportalen.module.scss';
-import { DEFAULT_SUGGESTIONS_LIST_TITLE, type ISamverkansportalenProps } from './ISamverkansportalenProps';
+import {
+  DEFAULT_SUGGESTIONS_LIST_TITLE,
+  DEFAULT_TOTAL_VOTES_PER_USER,
+  type ISamverkansportalenProps
+} from './ISamverkansportalenProps';
 import {
   type SuggestionCategory,
   type IGraphSuggestionItem,
@@ -1244,7 +1248,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
   );
 };
 
-const MAX_VOTES_PER_CATEGORY: number = 5;
+const DEFAULT_MAX_VOTES_PER_CATEGORY: number = DEFAULT_TOTAL_VOTES_PER_USER;
 const FALLBACK_CATEGORIES: SuggestionCategory[] = [
   strings.DefaultCategoryChangeRequest,
   strings.DefaultCategoryWebinar,
@@ -1597,6 +1601,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       prevProps.defaultStatus,
       this.props.defaultStatus
     );
+    const totalVotesChanged: boolean = prevProps.totalVotesPerUser !== this.props.totalVotesPerUser;
 
     if (statusesChanged || defaultStatusChanged) {
       if (this._statusListTitle) {
@@ -1620,6 +1625,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     ) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._initialize();
+    }
+
+    if (totalVotesChanged) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      this._loadAvailableVotes();
     }
   }
 
@@ -2807,6 +2817,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ];
     }
 
+    const maxVotes: number = this._getMaxVotesPerCategory();
     const categoryKeys: Set<string> = new Set();
     categories.forEach((category) => categoryKeys.add(this._getCategoryKey(category)));
     Object.keys(this.state.availableVotesByCategory).forEach((key) => categoryKeys.add(key));
@@ -2815,10 +2826,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return [
         {
           key: 'default',
-          text: strings.VotesPerCategoryDefaultLabel.replace(
-            '{0}',
-            MAX_VOTES_PER_CATEGORY.toString()
-          ),
+          text: strings.VotesPerCategoryDefaultLabel.replace('{0}', maxVotes.toString()),
           disabled: true
         }
       ];
@@ -2829,10 +2837,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     categoryKeys.forEach((key) => {
       const displayName: string =
         categories.find((category) => this._getCategoryKey(category) === key) ?? key;
-      const remaining: number = this.state.availableVotesByCategory[key] ?? MAX_VOTES_PER_CATEGORY;
+      const remaining: number = this.state.availableVotesByCategory[key] ?? maxVotes;
       summaryEntries.push({
         key,
-        text: `${displayName}: ${remaining}/${MAX_VOTES_PER_CATEGORY}`
+        text: `${displayName}: ${remaining}/${maxVotes}`
       });
     });
 
@@ -2845,11 +2853,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string = this._getCategoryKey(category);
-    return this.state.availableVotesByCategory[key] ?? MAX_VOTES_PER_CATEGORY;
+    return this.state.availableVotesByCategory[key] ?? this._getMaxVotesPerCategory();
   }
 
   private _getDefaultCategory(categories: SuggestionCategory[]): SuggestionCategory {
     return categories[0] ?? DEFAULT_SUGGESTION_CATEGORY;
+  }
+
+  private _getMaxVotesPerCategory(): number {
+    const value: number = this.props.totalVotesPerUser;
+
+    if (!Number.isFinite(value) || value <= 0) {
+      return DEFAULT_MAX_VOTES_PER_CATEGORY;
+    }
+
+    return Math.floor(value);
   }
 
   private async _fetchActiveSuggestions(options: {
@@ -3336,8 +3354,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       });
 
       const availableVotesByCategory: Record<string, number> = {};
+      const maxVotes: number = this._getMaxVotesPerCategory();
       Object.keys(usedVotesByCategory).forEach((key) => {
-        const remaining: number = Math.max(MAX_VOTES_PER_CATEGORY - usedVotesByCategory[key], 0);
+        const remaining: number = Math.max(maxVotes - usedVotesByCategory[key], 0);
         availableVotesByCategory[key] = remaining;
       });
 
