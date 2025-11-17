@@ -6,6 +6,9 @@ declare interface ISamverkansportalenWebPartStrings {
   HeaderSubtitleFieldLabel: string;
   ListFieldLabel: string;
   VoteListFieldLabel: string;
+  TotalVotesPerUserFieldLabel: string;
+  TotalVotesPerUserFieldDescription: string;
+  TotalVotesPerUserFieldErrorMessage: string;
   CommentListFieldLabel: string;
   CategoryListFieldLabel: string;
   CategoryListDefaultOptionLabel: string;

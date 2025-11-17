@@ -21,6 +21,7 @@ import {
   DEFAULT_SUGGESTIONS_HEADER_TITLE,
   DEFAULT_SUGGESTIONS_LIST_TITLE,
   DEFAULT_STATUS_DEFINITIONS,
+  DEFAULT_TOTAL_VOTES_PER_USER,
   ISamverkansportalenProps
 } from './components/ISamverkansportalenProps';
 import GraphSuggestionsService, {
@@ -58,6 +59,7 @@ export interface ISamverkansportalenWebPartProps {
   statusDefinitions?: string;
   completedStatus?: string;
   defaultStatus?: string;
+  totalVotesPerUser?: string;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -123,7 +125,8 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         ),
         statuses,
         completedStatus,
-        defaultStatus
+        defaultStatus,
+        totalVotesPerUser: this._getTotalVotesPerUserSetting()
       }
     );
 
@@ -1431,6 +1434,43 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return firstActive ?? completedStatus;
   }
 
+  private _normalizeTotalVotesPerUser(value: string | undefined): number {
+    const trimmed: string = (value ?? '').trim();
+
+    if (!trimmed) {
+      return DEFAULT_TOTAL_VOTES_PER_USER;
+    }
+
+    const parsed: number = Number(trimmed);
+
+    if (!Number.isFinite(parsed)) {
+      return DEFAULT_TOTAL_VOTES_PER_USER;
+    }
+
+    const rounded: number = Math.floor(parsed);
+    return rounded > 0 ? rounded : DEFAULT_TOTAL_VOTES_PER_USER;
+  }
+
+  private _getTotalVotesPerUserSetting(): number {
+    return this._normalizeTotalVotesPerUser(this.properties.totalVotesPerUser);
+  }
+
+  private _validateTotalVotesPerUser = (value: string): string => {
+    const trimmed: string = (value ?? '').trim();
+
+    if (!trimmed) {
+      return '';
+    }
+
+    const parsed: number = Number(trimmed);
+
+    if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+      return strings.TotalVotesPerUserFieldErrorMessage;
+    }
+
+    return '';
+  };
+
   private _getDropdownOptionText(option: IPropertyPaneDropdownOption): string {
     const text: string | undefined =
       typeof option.text === 'string' ? option.text.trim() : undefined;
@@ -1617,6 +1657,17 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   buttonType: PropertyPaneButtonType.Primary,
                   onClick: this._handleEnsureVoteListClick,
                   disabled: this._isListCreationInProgress
+                }),
+                PropertyPaneTextField('totalVotesPerUser', {
+                  label: strings.TotalVotesPerUserFieldLabel,
+                  description: strings.TotalVotesPerUserFieldDescription.replace(
+                    '{0}',
+                    DEFAULT_TOTAL_VOTES_PER_USER.toString()
+                  ),
+                  value: this.properties.totalVotesPerUser ?? '',
+                  placeholder: DEFAULT_TOTAL_VOTES_PER_USER.toString(),
+                  validateOnFocusOut: true,
+                  onGetErrorMessage: this._validateTotalVotesPerUser
                 }),
                 PropertyPaneDropdown('commentListTitle', {
                   label: strings.CommentListFieldLabel,
