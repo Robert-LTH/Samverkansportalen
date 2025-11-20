@@ -600,21 +600,26 @@ export class GraphSuggestionsService {
         ? filteredItems.filter((item) => this._matchesSuggestionIds(item, normalizedSuggestionIds))
         : filteredItems;
 
+      const fullyFiltered: IGraphSuggestionItem[] = this._filterSuggestionItems(
+        suggestionFiltered,
+        options
+      );
+
       if (hasSuggestionIdFilter) {
-        return { items: suggestionFiltered, nextToken: undefined };
+        return { items: fullyFiltered, nextToken: undefined };
       }
 
       const offset: number = this._parsePaginationToken(options.skipToken);
       const pageSize: number =
         options.top && Number.isFinite(options.top) && options.top > 0
           ? Math.floor(options.top)
-          : suggestionFiltered.length;
+          : fullyFiltered.length;
 
-      const paginatedItems: IGraphSuggestionItem[] = suggestionFiltered.slice(offset, offset + pageSize);
+      const paginatedItems: IGraphSuggestionItem[] = fullyFiltered.slice(offset, offset + pageSize);
 
       const nextOffset: number = offset + pageSize;
       const nextToken: string | undefined =
-        nextOffset < suggestionFiltered.length ? this._formatPaginationToken(nextOffset) : undefined;
+        nextOffset < fullyFiltered.length ? this._formatPaginationToken(nextOffset) : undefined;
 
       return { items: paginatedItems, nextToken };
     };
@@ -642,11 +647,16 @@ export class GraphSuggestionsService {
           ? mappedItems.filter((item) => this._matchesSuggestionIds(item, normalizedSuggestionIds))
           : mappedItems;
 
+        const fullyFiltered: IGraphSuggestionItem[] = this._filterSuggestionItems(
+          filteredMappedItems,
+          options
+        );
+
         const nextToken: string | undefined = hasSuggestionIdFilter
           ? undefined
           : this._extractSkipToken(response['@odata.nextLink']);
 
-        return { items: filteredMappedItems, nextToken };
+        return { items: fullyFiltered, nextToken };
       } catch (error) {
         if (this._isItemNotFoundError(error)) {
           return { items: [], nextToken: undefined };
@@ -812,61 +822,41 @@ export class GraphSuggestionsService {
     request = request.top(999);
 
     const response: { value?: IGraphListItemApiModel[] } = await request.get();
-
     const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
+    const parsedItems: IGraphCommentItem[] = this._parseCommentItems(items);
 
-    return items
-      .map((entry) => {
-        const parsedEntry = this._extractListItemWithFields<IGraphCommentItemFields>(entry);
+    if (parsedItems.length === 0 && suggestionIds.length > 0) {
+      const fallbackResponse: { value?: IGraphListItemApiModel[] } = await client
+        .api(`/sites/${siteId}/lists/${listId}/items`)
+        .version('v1.0')
+        .select('id,createdBy,createdDateTime')
+        .expand('fields($select=SuggestionId,Comment,Title)')
+        .expand('createdByUser($select=userPrincipalName,mail,email,displayName)')
+        .top(999)
+        .get();
 
-        if (!parsedEntry) {
-          return undefined;
+      const fallbackItems: IGraphListItemApiModel[] = Array.isArray(fallbackResponse.value)
+        ? fallbackResponse.value
+        : [];
+
+      const filteredFallback: IGraphListItemApiModel[] = fallbackItems.filter((entry) => {
+        const fields: unknown = entry.fields;
+
+        if (!fields || typeof fields !== 'object') {
+          return false;
         }
 
-        const { id, fields } = parsedEntry;
+        const suggestionId: number | undefined = this._normalizeIntegerId(
+          (fields as { SuggestionId?: unknown }).SuggestionId
+        );
 
-        let createdByUserPrincipalName: string | undefined;
-        let createdByUserDisplayName: string | undefined;
+        return typeof suggestionId === 'number' && suggestionIds.indexOf(suggestionId) !== -1;
+      });
 
-        const createdByUser: unknown = entry.createdBy?.user;
+      return this._parseCommentItems(filteredFallback);
+    }
 
-        if (createdByUser && typeof createdByUser === 'object') {
-          const {
-            userPrincipalName,
-            email,
-            mail,
-            displayName
-          } = createdByUser as {
-            userPrincipalName?: unknown;
-            email?: unknown;
-            mail?: unknown;
-            displayName?: unknown;
-          };
-
-          if (typeof displayName === 'string' && displayName.trim().length > 0) {
-            createdByUserDisplayName = displayName.trim();
-          }
-
-          if (typeof userPrincipalName === 'string' && userPrincipalName.trim().length > 0) {
-            createdByUserPrincipalName = userPrincipalName.trim();
-          } else if (typeof email === 'string' && email.trim().length > 0) {
-            createdByUserPrincipalName = email.trim();
-          } else if (typeof mail === 'string' && mail.trim().length > 0) {
-            createdByUserPrincipalName = mail.trim();
-          }
-        }
-
-        const createdDateTime: unknown = entry.createdDateTime;
-
-        return {
-          id,
-          fields,
-          createdByUserPrincipalName,
-          createdByUserDisplayName,
-          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined
-        } as IGraphCommentItem;
-      })
-      .filter((item): item is IGraphCommentItem => !!item);
+    return parsedItems;
   }
 
   public async getCommentCounts(
@@ -897,23 +887,56 @@ export class GraphSuggestionsService {
     const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
     const counts: Map<number, number> = new Map();
 
-    items.forEach((entry) => {
-      const fields: unknown = entry.fields;
+    const addCounts = (entries: IGraphListItemApiModel[]): void => {
+      entries.forEach((entry) => {
+        const fields: unknown = entry.fields;
 
-      if (!fields || typeof fields !== 'object') {
-        return;
-      }
+        if (!fields || typeof fields !== 'object') {
+          return;
+        }
 
-      const suggestionId: number | undefined = this._normalizeIntegerId(
-        (fields as { SuggestionId?: unknown }).SuggestionId
-      );
+        const suggestionId: number | undefined = this._normalizeIntegerId(
+          (fields as { SuggestionId?: unknown }).SuggestionId
+        );
 
-      if (typeof suggestionId !== 'number') {
-        return;
-      }
+        if (typeof suggestionId !== 'number') {
+          return;
+        }
 
-      counts.set(suggestionId, (counts.get(suggestionId) ?? 0) + 1);
-    });
+        counts.set(suggestionId, (counts.get(suggestionId) ?? 0) + 1);
+      });
+    };
+
+    addCounts(items);
+
+    if (counts.size === 0 && suggestionIds.length > 0) {
+      const fallbackResponse: { value?: IGraphListItemApiModel[] } = await client
+        .api(`/sites/${siteId}/lists/${listId}/items`)
+        .version('v1.0')
+        .select('id')
+        .expand('fields($select=SuggestionId)')
+        .top(999)
+        .get();
+
+      const fallbackItems: IGraphListItemApiModel[] = Array.isArray(fallbackResponse.value)
+        ? fallbackResponse.value
+        : [];
+
+      const filteredFallback: IGraphListItemApiModel[] = fallbackItems.filter((entry) => {
+        const fields: unknown = entry.fields;
+        if (!fields || typeof fields !== 'object') {
+          return false;
+        }
+
+        const suggestionId: number | undefined = this._normalizeIntegerId(
+          (fields as { SuggestionId?: unknown }).SuggestionId
+        );
+
+        return typeof suggestionId === 'number' && suggestionIds.indexOf(suggestionId) !== -1;
+      });
+
+      addCounts(filteredFallback);
+    }
 
     return counts;
   }
@@ -1569,6 +1592,151 @@ export class GraphSuggestionsService {
 
   private _escapeFilterValue(value: string): string {
     return value.replace(/'/g, "''");
+  }
+
+  private _filterSuggestionItems(
+    items: IGraphSuggestionItem[],
+    options: {
+      statuses?: string[];
+      category?: SuggestionCategory;
+      subcategory?: string;
+      suggestionIds?: number[];
+      searchQuery?: string;
+      titleSearchQuery?: string;
+      descriptionSearchQuery?: string;
+    }
+  ): IGraphSuggestionItem[] {
+    const normalizedStatuses: string[] = (options.statuses ?? [])
+      .filter((status) => typeof status === 'string')
+      .map((status) => status.trim().toLowerCase())
+      .filter((status) => status.length > 0);
+
+    const normalizedCategory: string | undefined =
+      typeof options.category === 'string' && options.category.trim().length > 0
+        ? options.category.trim().toLowerCase()
+        : undefined;
+
+    const normalizedSubcategory: string | undefined =
+      typeof options.subcategory === 'string' && options.subcategory.trim().length > 0
+        ? options.subcategory.trim().toLowerCase()
+        : undefined;
+
+    const normalizedSuggestionIds: number[] = (options.suggestionIds ?? [])
+      .map((id) => this._normalizeIntegerId(id))
+      .filter((id): id is number => typeof id === 'number');
+
+    const searchTerms: string[] = [
+      options.searchQuery,
+      options.titleSearchQuery,
+      options.descriptionSearchQuery
+    ]
+      .map((term) => (typeof term === 'string' ? term.replace(/\s+/g, ' ').trim().toLowerCase() : ''))
+      .filter((term) => term.length > 0);
+
+    return items.filter((item) => {
+      const fields: IGraphSuggestionItemFields = item.fields ?? {};
+      const normalizedStatus: string | undefined =
+        typeof fields.Status === 'string' && fields.Status.trim().length > 0
+          ? fields.Status.trim().toLowerCase()
+          : undefined;
+
+      if (
+        normalizedStatuses.length > 0 &&
+        (!normalizedStatus || normalizedStatuses.indexOf(normalizedStatus) === -1)
+      ) {
+        return false;
+      }
+
+      const normalizedItemCategory: string | undefined =
+        typeof fields.Category === 'string' && fields.Category.trim().length > 0
+          ? fields.Category.trim().toLowerCase()
+          : undefined;
+
+      if (normalizedCategory && normalizedItemCategory !== normalizedCategory) {
+        return false;
+      }
+
+      const normalizedItemSubcategory: string | undefined =
+        typeof fields.Subcategory === 'string' && fields.Subcategory.trim().length > 0
+          ? fields.Subcategory.trim().toLowerCase()
+          : undefined;
+
+      if (normalizedSubcategory && normalizedItemSubcategory !== normalizedSubcategory) {
+        return false;
+      }
+
+      if (normalizedSuggestionIds.length > 0 && !this._matchesSuggestionIds(item, normalizedSuggestionIds)) {
+        return false;
+      }
+
+      if (searchTerms.length === 0) {
+        return true;
+      }
+
+      const normalizedTitle: string =
+        typeof fields.Title === 'string' ? fields.Title.trim().toLowerCase() : '';
+      const normalizedDetails: string =
+        typeof fields.Details === 'string' ? fields.Details.trim().toLowerCase() : '';
+
+      return searchTerms.some(
+        (term) => normalizedTitle.includes(term) || normalizedDetails.includes(term)
+      );
+    });
+  }
+
+  private _parseCommentItems(entries: IGraphListItemApiModel[]): IGraphCommentItem[] {
+    return entries
+      .map((entry) => {
+        const parsedEntry = this._extractListItemWithFields<IGraphCommentItemFields>(entry);
+
+        if (!parsedEntry) {
+          return undefined;
+        }
+
+        const { id, fields } = parsedEntry;
+
+        let createdByUserPrincipalName: string | undefined;
+        let createdByUserDisplayName: string | undefined;
+
+        const createdByUser: unknown = entry.createdBy?.user;
+
+        if (createdByUser && typeof createdByUser === 'object') {
+          const {
+            userPrincipalName,
+            email,
+            mail,
+            displayName
+          } = createdByUser as {
+            userPrincipalName?: unknown;
+            email?: unknown;
+            mail?: unknown;
+            displayName?: unknown;
+          };
+
+          if (typeof displayName === 'string' && displayName.trim().length > 0) {
+            createdByUserDisplayName = displayName.trim();
+          }
+
+          if (typeof userPrincipalName === 'string' && userPrincipalName.trim().length > 0) {
+            createdByUserPrincipalName = userPrincipalName.trim();
+          } else if (typeof email === 'string' && email.trim().length > 0) {
+            createdByUserPrincipalName = email.trim();
+          } else if (typeof mail === 'string' && mail.trim().length > 0) {
+            createdByUserPrincipalName = mail.trim();
+          }
+        }
+
+        const createdDateTime: unknown = entry.createdDateTime;
+
+        return {
+          id,
+          fields,
+          createdByUserPrincipalName,
+          createdByUserDisplayName,
+          createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined
+        } as IGraphCommentItem;
+      })
+      .filter((item): item is IGraphCommentItem => !!item);
   }
 
   private _extractSkipToken(nextLink: unknown): string | undefined {
