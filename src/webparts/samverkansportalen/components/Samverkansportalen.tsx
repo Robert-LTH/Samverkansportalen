@@ -3061,7 +3061,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
 
     const suggestionIds: number[] = response.items
-      .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
+      .map((entry) =>
+        this._parseNumericId(entry.listItemId ?? entry.fields.id ?? (entry.fields as { Id?: unknown }).Id)
+      )
       .filter((value): value is number => typeof value === 'number');
 
     let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
@@ -3117,7 +3119,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
 
     const suggestionIds: number[] = response.items
-      .map((entry) => this._parseNumericId(entry.fields.id ?? (entry.fields as { Id?: unknown }).Id))
+      .map((entry) =>
+        this._parseNumericId(entry.listItemId ?? entry.fields.id ?? (entry.fields as { Id?: unknown }).Id)
+      )
       .filter((value): value is number => typeof value === 'number');
 
     let votesBySuggestion: Map<number, IVoteEntry[]> = new Map();
@@ -3159,7 +3163,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return graphItems
       .map((entry) => {
         const fields: IGraphSuggestionItemFields = entry.fields;
-        const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
+        const rawId: unknown = entry.listItemId ?? fields.id ?? (fields as { Id?: unknown }).Id;
         const suggestionId: number | undefined = this._parseNumericId(rawId);
 
         if (typeof suggestionId !== 'number') {
@@ -3600,7 +3604,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const suggestionIds: number[] = response.items
         .map((entry) => {
           const fields: IGraphSuggestionItemFields = entry.fields;
-          const rawId: unknown = fields.id ?? (fields as { Id?: unknown }).Id;
+          const rawId: unknown = entry.listItemId ?? fields.id ?? (fields as { Id?: unknown }).Id;
           return this._parseNumericId(rawId);
         })
         .filter((value): value is number => typeof value === 'number');

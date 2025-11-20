@@ -31,6 +31,7 @@ export interface IGraphSuggestionItemFields extends Record<string, unknown> {
 }
 
 export interface IGraphSuggestionItem {
+  listItemId?: number;
   fields: IGraphSuggestionItemFields;
   createdByUserPrincipalName?: string;
   createdDateTime?: string;
@@ -1385,6 +1386,7 @@ export class GraphSuggestionsService {
           return undefined;
         }
 
+        const listItemId: number | undefined = this._normalizeIntegerId(entry.id);
         const fields: unknown = entry.fields;
 
         if (!fields || typeof fields !== 'object') {
@@ -1418,6 +1420,7 @@ export class GraphSuggestionsService {
         const lastModifiedDateTime: unknown = entry.lastModifiedDateTime;
 
         return {
+          listItemId,
           fields: fields as IGraphSuggestionItemFields,
           createdByUserPrincipalName,
           createdDateTime: typeof createdDateTime === 'string' ? createdDateTime : undefined,
