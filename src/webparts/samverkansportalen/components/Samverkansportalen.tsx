@@ -850,7 +850,6 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                 data-label={strings.SuggestionTableDetailsColumnLabel}
               >
                 <div className={styles.metaContent}>
-                  <SuggestionTimestamps item={item} formatDateTime={formatDateTime} />
                   <CommentSection
                     comment={comment}
                     onToggle={() => onToggleComments(item.id)}
@@ -4413,6 +4412,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           commentCount: comments.length,
           areCommentsLoaded: true
         }),
+        myVoteSuggestions: this._updateSuggestionArray(prevState.myVoteSuggestions, suggestionId, {
+          comments,
+          commentCount: comments.length,
+          areCommentsLoaded: true
+        }),
+        adminSuggestions: this._updateSuggestionArray(prevState.adminSuggestions, suggestionId, {
+          comments,
+          commentCount: comments.length,
+          areCommentsLoaded: true
+        }),
         selectedSimilarSuggestion:
           prevState.selectedSimilarSuggestion && prevState.selectedSimilarSuggestion.id === suggestionId
             ? {
@@ -4432,10 +4441,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _findSuggestionById(suggestionId: number): ISuggestionItem | undefined {
-    const { activeSuggestions, completedSuggestions, selectedSimilarSuggestion } = this.state;
+    const {
+      activeSuggestions,
+      completedSuggestions,
+      myVoteSuggestions,
+      adminSuggestions,
+      selectedSimilarSuggestion
+    } = this.state;
     return (
       activeSuggestions.items.find((item) => item.id === suggestionId) ??
       completedSuggestions.items.find((item) => item.id === suggestionId) ??
+      myVoteSuggestions.find((item) => item.id === suggestionId) ??
+      adminSuggestions.find((item) => item.id === suggestionId) ??
       (selectedSimilarSuggestion && selectedSimilarSuggestion.id === suggestionId
         ? selectedSimilarSuggestion
         : undefined)
@@ -4452,6 +4469,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     );
 
     return { ...source, items };
+  }
+
+  private _updateSuggestionArray(
+    source: ISuggestionItem[],
+    suggestionId: number,
+    updates: Partial<ISuggestionItem>
+  ): ISuggestionItem[] {
+    return source.map((item) => (item.id === suggestionId ? { ...item, ...updates } : item));
   }
 
   private async _submitCommentForSuggestion(item: ISuggestionItem): Promise<void> {
