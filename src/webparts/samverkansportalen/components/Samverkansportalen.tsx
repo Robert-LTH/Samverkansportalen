@@ -4560,7 +4560,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
 
       this._updateState((prevState) => ({
-        success: 'Your comment has been added.',
+        success: strings.CommentAddedMessage,
         commentDrafts: this._omitCommentDraft(prevState.commentDrafts, item.id),
         commentComposerIds: prevState.commentComposerIds.filter((id) => id !== item.id)
       }));

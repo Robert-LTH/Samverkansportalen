@@ -145,6 +145,7 @@ define([], function() {
     "RichTextEditorBulletListButtonLabel": "Punktlista",
     "RichTextEditorPlaceholder": "Börja skriva...",
     "SubmitCommentButtonText": "Publicera kommentar",
+    "CommentAddedMessage": "Din kommentar har lagts till.",
     "DeleteCommentButtonLabel": "Ta bort kommentar",
     "VoteSingularLabel": "röst",
     "VotesLabel": "Röster",

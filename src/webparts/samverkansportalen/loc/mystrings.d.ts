@@ -135,6 +135,7 @@ declare interface ISamverkansportalenWebPartStrings {
   RichTextEditorBulletListButtonLabel: string;
   RichTextEditorPlaceholder: string;
   SubmitCommentButtonText: string;
+  CommentAddedMessage: string;
   DeleteCommentButtonLabel: string;
   VoteSingularLabel: string;
   VotesLabel: string;
