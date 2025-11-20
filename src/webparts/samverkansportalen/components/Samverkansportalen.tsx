@@ -728,6 +728,7 @@ interface ISuggestionTableProps {
   formatDateTime: (value: string) => string;
   isLoading: boolean;
   statuses: string[];
+  showMetadataInIdColumn: boolean;
 }
 
 const SuggestionTable: React.FC<ISuggestionTableProps> = ({
@@ -742,7 +743,8 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
   onToggleCommentComposer,
   formatDateTime,
   isLoading,
-  statuses
+  statuses,
+  showMetadataInIdColumn
 }) => (
   <div className={styles.tableWrapper}>
     <table className={styles.suggestionTable}>
@@ -754,15 +756,19 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
           <th scope="col" className={styles.tableHeaderSuggestion}>
             {strings.SuggestionTableSuggestionColumnLabel}
           </th>
-          <th scope="col" className={styles.tableHeaderCategory}>
-            {strings.CategoryLabel}
-          </th>
-          <th scope="col" className={styles.tableHeaderSubcategory}>
-            {strings.SubcategoryLabel}
-          </th>
-          <th scope="col" className={styles.tableHeaderStatus}>
-            {strings.StatusLabel}
-          </th>
+          {!showMetadataInIdColumn && (
+            <>
+              <th scope="col" className={styles.tableHeaderCategory}>
+                {strings.CategoryLabel}
+              </th>
+              <th scope="col" className={styles.tableHeaderSubcategory}>
+                {strings.SubcategoryLabel}
+              </th>
+              <th scope="col" className={styles.tableHeaderStatus}>
+                {strings.StatusLabel}
+              </th>
+            </>
+          )}
           <th scope="col" className={styles.tableHeaderVotes}>
             {strings.VotesLabel}
           </th>
@@ -775,13 +781,39 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
         {viewModels.map(({ item, interaction, comment }) => (
           <React.Fragment key={item.id}>
             <tr className={styles.suggestionRow}>
-              <td className={styles.tableCellId} data-label={strings.SuggestionTableEntryColumnLabel}>
-                <span
-                  className={styles.entryId}
-                  aria-label={strings.EntryAriaLabel.replace('{0}', item.id.toString())}
-                >
-                  #{item.id}
-                </span>
+              <td
+                className={`${styles.tableCellId} ${showMetadataInIdColumn ? styles.tableCellIdWithMeta : ''}`}
+                data-label={strings.SuggestionTableEntryColumnLabel}
+              >
+                <div className={styles.entryMetaColumn}>
+                  <span
+                    className={styles.entryId}
+                    aria-label={strings.EntryAriaLabel.replace('{0}', item.id.toString())}
+                  >
+                    #{item.id}
+                  </span>
+                  {showMetadataInIdColumn && (
+                    <div className={styles.entryMetaDetails}>
+                      <span className={styles.categoryBadge}>{item.category}</span>
+                      {item.subcategory ? (
+                        <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                      ) : (
+                        <span className={styles.subcategoryPlaceholder}>
+                          {strings.NoSubcategoriesAvailablePlaceholder}
+                        </span>
+                      )}
+                      <div className={styles.inlineStatusControl}>
+                        <SuggestionStatusControl
+                          statuses={statuses}
+                          value={item.status}
+                          isEditable={interaction.canAdvanceSuggestionStatus}
+                          isDisabled={isLoading}
+                          onChange={(status) => onChangeStatus(item, status)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </td>
               <td
                 className={styles.tableCellSuggestion}
@@ -796,25 +828,29 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   />
                 )}
               </td>
-              <td className={styles.tableCellCategory} data-label={strings.CategoryLabel}>
-                <span className={styles.categoryBadge}>{item.category}</span>
-              </td>
-              <td className={styles.tableCellSubcategory} data-label={strings.SubcategoryLabel}>
-                {item.subcategory ? (
-                  <span className={styles.subcategoryBadge}>{item.subcategory}</span>
-                ) : (
-                  <span className={styles.subcategoryPlaceholder}>—</span>
-                )}
-              </td>
-              <td className={styles.tableCellStatus} data-label={strings.StatusLabel}>
-                <SuggestionStatusControl
-                  statuses={statuses}
-                  value={item.status}
-                  isEditable={interaction.canAdvanceSuggestionStatus}
-                  isDisabled={isLoading}
-                  onChange={(status) => onChangeStatus(item, status)}
-                />
-              </td>
+              {!showMetadataInIdColumn && (
+                <>
+                  <td className={styles.tableCellCategory} data-label={strings.CategoryLabel}>
+                    <span className={styles.categoryBadge}>{item.category}</span>
+                  </td>
+                  <td className={styles.tableCellSubcategory} data-label={strings.SubcategoryLabel}>
+                    {item.subcategory ? (
+                      <span className={styles.subcategoryBadge}>{item.subcategory}</span>
+                    ) : (
+                      <span className={styles.subcategoryPlaceholder}>—</span>
+                    )}
+                  </td>
+                  <td className={styles.tableCellStatus} data-label={strings.StatusLabel}>
+                    <SuggestionStatusControl
+                      statuses={statuses}
+                      value={item.status}
+                      isEditable={interaction.canAdvanceSuggestionStatus}
+                      isDisabled={isLoading}
+                      onChange={(status) => onChangeStatus(item, status)}
+                    />
+                  </td>
+                </>
+              )}
               <td className={styles.tableCellVotes} data-label={strings.VotesLabel}>
                 <div
                   className={styles.voteBadge}
@@ -846,7 +882,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
             <tr className={styles.metaRow}>
               <td
                 className={styles.metaCell}
-                colSpan={7}
+                colSpan={showMetadataInIdColumn ? 4 : 7}
                 data-label={strings.SuggestionTableDetailsColumnLabel}
               >
                 <div className={styles.metaContent}>
@@ -875,6 +911,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
 interface ISuggestionListProps {
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
+  showMetadataInIdColumn: boolean;
   isLoading: boolean;
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
@@ -891,6 +928,7 @@ interface ISuggestionListProps {
 const SuggestionList: React.FC<ISuggestionListProps> = ({
   viewModels,
   useTableLayout,
+  showMetadataInIdColumn,
   isLoading,
   onToggleVote,
   onChangeStatus,
@@ -921,6 +959,7 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
       formatDateTime={formatDateTime}
       isLoading={isLoading}
       statuses={statuses}
+      showMetadataInIdColumn={showMetadataInIdColumn}
     />
   ) : (
     <SuggestionCards
@@ -966,6 +1005,7 @@ interface ISuggestionSectionProps {
   isClearFiltersDisabled: boolean;
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
+  showMetadataInIdColumn: boolean;
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
@@ -1006,6 +1046,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   isClearFiltersDisabled,
   viewModels,
   useTableLayout,
+  showMetadataInIdColumn,
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
@@ -1079,6 +1120,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
               <SuggestionList
                 viewModels={viewModels}
                 useTableLayout={useTableLayout}
+                showMetadataInIdColumn={showMetadataInIdColumn}
                 isLoading={isLoading}
                 onToggleVote={onToggleVote}
                 onChangeStatus={onChangeStatus}
@@ -1219,6 +1261,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
             <SuggestionList
               viewModels={viewModels}
               useTableLayout={false}
+              showMetadataInIdColumn={false}
               isLoading={isProcessing}
               onToggleVote={onToggleVote}
               onChangeStatus={onChangeStatus}
@@ -1873,6 +1916,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 isClearFiltersDisabled={!hasActiveFilters}
                 viewModels={activeSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
+                showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
@@ -1918,6 +1962,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 isClearFiltersDisabled={!hasCompletedFilters}
                 viewModels={completedSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
+                showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
@@ -1984,6 +2029,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   <SuggestionList
                     viewModels={adminSuggestionViewModels}
                     useTableLayout={this.props.useTableLayout === true}
+                    showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
                     isLoading={isLoading || isAdminSuggestionsLoading}
                     onToggleVote={(item) => this._toggleVote(item)}
                     onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
@@ -2011,6 +2057,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 <SuggestionList
                   viewModels={myVoteSuggestionViewModels}
                   useTableLayout={this.props.useTableLayout === true}
+                  showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
                   isLoading={isLoading || isMyVotesLoading}
                   onToggleVote={(item) => this._toggleVote(item)}
                   onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}

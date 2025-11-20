@@ -4,6 +4,9 @@ declare interface ISamverkansportalenWebPartStrings {
   DescriptionFieldLabel: string;
   HeaderTitleFieldLabel: string;
   HeaderSubtitleFieldLabel: string;
+  DefaultSuggestionsHeaderTitle: string;
+  DefaultSuggestionsHeaderSubtitle: string;
+  DefaultStatusDefinitions: string;
   ListFieldLabel: string;
   VoteListFieldLabel: string;
   TotalVotesPerUserFieldLabel: string;
@@ -94,6 +97,9 @@ declare interface ISamverkansportalenWebPartStrings {
   UseTableLayoutToggleLabel: string;
   UseTableLayoutToggleOnText: string;
   UseTableLayoutToggleOffText: string;
+  ShowMetadataInIdColumnLabel: string;
+  ShowMetadataInIdColumnOnText: string;
+  ShowMetadataInIdColumnOffText: string;
   AddSuggestionSectionTitle: string;
   HideSectionLabel: string;
   ShowSectionLabel: string;
