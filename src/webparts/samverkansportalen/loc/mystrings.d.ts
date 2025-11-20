@@ -147,6 +147,7 @@ declare interface ISamverkansportalenWebPartStrings {
   DeleteCommentButtonLabel: string;
   VoteSingularLabel: string;
   VotesLabel: string;
+  VotesAndActionsLabel: string;
   LoadingCommentsLabel: string;
   LoadingSuggestionsLabel: string;
   SuggestionStatusUpdatedMessage: string;

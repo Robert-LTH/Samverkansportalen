@@ -157,6 +157,7 @@ define([], function() {
     "DeleteCommentButtonLabel": "Delete comment",
     "VoteSingularLabel": "vote",
     "VotesLabel": "Votes",
+    "VotesAndActionsLabel": "Votes and actions",
     "LoadingCommentsLabel": "Loading comments...",
     "LoadingSuggestionsLabel": "Loading suggestions...",
     "SuggestionStatusUpdatedMessage": "The suggestion status has been updated.",

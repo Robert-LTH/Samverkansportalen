@@ -772,10 +772,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
             </>
           )}
           <th scope="col" className={styles.tableHeaderVotes}>
-            {strings.VotesLabel}
-          </th>
-          <th scope="col" className={styles.tableHeaderActions}>
-            {strings.SuggestionTableActionsColumnLabel}
+            {strings.VotesAndActionsLabel}
           </th>
         </tr>
       </thead>
@@ -853,7 +850,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   </td>
                 </>
               )}
-              <td className={styles.tableCellVotes} data-label={strings.VotesLabel}>
+              <td className={styles.tableCellVotes} data-label={strings.VotesAndActionsLabel}>
                 <div
                   className={styles.voteBadge}
                   aria-label={`${item.votes} ${item.votes === 1 ? strings.VoteSingularLabel : strings.VotesLabel}`}
@@ -865,7 +862,10 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   <div className={styles.voteActions}>
                     {interaction.isVotingAllowed ? (
                       <PrimaryButton
-                        text={interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText}
+                        text={interaction.hasVoted ? '-' : '+'}
+                        ariaLabel={
+                          interaction.hasVoted ? strings.RemoveVoteButtonText : strings.VoteButtonText
+                        }
                         onClick={() => onToggleVote(item)}
                         disabled={interaction.disableVote}
                       />
@@ -875,15 +875,11 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
                   </div>
                 </div>
               </td>
-              <td
-                className={styles.tableCellActions}
-                data-label={strings.SuggestionTableActionsColumnLabel}
-              />
             </tr>
             <tr className={styles.metaRow}>
               <td
                 className={styles.metaCell}
-                colSpan={showMetadataInIdColumn ? 4 : 7}
+                colSpan={showMetadataInIdColumn ? 3 : 6}
                 data-label={strings.SuggestionTableDetailsColumnLabel}
               >
                 <div className={styles.metaContent}>
