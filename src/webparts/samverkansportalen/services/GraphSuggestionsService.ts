@@ -782,13 +782,7 @@ export class GraphSuggestionsService {
   }
 
   public async deleteStatusItem(listId: string, itemId: number): Promise<void> {
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
-
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
-      .version('v1.0')
-      .delete();
+    await this._deleteListItem(listId, itemId);
   }
 
   public async getCommentItems(
@@ -945,13 +939,7 @@ export class GraphSuggestionsService {
   }
 
   public async deleteCommentItem(listId: string, itemId: number): Promise<void> {
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
-
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
-      .version('v1.0')
-      .delete();
+    await this._deleteListItem(listId, itemId);
   }
 
   public async deleteCommentsForSuggestion(listId: string, suggestionId: number): Promise<void> {
@@ -968,10 +956,7 @@ export class GraphSuggestionsService {
 
     await Promise.all(
       commentItems.map(async (comment) => {
-        await client
-          .api(`/sites/${siteId}/lists/${listId}/items/${comment.id}`)
-          .version('v1.0')
-          .delete();
+        await this._deleteListItem(listId, comment.id);
       })
     );
   }
@@ -1024,23 +1009,11 @@ export class GraphSuggestionsService {
   }
 
   public async deleteSubcategoryItem(listId: string, itemId: number): Promise<void> {
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
-
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
-      .version('v1.0')
-      .delete();
+    await this._deleteListItem(listId, itemId);
   }
 
   public async deleteCategoryItem(listId: string, itemId: number): Promise<void> {
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
-
-    await client
-      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
-      .version('v1.0')
-      .delete();
+    await this._deleteListItem(listId, itemId);
   }
 
   public async addSuggestion(listId: string, fields: IGraphSuggestionItemFields): Promise<void> {
@@ -1702,6 +1675,17 @@ export class GraphSuggestionsService {
     }
 
     return undefined;
+  }
+
+  private async _deleteListItem(listId: string, itemId: number): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}`)
+      .version('v1.0')
+      .header('If-Match', '*')
+      .delete();
   }
 }
 
