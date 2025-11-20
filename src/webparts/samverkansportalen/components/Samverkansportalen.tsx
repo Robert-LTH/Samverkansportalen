@@ -876,8 +876,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
               <td
                 className={styles.tableCellActions}
                 data-label={strings.SuggestionTableActionsColumnLabel}
-              >
-              </td>
+              />
             </tr>
             <tr className={styles.metaRow}>
               <td
