@@ -157,6 +157,7 @@ define([], function() {
     "DeleteCommentButtonLabel": "Ta bort kommentar",
     "VoteSingularLabel": "röst",
     "VotesLabel": "Röster",
+    "VotesAndActionsLabel": "Röster och åtgärder",
     "LoadingCommentsLabel": "Läser in kommentarer...",
     "LoadingSuggestionsLabel": "Läser in förslag...",
     "SuggestionStatusUpdatedMessage": "Förslagets status har uppdaterats.",
