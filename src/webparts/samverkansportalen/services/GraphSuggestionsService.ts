@@ -796,7 +796,7 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('id,createdBy,createdDateTime')
-      .expand('fields($select=Id,SuggestionId,Comment,Title)')
+      .expand('fields($select=SuggestionId,Comment,Title)')
       .expand('createdByUser($select=userPrincipalName,mail,email,displayName)');
 
     const suggestionIds: number[] = (options.suggestionIds ?? [])
@@ -950,9 +950,6 @@ export class GraphSuggestionsService {
     if (commentItems.length === 0) {
       return;
     }
-
-    const client: MSGraphClientV3 = await this._getClient();
-    const siteId: string = await this._getSiteId();
 
     await Promise.all(
       commentItems.map(async (comment) => {
