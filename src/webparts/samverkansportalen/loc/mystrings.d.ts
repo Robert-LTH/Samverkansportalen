@@ -6,6 +6,14 @@ declare interface ISamverkansportalenWebPartStrings {
   HeaderSubtitleFieldLabel: string;
   DefaultSuggestionsHeaderTitle: string;
   DefaultSuggestionsHeaderSubtitle: string;
+  DefaultSuggestionsListTitle: string;
+  DefaultVotesListSuffix: string;
+  DefaultCommentsListSuffix: string;
+  DefaultVotesListTitle: string;
+  DefaultCommentsListTitle: string;
+  DefaultCategoryListTitle: string;
+  DefaultSubcategoryListTitle: string;
+  DefaultStatusListTitle: string;
   DefaultStatusDefinitions: string;
   ListFieldLabel: string;
   VoteListFieldLabel: string;
@@ -186,6 +194,32 @@ declare interface ISamverkansportalenWebPartStrings {
   AppOfficeEnvironment: string;
   AppOutlookEnvironment: string;
   UnknownEnvironment: string;
+  ActiveSuggestionsPreviousPageErrorMessage: string;
+  ActiveSuggestionsNextPageErrorMessage: string;
+  CompletedSuggestionsPreviousPageErrorMessage: string;
+  CompletedSuggestionsNextPageErrorMessage: string;
+  SelectedSuggestionLoadErrorMessage: string;
+  ActiveSuggestionsLoadErrorMessage: string;
+  CompletedSuggestionsLoadErrorMessage: string;
+  SuggestionTitleMissingMessage: string;
+  SuggestionAddErrorMessage: string;
+  CurrentUserMissingErrorMessage: string;
+  VoteUpdateErrorMessage: string;
+  CommentsLoadErrorMessage: string;
+  CommentMissingMessage: string;
+  CommentAddErrorMessage: string;
+  CommentDeletePermissionErrorMessage: string;
+  CommentDeleteErrorMessage: string;
+  SuggestionStatusPermissionErrorMessage: string;
+  SuggestionStatusSelectionErrorMessage: string;
+  SuggestionStatusUpdateErrorMessage: string;
+  SuggestionDeletePermissionErrorMessage: string;
+  SuggestionDeleteConfirmationMessage: string;
+  SuggestionDeleteSuccessMessage: string;
+  SuggestionDeleteErrorMessage: string;
+  ConfiguredCategoryLoadErrorMessage: string;
+  ConfiguredSubcategoryLoadErrorMessage: string;
+  SuggestionsListLoadErrorMessage: string;
 }
 
 declare module 'SamverkansportalenWebPartStrings' {

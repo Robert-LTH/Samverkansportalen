@@ -20,6 +20,8 @@ import {
   DEFAULT_SUGGESTIONS_HEADER_SUBTITLE,
   DEFAULT_SUGGESTIONS_HEADER_TITLE,
   DEFAULT_SUGGESTIONS_LIST_TITLE,
+  DEFAULT_VOTES_LIST_SUFFIX,
+  DEFAULT_COMMENTS_LIST_SUFFIX,
   DEFAULT_STATUS_DEFINITIONS,
   DEFAULT_TOTAL_VOTES_PER_USER,
   ISamverkansportalenProps
@@ -1314,7 +1316,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private _getDefaultVoteListTitle(listTitle: string): string {
     const trimmed: string = listTitle.trim();
-    return `${trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE}Votes`;
+    if (trimmed.length === 0) {
+      return strings.DefaultVotesListTitle;
+    }
+
+    return `${trimmed}${DEFAULT_VOTES_LIST_SUFFIX}`;
   }
 
   private _normalizeVoteListTitle(value?: string, listTitle?: string): string {
@@ -1329,7 +1335,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
   private _getDefaultCommentListTitle(listTitle: string): string {
     const trimmed: string = listTitle.trim();
-    return `${trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE}Comments`;
+    if (trimmed.length === 0) {
+      return strings.DefaultCommentsListTitle;
+    }
+
+    return `${trimmed}${DEFAULT_COMMENTS_LIST_SUFFIX}`;
   }
 
   private _normalizeCommentListTitle(value?: string, listTitle?: string): string {

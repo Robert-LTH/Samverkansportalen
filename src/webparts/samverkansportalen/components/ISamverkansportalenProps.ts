@@ -1,7 +1,9 @@
 import * as strings from 'SamverkansportalenWebPartStrings';
 import GraphSuggestionsService from '../services/GraphSuggestionsService';
 
-export const DEFAULT_SUGGESTIONS_LIST_TITLE: string = 'SamverkansportalenSuggestions';
+export const DEFAULT_SUGGESTIONS_LIST_TITLE: string = strings.DefaultSuggestionsListTitle;
+export const DEFAULT_VOTES_LIST_SUFFIX: string = strings.DefaultVotesListSuffix;
+export const DEFAULT_COMMENTS_LIST_SUFFIX: string = strings.DefaultCommentsListSuffix;
 export const DEFAULT_SUGGESTIONS_HEADER_TITLE: string = strings.DefaultSuggestionsHeaderTitle;
 export const DEFAULT_SUGGESTIONS_HEADER_SUBTITLE: string = strings.DefaultSuggestionsHeaderSubtitle;
 export const DEFAULT_STATUS_DEFINITIONS: string = strings.DefaultStatusDefinitions;
