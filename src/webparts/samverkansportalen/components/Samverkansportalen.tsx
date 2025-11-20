@@ -20,6 +20,8 @@ import { debounce } from '@microsoft/sp-lodash-subset';
 import styles from './Samverkansportalen.module.scss';
 import {
   DEFAULT_SUGGESTIONS_LIST_TITLE,
+  DEFAULT_VOTES_LIST_SUFFIX,
+  DEFAULT_COMMENTS_LIST_SUFFIX,
   DEFAULT_TOTAL_VOTES_PER_USER,
   type ISamverkansportalenProps
 } from './ISamverkansportalenProps';
@@ -751,7 +753,7 @@ const SuggestionTable: React.FC<ISuggestionTableProps> = ({
       <thead>
         <tr>
           <th scope="col" className={styles.tableHeaderId}>
-            #
+            {strings.SuggestionTableEntryColumnLabel}
           </th>
           <th scope="col" className={styles.tableHeaderSuggestion}>
             {strings.SuggestionTableSuggestionColumnLabel}
@@ -2146,7 +2148,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         filter: activeFilter
       });
     } catch (error) {
-      this._handleError('We could not load the previous page of active suggestions.', error);
+      this._handleError(strings.ActiveSuggestionsPreviousPageErrorMessage, error);
     } finally {
       this._updateState({ isActiveSuggestionsLoading: false });
     }
@@ -2174,7 +2176,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         filter: activeFilter
       });
     } catch (error) {
-      this._handleError('We could not load more active suggestions. Please try again.', error);
+      this._handleError(strings.ActiveSuggestionsNextPageErrorMessage, error);
     } finally {
       this._updateState({ isActiveSuggestionsLoading: false });
     }
@@ -2200,7 +2202,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         filter: completedFilter
       });
     } catch (error) {
-      this._handleError('We could not load the previous page of completed suggestions.', error);
+      this._handleError(strings.CompletedSuggestionsPreviousPageErrorMessage, error);
     } finally {
       this._updateState({ isCompletedSuggestionsLoading: false });
     }
@@ -2228,7 +2230,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         filter: completedFilter
       });
     } catch (error) {
-      this._handleError('We could not load more completed suggestions. Please try again.', error);
+      this._handleError(strings.CompletedSuggestionsNextPageErrorMessage, error);
     } finally {
       this._updateState({ isCompletedSuggestionsLoading: false });
     }
@@ -2427,12 +2429,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     } catch (error) {
       const message: string =
         error instanceof Error && error.message.includes('category list')
-          ? 'We could not load the configured category list. Please verify the configuration or reset it to use the default categories.'
+          ? strings.ConfiguredCategoryLoadErrorMessage
           : error instanceof Error && error.message.includes('subcategory list')
-          ? 'We could not load the configured subcategory list. Please verify the configuration or remove it.'
+          ? strings.ConfiguredSubcategoryLoadErrorMessage
           : error instanceof Error && error.message.includes('status list')
           ? strings.StatusListLoadErrorMessage
-          : 'We could not load the suggestions list. Please refresh the page or contact your administrator.';
+          : strings.SuggestionsListLoadErrorMessage;
       this._handleError(message, error);
     } finally {
       this._updateState({ isLoading: false });
@@ -3808,7 +3810,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      this._handleError('We could not load the selected suggestion. Please try again.', error);
+      this._handleError(strings.SelectedSuggestionLoadErrorMessage, error);
 
       const nextExpanded: number[] = this.state.expandedCommentIds.filter((id) => id !== suggestionId);
       const nextLoading: number[] = this.state.loadingCommentIds.filter((id) => id !== suggestionId);
@@ -4136,7 +4138,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this._updateState({ isActiveSuggestionsLoading: false });
       })
       .catch((error) => {
-        this._handleError('We could not load the active suggestions. Please try again.', error);
+        this._handleError(strings.ActiveSuggestionsLoadErrorMessage, error);
         this._updateState({ isActiveSuggestionsLoading: false });
       });
   }
@@ -4154,7 +4156,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this._updateState({ isCompletedSuggestionsLoading: false });
       })
       .catch((error) => {
-        this._handleError('We could not load the completed suggestions. Please try again.', error);
+        this._handleError(strings.CompletedSuggestionsLoadErrorMessage, error);
         this._updateState({ isCompletedSuggestionsLoading: false });
       });
   }
@@ -4166,7 +4168,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const selectedSubcategory: ISubcategoryDefinition | undefined = this._getSelectedSubcategoryDefinition();
 
     if (!title) {
-      this._handleError('Please add a title before submitting your suggestion.');
+      this._handleError(strings.SuggestionTitleMissingMessage);
       return;
     }
 
@@ -4213,7 +4215,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       this._updateState({ success: 'Your suggestion has been added.' });
     } catch (error) {
-      this._handleError('We could not add your suggestion. Please try again.', error);
+      this._handleError(strings.SuggestionAddErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -4223,7 +4225,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const normalizedUser: string | undefined = this._normalizeLoginName(this.props.userLoginName);
 
     if (!normalizedUser) {
-      this._handleError('We could not determine the current user. Please try again later.');
+      this._handleError(strings.CurrentUserMissingErrorMessage);
       return;
     }
 
@@ -4259,7 +4261,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       this._updateState({ success: hasVoted ? 'Your vote has been removed.' : 'Thanks for voting!' });
     } catch (error) {
-      this._handleError('We could not update your vote. Please try again.', error);
+      this._handleError(strings.VoteUpdateErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -4479,7 +4481,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             : prevState.selectedSimilarSuggestion
       }));
     } catch (error) {
-      this._handleError('We could not load the comments. Please try again.', error);
+      this._handleError(strings.CommentsLoadErrorMessage, error);
       this.setState((prevState) => ({
         loadingCommentIds: prevState.loadingCommentIds.filter((id) => id !== suggestionId)
       }));
@@ -4528,7 +4530,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private async _submitCommentForSuggestion(item: ISuggestionItem): Promise<void> {
     const draft: string = this._getCommentDraft(item.id);
     if (isRichTextValueEmpty(draft)) {
-      this._handleError('Please enter a comment before submitting.');
+      this._handleError(strings.CommentMissingMessage);
       return;
     }
 
@@ -4565,7 +4567,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         commentComposerIds: prevState.commentComposerIds.filter((id) => id !== item.id)
       }));
     } catch (error) {
-      this._handleError('We could not add your comment. Please try again.', error);
+      this._handleError(strings.CommentAddErrorMessage, error);
     } finally {
       this._updateState((prevState) => ({
         isLoading: false,
@@ -4579,7 +4581,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     comment: ISuggestionComment
   ): Promise<void> {
     if (!this.props.isCurrentUserAdmin) {
-      this._handleError('Only administrators can delete comments.');
+      this._handleError(strings.CommentDeletePermissionErrorMessage);
       return;
     }
 
@@ -4609,7 +4611,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       }
       this._updateState({ success: 'The comment has been removed.' });
     } catch (error) {
-      this._handleError('We could not remove the comment. Please try again.', error);
+      this._handleError(strings.CommentDeleteErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -4631,14 +4633,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _updateSuggestionStatus(item: ISuggestionItem, requestedStatus: string): Promise<void> {
     if (!this.props.isCurrentUserAdmin) {
-      this._handleError('Only administrators can update suggestion statuses.');
+      this._handleError(strings.SuggestionStatusPermissionErrorMessage);
       return;
     }
 
     const targetStatus: string | undefined = this._normalizeRequestedStatus(requestedStatus);
 
     if (!targetStatus) {
-      this._handleError('Please select a valid status for this suggestion.');
+      this._handleError(strings.SuggestionStatusSelectionErrorMessage);
       return;
     }
 
@@ -4711,7 +4713,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
       this._updateState({ success: strings.SuggestionStatusUpdatedMessage });
     } catch (error) {
-      this._handleError('We could not update the suggestion status. Please try again.', error);
+      this._handleError(strings.SuggestionStatusUpdateErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -4719,11 +4721,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private async _deleteSuggestion(item: ISuggestionItem): Promise<void> {
     if (!this._canCurrentUserDeleteSuggestion(item)) {
-      this._handleError('You do not have permission to remove this suggestion.');
+      this._handleError(strings.SuggestionDeletePermissionErrorMessage);
       return;
     }
 
-    const confirmation: boolean = window.confirm('Are you sure you want to remove this suggestion? This action cannot be undone.');
+    const confirmation: boolean = window.confirm(strings.SuggestionDeleteConfirmationMessage);
 
     if (!confirmation) {
       return;
@@ -4757,9 +4759,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         }));
       }
 
-      this._updateState({ success: 'The suggestion has been removed.' });
+      this._updateState({ success: strings.SuggestionDeleteSuccessMessage });
     } catch (error) {
-      this._handleError('We could not remove this suggestion. Please try again.', error);
+      this._handleError(strings.SuggestionDeleteErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
     }
@@ -4777,7 +4779,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _normalizeVoteListTitle(value?: string, listTitle?: string): string {
     const trimmed: string = (value ?? '').trim();
     const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.props.listTitle);
-    return trimmed.length > 0 ? trimmed : `${normalizedListTitle}Votes`;
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+
+    if (normalizedListTitle === DEFAULT_SUGGESTIONS_LIST_TITLE) {
+      return strings.DefaultVotesListTitle;
+    }
+
+    return `${normalizedListTitle}${DEFAULT_VOTES_LIST_SUFFIX}`;
   }
 
   private get _voteListTitle(): string {
@@ -4787,7 +4797,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _normalizeCommentListTitle(value?: string, listTitle?: string): string {
     const trimmed: string = (value ?? '').trim();
     const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.props.listTitle);
-    return trimmed.length > 0 ? trimmed : `${normalizedListTitle}Comments`;
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+
+    if (normalizedListTitle === DEFAULT_SUGGESTIONS_LIST_TITLE) {
+      return strings.DefaultCommentsListTitle;
+    }
+
+    return `${normalizedListTitle}${DEFAULT_COMMENTS_LIST_SUFFIX}`;
   }
 
   private get _commentListTitle(): string {

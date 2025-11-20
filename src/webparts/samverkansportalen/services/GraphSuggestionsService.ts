@@ -1,4 +1,5 @@
 import { MSGraphClientFactory, type MSGraphClientV3 } from '@microsoft/sp-http';
+import * as strings from 'SamverkansportalenWebPartStrings';
 
 type GraphRequest = ReturnType<MSGraphClientV3['api']>;
 
@@ -7,10 +8,10 @@ export interface IGraphListInfo {
   displayName: string;
 }
 
-export const DEFAULT_CATEGORY_LIST_TITLE: string = 'Suggestion categories';
-export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = 'Suggestion subcategories';
-export const DEFAULT_COMMENT_LIST_TITLE: string = 'Suggestion comments';
-export const DEFAULT_STATUS_LIST_TITLE: string = 'Suggestion statuses';
+export const DEFAULT_CATEGORY_LIST_TITLE: string = strings.DefaultCategoryListTitle;
+export const DEFAULT_SUBCATEGORY_LIST_TITLE: string = strings.DefaultSubcategoryListTitle;
+export const DEFAULT_COMMENT_LIST_TITLE: string = strings.DefaultCommentsListTitle;
+export const DEFAULT_STATUS_LIST_TITLE: string = strings.DefaultStatusListTitle;
 
 export type SuggestionCategory = string;
 
