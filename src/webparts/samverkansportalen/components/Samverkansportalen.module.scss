@@ -343,6 +343,10 @@
   text-align: center;
 }
 
+.tableCellIdWithMeta {
+  width: 12rem;
+}
+
 .tableHeaderVotes,
 .tableCellVotes {
   width: 8rem;
@@ -451,6 +455,26 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   box-shadow: 0 0 0 3px var(--accentColorLightest);
+}
+
+.entryMetaColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entryMetaDetails {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.inlineStatusControl {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .categoryBadge {

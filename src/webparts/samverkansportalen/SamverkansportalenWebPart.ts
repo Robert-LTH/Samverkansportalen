@@ -60,6 +60,7 @@ export interface ISamverkansportalenWebPartProps {
   completedStatus?: string;
   defaultStatus?: string;
   totalVotesPerUser?: string;
+  showMetadataInIdColumn?: boolean;
 }
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
@@ -115,6 +116,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         subcategoryListTitle: this._selectedSubcategoryListTitle,
         categoryListTitle: this._selectedCategoryListTitle,
         statusListTitle: this._selectedStatusListTitle,
+        showMetadataInIdColumn: this.properties.showMetadataInIdColumn === true,
         headerTitle: this._normalizeHeaderText(
           this.properties.headerTitle,
           DEFAULT_SUGGESTIONS_HEADER_TITLE
@@ -180,6 +182,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       statusList,
       completedStatus
     );
+    this.properties.showMetadataInIdColumn = this.properties.showMetadataInIdColumn === true;
 
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
@@ -1864,6 +1867,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   label: strings.UseTableLayoutToggleLabel,
                   onText: strings.UseTableLayoutToggleOnText,
                   offText: strings.UseTableLayoutToggleOffText
+                }),
+                PropertyPaneToggle('showMetadataInIdColumn', {
+                  label: strings.ShowMetadataInIdColumnLabel,
+                  onText: strings.ShowMetadataInIdColumnOnText,
+                  offText: strings.ShowMetadataInIdColumnOffText,
+                  disabled: this.properties.useTableLayout !== true
                 })
               ]
             }
