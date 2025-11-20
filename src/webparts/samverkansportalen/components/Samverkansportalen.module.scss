@@ -350,26 +350,31 @@
 }
 
 .tableHeaderSuggestion {
-  width: 35%;
+  width: 40%;
+  min-width: 18rem;
 }
 
 .tableHeaderCategory {
-  width: 9rem;
+  width: 11rem;
+  min-width: 11rem;
 }
 
 .tableHeaderSubcategory {
-  width: 12rem;
+  width: 13rem;
+  min-width: 13rem;
 }
 
 .tableHeaderStatus,
 .tableCellStatus {
-  width: 10rem;
+  width: 12rem;
+  min-width: 12rem;
   text-align: center;
 }
 
 .tableHeaderActions,
 .tableCellActions {
-  width: 14rem;
+  width: 15rem;
+  min-width: 15rem;
 }
 
 .tableCellSuggestion {
