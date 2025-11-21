@@ -477,7 +477,7 @@ export class GraphSuggestionsService {
       suggestionIds?: number[];
       orderBy?: string;
     } = {}
-  ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> {
+  ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string; totalCount?: number }> {
     const client: MSGraphClientV3 = await this._getClient();
     const siteId: string = await this._getSiteId();
 
@@ -490,6 +490,9 @@ export class GraphSuggestionsService {
         .expand('createdByUser($select=userPrincipalName,mail,email)');
 
     let request = createBaseRequest();
+
+    request = request.count(true);
+    request = request.header('ConsistencyLevel', 'eventual');
 
     const filterParts: string[] = [];
     const normalizedSuggestionIds: number[] = (options.suggestionIds ?? [])
@@ -592,7 +595,11 @@ export class GraphSuggestionsService {
           )
       : undefined;
 
-    const executeManualSearch = async (): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string }> => {
+    const executeManualSearch = async (): Promise<{
+      items: IGraphSuggestionItem[];
+      nextToken?: string;
+      totalCount?: number;
+    }> => {
       const allItems: IGraphSuggestionItem[] = await this._getAllSuggestionItems(
         createBaseRequest,
         filterParts,
@@ -615,7 +622,7 @@ export class GraphSuggestionsService {
       );
 
       if (hasSuggestionIdFilter) {
-        return { items: fullyFiltered, nextToken: undefined };
+        return { items: fullyFiltered, nextToken: undefined, totalCount: fullyFiltered.length };
       }
 
       const offset: number = this._parsePaginationToken(options.skipToken);
@@ -630,7 +637,7 @@ export class GraphSuggestionsService {
       const nextToken: string | undefined =
         nextOffset < fullyFiltered.length ? this._formatPaginationToken(nextOffset) : undefined;
 
-      return { items: paginatedItems, nextToken };
+      return { items: paginatedItems, nextToken, totalCount: fullyFiltered.length };
     };
 
     if (!hasSearchFilters) {
@@ -661,14 +668,18 @@ export class GraphSuggestionsService {
           options
         );
 
+        const rawTotalCount: unknown = (response as { '@odata.count'?: unknown })['@odata.count'];
+        const totalCount: number | undefined =
+          typeof rawTotalCount === 'number' ? rawTotalCount : undefined;
+
         const nextToken: string | undefined = hasSuggestionIdFilter
           ? undefined
           : this._extractSkipToken(response['@odata.nextLink']);
 
-        return { items: fullyFiltered, nextToken };
+        return { items: fullyFiltered, nextToken, totalCount };
       } catch (error) {
         if (this._isItemNotFoundError(error)) {
-          return { items: [], nextToken: undefined };
+          return { items: [], nextToken: undefined, totalCount: 0 };
         }
 
         if (this._isContainsNotSupportedError(error)) {
@@ -683,7 +694,7 @@ export class GraphSuggestionsService {
       return await executeManualSearch();
     } catch (error) {
       if (this._isItemNotFoundError(error)) {
-        return { items: [], nextToken: undefined };
+        return { items: [], nextToken: undefined, totalCount: 0 };
       }
 
       throw error;
