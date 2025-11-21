@@ -537,7 +537,7 @@
   border: 1px solid transparent;
   background: var(--accentColorTint);
   color: var(--accentColorDark);
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -553,6 +553,7 @@
 
 .statusDropdown :global(.ms-Dropdown-caretDownWrapper) {
   color: var(--accentColorDark);
+  height: 20px;
 }
 
 .statusDropdown :global(.ms-Dropdown.is-disabled .ms-Dropdown-title) {
@@ -733,7 +734,7 @@
   background: "[theme:neutralLighterAlt, default: #f3f2f1]";
   border-radius: 0.5rem;
   padding: 0.6rem 0.75rem;
-  width: 100%;
+  width: 95%;
 }
 
 .commentItemTopRow {
