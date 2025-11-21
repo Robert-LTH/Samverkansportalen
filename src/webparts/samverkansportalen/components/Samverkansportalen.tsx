@@ -4,7 +4,6 @@ import {
   PrimaryButton,
   DefaultButton,
   IconButton,
-  ActionButton,
   Icon,
   MessageBar,
   MessageBarType,
@@ -111,9 +110,6 @@ interface ISamverkansportalenState {
   selectedMainTab: 'active' | 'completed' | 'myVotes' | 'admin';
   error?: string;
   success?: string;
-  isAddSuggestionExpanded: boolean;
-  isActiveSuggestionsExpanded: boolean;
-  isCompletedSuggestionsExpanded: boolean;
   expandedCommentIds: number[];
   loadingCommentIds: number[];
   commentDrafts: Record<number, string>;
@@ -135,6 +131,7 @@ interface IPaginatedSuggestionsState {
   currentToken?: string;
   nextToken?: string;
   previousTokens: (string | undefined)[];
+  totalCount?: number;
 }
 
 interface ISuggestionInteractionState {
@@ -189,31 +186,6 @@ const getNextRichTextEditorId = (): string => {
 
 type SuggestionAction = (item: ISuggestionItem) => void | Promise<void>;
 type CommentAction = (item: ISuggestionItem, comment: ISuggestionComment) => void | Promise<void>;
-
-interface ISectionHeaderProps {
-  title: string;
-  titleId: string;
-  contentId: string;
-  isExpanded: boolean;
-  onToggle: () => void;
-}
-
-const SectionHeader: React.FC<ISectionHeaderProps> = ({ title, titleId, contentId, isExpanded, onToggle }) => (
-  <div className={styles.sectionHeader}>
-    <h3 id={titleId} className={styles.sectionTitle}>
-      {title}
-    </h3>
-    <ActionButton
-      className={styles.sectionToggleButton}
-      iconProps={{ iconName: isExpanded ? 'ChevronUpSmall' : 'ChevronDownSmall' }}
-      onClick={onToggle}
-      aria-expanded={isExpanded}
-      aria-controls={contentId}
-    >
-      {isExpanded ? strings.HideSectionLabel : strings.ShowSectionLabel}
-    </ActionButton>
-  </div>
-);
 
 interface IPaginationControlsProps {
   page: number;
@@ -980,8 +952,6 @@ interface ISuggestionSectionProps {
   title: string;
   titleId: string;
   contentId: string;
-  isExpanded: boolean;
-  onToggle: () => void;
   isLoading: boolean;
   isSectionLoading: boolean;
   searchValue: string;
@@ -1024,8 +994,6 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   title,
   titleId,
   contentId,
-  isExpanded,
-  onToggle,
   isLoading,
   isSectionLoading,
   searchValue,
@@ -1061,84 +1029,77 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   onNext
 }) => (
   <div className={styles.suggestionSection}>
-    <SectionHeader
-      title={title}
-      titleId={titleId}
-      contentId={contentId}
-      isExpanded={isExpanded}
-      onToggle={onToggle}
-    />
+    <div className={styles.sectionHeader}>
+      <h3 id={titleId} className={styles.sectionTitle}>
+        {title}
+      </h3>
+    </div>
     <div
       id={contentId}
       role="region"
       aria-labelledby={titleId}
-      className={`${styles.sectionContent} ${isExpanded ? '' : styles.sectionContentCollapsed}`}
-      hidden={!isExpanded}
+      className={styles.sectionContent}
     >
-      {isExpanded && (
+      <div className={styles.filterControls}>
+        <TextField
+          label={strings.SearchLabel}
+          value={searchValue}
+          onChange={onSearchChange}
+          disabled={isLoading}
+          placeholder={strings.SearchPlaceholder}
+          className={styles.filterSearch}
+        />
+        <Dropdown
+          label={strings.CategoryLabel}
+          options={categoryOptions}
+          selectedKey={selectedCategoryKey}
+          onChange={onCategoryChange}
+          disabled={isLoading || isSectionLoading || disableCategoryDropdown}
+          className={styles.filterDropdown}
+        />
+        <Dropdown
+          label={strings.SubcategoryLabel}
+          options={subcategoryOptions}
+          selectedKey={selectedSubcategoryKey}
+          onChange={onSubcategoryChange}
+          disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
+          className={styles.filterDropdown}
+          placeholder={subcategoryPlaceholder}
+        />
+        <DefaultButton
+          text={strings.ClearFiltersButtonText}
+          className={styles.filterButton}
+          onClick={onClearFilters}
+          disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
+        />
+      </div>
+      {isLoading || isSectionLoading ? (
+        <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
+      ) : (
         <>
-          <div className={styles.filterControls}>
-            <TextField
-              label={strings.SearchLabel}
-              value={searchValue}
-              onChange={onSearchChange}
-              disabled={isLoading}
-              placeholder={strings.SearchPlaceholder}
-              className={styles.filterSearch}
-            />
-            <Dropdown
-              label={strings.CategoryLabel}
-              options={categoryOptions}
-              selectedKey={selectedCategoryKey}
-              onChange={onCategoryChange}
-              disabled={isLoading || isSectionLoading || disableCategoryDropdown}
-              className={styles.filterDropdown}
-            />
-            <Dropdown
-              label={strings.SubcategoryLabel}
-              options={subcategoryOptions}
-              selectedKey={selectedSubcategoryKey}
-              onChange={onSubcategoryChange}
-              disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
-              className={styles.filterDropdown}
-              placeholder={subcategoryPlaceholder}
-            />
-            <DefaultButton
-              text={strings.ClearFiltersButtonText}
-              className={styles.filterButton}
-              onClick={onClearFilters}
-              disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
-            />
-          </div>
-          {isLoading || isSectionLoading ? (
-            <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
-          ) : (
-            <>
-              <SuggestionList
-                viewModels={viewModels}
-                useTableLayout={useTableLayout}
-                showMetadataInIdColumn={showMetadataInIdColumn}
-                isLoading={isLoading}
-                onToggleVote={onToggleVote}
-                onChangeStatus={onChangeStatus}
-                onDeleteSuggestion={onDeleteSuggestion}
-                onSubmitComment={onSubmitComment}
-                onCommentDraftChange={onCommentDraftChange}
-                onDeleteComment={onDeleteComment}
-                onToggleComments={onToggleComments}
-                onToggleCommentComposer={onToggleCommentComposer}
-                formatDateTime={formatDateTime}
-                statuses={statuses}
-              />
-              <PaginationControls
-                page={page}
-                hasPrevious={hasPrevious}
-                hasNext={hasNext}
-                onPrevious={onPrevious}
-                onNext={onNext}
-              />
-            </>
-          )}
+          <SuggestionList
+            viewModels={viewModels}
+            useTableLayout={useTableLayout}
+            showMetadataInIdColumn={showMetadataInIdColumn}
+            isLoading={isLoading}
+            onToggleVote={onToggleVote}
+            onChangeStatus={onChangeStatus}
+            onDeleteSuggestion={onDeleteSuggestion}
+            onSubmitComment={onSubmitComment}
+            onCommentDraftChange={onCommentDraftChange}
+            onDeleteComment={onDeleteComment}
+            onToggleComments={onToggleComments}
+            onToggleCommentComposer={onToggleCommentComposer}
+            formatDateTime={formatDateTime}
+            statuses={statuses}
+          />
+          <PaginationControls
+            page={page}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
         </>
       )}
     </div>
@@ -1394,9 +1355,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       adminSuggestions: [],
       isAdminSuggestionsLoading: false,
       selectedMainTab: 'active',
-      isAddSuggestionExpanded: true,
-      isActiveSuggestionsExpanded: true,
-      isCompletedSuggestionsExpanded: true,
       expandedCommentIds: [],
       loadingCommentIds: [],
       commentDrafts: {},
@@ -1692,9 +1650,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       similarSuggestionsQuery,
       error,
       success,
-      isAddSuggestionExpanded,
-      isActiveSuggestionsExpanded,
-      isCompletedSuggestionsExpanded,
       myVoteSuggestions,
       isMyVotesLoading,
       adminSuggestions,
@@ -1763,6 +1718,16 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       { allowVoting: true }
     );
     const voteSummaryOptions: IDropdownOption[] = this._getVoteSummaryOptions(categories);
+    const formatTabLabel = (label: string, total?: number): string =>
+      typeof total === 'number' ? `${label} (${total})` : label;
+    const activeTabLabel: string = formatTabLabel(
+      strings.ActiveSuggestionsTabLabel,
+      activeSuggestions.totalCount
+    );
+    const completedTabLabel: string = formatTabLabel(
+      strings.CompletedSuggestionsTabLabel,
+      completedSuggestions.totalCount
+    );
 
     return (
       <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
@@ -1805,88 +1770,81 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         )}
 
         <Pivot selectedKey={selectedMainTab} onLinkClick={this._onSuggestionTabChange}>
-          <PivotItem headerText={strings.ActiveSuggestionsTabLabel} itemKey="active">
+          <PivotItem headerText={activeTabLabel} itemKey="active">
             <div className={styles.pivotContent}>
               <div className={styles.addSuggestion}>
-                <SectionHeader
-                  title={strings.AddSuggestionSectionTitle}
-                  titleId={this._sectionIds.add.title}
-                  contentId={this._sectionIds.add.content}
-                  isExpanded={isAddSuggestionExpanded}
-                  onToggle={this._toggleAddSuggestionSection}
-                />
+                <div className={styles.sectionHeader}>
+                  <h3 id={this._sectionIds.add.title} className={styles.sectionTitle}>
+                    {strings.AddSuggestionSectionTitle}
+                  </h3>
+                </div>
                 <div
                   id={this._sectionIds.add.content}
                   role="region"
                   aria-labelledby={this._sectionIds.add.title}
-                  className={`${styles.sectionContent} ${
-                    isAddSuggestionExpanded ? '' : styles.sectionContentCollapsed
-                  }`}
-                  hidden={!isAddSuggestionExpanded}
+                  className={styles.sectionContent}
                 >
-                  {isAddSuggestionExpanded && (
-                    <div className={styles.addForm}>
-                      <TextField
-                        label={strings.AddSuggestionTitleLabel}
-                        required
-                        value={newTitle}
-                        onChange={this._onTitleChange}
-                        disabled={isLoading}
-                      />
-                      <RichTextEditor
-                        label={strings.AddSuggestionDetailsLabel}
-                        value={newDescription}
-                        onChange={this._onDescriptionEditorChange}
-                        placeholder={strings.RichTextEditorPlaceholder}
-                        disabled={isLoading}
-                      />
-                      <Dropdown
-                        label={strings.CategoryLabel}
-                        options={categoryOptions}
-                        selectedKey={newCategory}
-                        onChange={this._onCategoryChange}
-                        disabled={isLoading || categoryOptions.length === 0}
-                      />
-                      <Dropdown
-                        label={strings.SubcategoryLabel}
-                        options={subcategoryOptions}
-                        selectedKey={newSubcategoryKey}
-                        onChange={this._onSubcategoryChange}
-                        disabled={isLoading || subcategoryOptions.length === 0}
-                        placeholder={
-                          subcategoryOptions.length === 0
-                            ? strings.NoSubcategoriesAvailablePlaceholder
-                            : strings.SelectSubcategoryPlaceholder
-                        }
-                      />
-                      <PrimaryButton
-                        text={strings.SubmitSuggestionButtonText}
-                        onClick={this._addSuggestion}
-                        disabled={isLoading || newTitle.trim().length === 0}
-                      />
-                      <SimilarSuggestions
-                        viewModels={similarSuggestionViewModels}
-                        isLoading={isSimilarSuggestionsLoading}
-                        query={similarSuggestionsQuery}
-                        page={similarSuggestions.page}
-                        hasPrevious={similarSuggestions.previousTokens.length > 0}
-                        hasNext={!!similarSuggestions.nextToken}
-                        onPrevious={this._goToPreviousSimilarPage}
-                        onNext={this._goToNextSimilarPage}
-                        onToggleVote={(item) => this._toggleVote(item)}
-                        onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
-                        onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                        onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
-                        onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
-                        onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
-                        onToggleComments={(id) => this._toggleCommentsSection(id)}
-                        onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
-                        formatDateTime={(value) => this._formatDateTime(value)}
-                        isProcessing={isLoading}
-                        statuses={this.state.statuses}
-                      />
-                    </div>
-                  )}
+                  <div className={styles.addForm}>
+                    <TextField
+                      label={strings.AddSuggestionTitleLabel}
+                      required
+                      value={newTitle}
+                      onChange={this._onTitleChange}
+                      disabled={isLoading}
+                    />
+                    <RichTextEditor
+                      label={strings.AddSuggestionDetailsLabel}
+                      value={newDescription}
+                      onChange={this._onDescriptionEditorChange}
+                      placeholder={strings.RichTextEditorPlaceholder}
+                      disabled={isLoading}
+                    />
+                    <Dropdown
+                      label={strings.CategoryLabel}
+                      options={categoryOptions}
+                      selectedKey={newCategory}
+                      onChange={this._onCategoryChange}
+                      disabled={isLoading || categoryOptions.length === 0}
+                    />
+                    <Dropdown
+                      label={strings.SubcategoryLabel}
+                      options={subcategoryOptions}
+                      selectedKey={newSubcategoryKey}
+                      onChange={this._onSubcategoryChange}
+                      disabled={isLoading || subcategoryOptions.length === 0}
+                      placeholder={
+                        subcategoryOptions.length === 0
+                          ? strings.NoSubcategoriesAvailablePlaceholder
+                          : strings.SelectSubcategoryPlaceholder
+                      }
+                    />
+                    <PrimaryButton
+                      text={strings.SubmitSuggestionButtonText}
+                      onClick={this._addSuggestion}
+                      disabled={isLoading || newTitle.trim().length === 0}
+                    />
+                    <SimilarSuggestions
+                      viewModels={similarSuggestionViewModels}
+                      isLoading={isSimilarSuggestionsLoading}
+                      query={similarSuggestionsQuery}
+                      page={similarSuggestions.page}
+                      hasPrevious={similarSuggestions.previousTokens.length > 0}
+                      hasNext={!!similarSuggestions.nextToken}
+                      onPrevious={this._goToPreviousSimilarPage}
+                      onNext={this._goToNextSimilarPage}
+                      onToggleVote={(item) => this._toggleVote(item)}
+                      onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
+                      onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                      onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                      onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
+                      onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                      onToggleComments={(id) => this._toggleCommentsSection(id)}
+                      onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
+                      formatDateTime={(value) => this._formatDateTime(value)}
+                      isProcessing={isLoading}
+                      statuses={this.state.statuses}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1894,8 +1852,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 title={strings.ActiveSuggestionsSectionTitle}
                 titleId={this._sectionIds.active.title}
                 contentId={this._sectionIds.active.content}
-                isExpanded={isActiveSuggestionsExpanded}
-                onToggle={this._toggleActiveSection}
                 isLoading={isLoading}
                 isSectionLoading={isActiveSuggestionsLoading}
                 searchValue={activeFilter.searchQuery}
@@ -1925,7 +1881,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 formatDateTime={(value) => this._formatDateTime(value)}
                 statuses={this.state.statuses}
                 page={activeSuggestions.page}
-                hasPrevious={activeSuggestions.previousTokens.length > 0}
+                hasPrevious={activeSuggestions.page > 1}
                 hasNext={!!activeSuggestions.nextToken}
                 onPrevious={this._goToPreviousActivePage}
                 onNext={this._goToNextActivePage}
@@ -1934,14 +1890,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             </div>
           </PivotItem>
 
-          <PivotItem headerText={strings.CompletedSuggestionsTabLabel} itemKey="completed">
+          <PivotItem headerText={completedTabLabel} itemKey="completed">
             <div className={styles.pivotContent}>
               <SuggestionSection
                 title={strings.CompletedSuggestionsSectionTitle}
                 titleId={this._sectionIds.completed.title}
                 contentId={this._sectionIds.completed.content}
-                isExpanded={isCompletedSuggestionsExpanded}
-                onToggle={this._toggleCompletedSection}
                 isLoading={isLoading}
                 isSectionLoading={isCompletedSuggestionsLoading}
                 searchValue={completedFilter.searchQuery}
@@ -1971,7 +1925,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 formatDateTime={(value) => this._formatDateTime(value)}
                 statuses={this.state.statuses}
                 page={completedSuggestions.page}
-                hasPrevious={completedSuggestions.previousTokens.length > 0}
+                hasPrevious={completedSuggestions.page > 1}
                 hasNext={!!completedSuggestions.nextToken}
                 onPrevious={this._goToPreviousCompletedPage}
                 onNext={this._goToNextCompletedPage}
@@ -2128,7 +2082,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _goToPreviousActivePage = async (): Promise<void> => {
     const { activeSuggestions, activeFilter } = this.state;
 
-    if (activeSuggestions.previousTokens.length === 0) {
+    if (activeSuggestions.page <= 1) {
       return;
     }
 
@@ -2160,7 +2114,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const tokens: (string | undefined)[] = [
       ...activeSuggestions.previousTokens,
-      activeSuggestions.currentToken
+      ...(activeSuggestions.currentToken ? [activeSuggestions.currentToken] : [])
     ];
 
     this._updateState({ isActiveSuggestionsLoading: true, error: undefined, success: undefined });
@@ -2182,7 +2136,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _goToPreviousCompletedPage = async (): Promise<void> => {
     const { completedSuggestions, completedFilter } = this.state;
 
-    if (completedSuggestions.previousTokens.length === 0) {
+    if (completedSuggestions.page <= 1) {
       return;
     }
 
@@ -2214,7 +2168,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const tokens: (string | undefined)[] = [
       ...completedSuggestions.previousTokens,
-      completedSuggestions.currentToken
+      ...(completedSuggestions.currentToken ? [completedSuggestions.currentToken] : [])
     ];
 
     this._updateState({ isCompletedSuggestionsLoading: true, error: undefined, success: undefined });
@@ -2927,7 +2881,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? []
       : options.previousTokens;
 
-    const { items, nextToken } = await this._getSuggestionsPage('active', effectiveSkipToken, filter);
+    const { items, nextToken, totalCount } = await this._getSuggestionsPage(
+      'active',
+      effectiveSkipToken,
+      filter
+    );
 
     if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
@@ -2948,7 +2906,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         page: hasSpecificSuggestion ? 1 : options.page,
         currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
         nextToken: hasSpecificSuggestion ? undefined : nextToken,
-        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens
+        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens,
+        totalCount: typeof totalCount === 'number' ? totalCount : items.length
       },
       activeFilter: filter,
       isActiveSuggestionsLoading: false
@@ -2968,7 +2927,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? []
       : options.previousTokens;
 
-    const { items, nextToken } = await this._getSuggestionsPage('completed', effectiveSkipToken, filter);
+    const { items, nextToken, totalCount } = await this._getSuggestionsPage(
+      'completed',
+      effectiveSkipToken,
+      filter
+    );
 
     if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
@@ -2989,7 +2952,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         page: hasSpecificSuggestion ? 1 : options.page,
         currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
         nextToken: hasSpecificSuggestion ? undefined : nextToken,
-        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens
+        previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens,
+        totalCount: typeof totalCount === 'number' ? totalCount : items.length
       },
       completedFilter: filter,
       isCompletedSuggestionsLoading: false
@@ -3034,7 +2998,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     statusGroup: 'active' | 'completed',
     skipToken: string | undefined,
     filter: IFilterState
-  ): Promise<{ items: ISuggestionItem[]; nextToken?: string }> {
+  ): Promise<{ items: ISuggestionItem[]; nextToken?: string; totalCount?: number }> {
     const listId: string = this._getResolvedListId();
     const baseStatuses: string[] =
       statusGroup === 'completed' ? [this.state.completedStatus] : this._getActiveStatuses();
@@ -3091,7 +3055,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       votesBySuggestion,
       commentCounts
     );
-    return { items, nextToken: response.nextToken };
+    return { items, nextToken: response.nextToken, totalCount: response.totalCount };
   }
 
   private async _getTopSuggestionsByVotes(filter: IFilterState): Promise<ISuggestionItem[]> {
@@ -4978,36 +4942,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this._loadAdminSuggestions();
       }
     });
-  };
-
-  private _toggleAddSuggestionSection = (): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    this.setState((prevState) => ({
-      isAddSuggestionExpanded: !prevState.isAddSuggestionExpanded
-    }));
-  };
-
-  private _toggleActiveSection = (): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    this.setState((prevState) => ({
-      isActiveSuggestionsExpanded: !prevState.isActiveSuggestionsExpanded
-    }));
-  };
-
-  private _toggleCompletedSection = (): void => {
-    if (!this._isMounted) {
-      return;
-    }
-
-    this.setState((prevState) => ({
-      isCompletedSuggestionsExpanded: !prevState.isCompletedSuggestionsExpanded
-    }));
   };
 
   private _flushPendingSimilarSuggestionsSearch(): void {
