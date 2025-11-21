@@ -81,6 +81,8 @@ interface ISimilarSuggestionsQuery {
 interface ISamverkansportalenState {
   activeSuggestions: IPaginatedSuggestionsState;
   completedSuggestions: IPaginatedSuggestionsState;
+  activeSuggestionsTotal?: number;
+  completedSuggestionsTotal?: number;
   isLoading: boolean;
   isActiveSuggestionsLoading: boolean;
   isCompletedSuggestionsLoading: boolean;
@@ -1304,6 +1306,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
       completedSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
+      activeSuggestionsTotal: undefined,
+      completedSuggestionsTotal: undefined,
       isLoading: false,
       isActiveSuggestionsLoading: false,
       isCompletedSuggestionsLoading: false,
@@ -1722,11 +1726,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       typeof total === 'number' ? `${label} (${total})` : label;
     const activeTabLabel: string = formatTabLabel(
       strings.ActiveSuggestionsTabLabel,
-      activeSuggestions.totalCount
+      this.state.activeSuggestionsTotal ?? activeSuggestions.totalCount
     );
     const completedTabLabel: string = formatTabLabel(
       strings.CompletedSuggestionsTabLabel,
-      completedSuggestions.totalCount
+      this.state.completedSuggestionsTotal ?? completedSuggestions.totalCount
     );
 
     return (
@@ -2487,13 +2491,45 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           skipToken: undefined,
           filter: this.state.completedFilter
         }),
-        this._loadAvailableVotes()
+        this._loadAvailableVotes(),
+        this._loadSuggestionTotals()
       ]);
     } finally {
       this._updateState({
         isActiveSuggestionsLoading: false,
         isCompletedSuggestionsLoading: false
       });
+    }
+  }
+
+  private async _loadSuggestionTotals(): Promise<void> {
+    try {
+      const listId: string = this._getResolvedListId();
+      const activeStatuses: string[] = this._getActiveStatuses();
+      const completedStatus: string = this.state.completedStatus;
+
+      const fetchCount = async (statuses: string[]): Promise<number | undefined> => {
+        if (statuses.length === 0) {
+          return 0;
+        }
+
+        const response = await this.props.graphService.getSuggestionItems(listId, {
+          statuses,
+          top: 1,
+          orderBy: 'createdDateTime desc'
+        });
+
+        return typeof response.totalCount === 'number' ? response.totalCount : response.items.length;
+      };
+
+      const [activeSuggestionsTotal, completedSuggestionsTotal] = await Promise.all([
+        fetchCount(activeStatuses),
+        fetchCount([completedStatus])
+      ]);
+
+      this._updateState({ activeSuggestionsTotal, completedSuggestionsTotal });
+    } catch (error) {
+      console.error('Failed to load suggestion totals.', error);
     }
   }
 
