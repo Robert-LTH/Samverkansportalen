@@ -210,6 +210,7 @@ declare interface ISamverkansportalenWebPartStrings {
   CommentMissingMessage: string;
   CommentAddErrorMessage: string;
   CommentDeletePermissionErrorMessage: string;
+  CommentDeleteCompletedSuggestionErrorMessage: string;
   CommentDeleteErrorMessage: string;
   SuggestionStatusPermissionErrorMessage: string;
   SuggestionStatusSelectionErrorMessage: string;

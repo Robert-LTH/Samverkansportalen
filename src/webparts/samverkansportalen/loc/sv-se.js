@@ -211,6 +211,7 @@ define([], function() {
     "CommentMissingMessage": "Ange en kommentar innan du skickar in.",
     "CommentAddErrorMessage": "Vi kunde inte lägga till din kommentar. Försök igen.",
     "CommentDeletePermissionErrorMessage": "Endast administratörer kan ta bort kommentarer.",
+    "CommentDeleteCompletedSuggestionErrorMessage": "Det går inte att ta bort kommentarer för färdiga förslag.",
     "CommentDeleteErrorMessage": "Vi kunde inte ta bort kommentaren. Försök igen.",
     "SuggestionStatusPermissionErrorMessage": "Endast administratörer kan uppdatera status för förslag.",
     "SuggestionStatusSelectionErrorMessage": "Välj en giltig status för det här förslaget.",

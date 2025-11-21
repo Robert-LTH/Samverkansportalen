@@ -211,6 +211,7 @@ define([], function() {
     "CommentMissingMessage": "Please enter a comment before submitting.",
     "CommentAddErrorMessage": "We could not add your comment. Please try again.",
     "CommentDeletePermissionErrorMessage": "Only administrators can delete comments.",
+    "CommentDeleteCompletedSuggestionErrorMessage": "Comments on completed suggestions cannot be removed.",
     "CommentDeleteErrorMessage": "We could not remove the comment. Please try again.",
     "SuggestionStatusPermissionErrorMessage": "Only administrators can update suggestion statuses.",
     "SuggestionStatusSelectionErrorMessage": "Please select a valid status for this suggestion.",
