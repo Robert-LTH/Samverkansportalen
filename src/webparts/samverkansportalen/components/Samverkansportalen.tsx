@@ -2515,7 +2515,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
         const response = await this.props.graphService.getSuggestionItems(listId, {
           statuses,
-          top: 1,
+          top: 999,
           orderBy: 'createdDateTime desc'
         });
 
