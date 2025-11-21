@@ -3261,8 +3261,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       );
       const rawComment: unknown =
         (fields as { Comment?: unknown }).Comment ?? (fields as { Title?: unknown }).Title;
-      const commentText: string | undefined =
-        typeof rawComment === 'string' && rawComment.trim().length > 0 ? rawComment.trim() : undefined;
+      const commentText: string | undefined = this._normalizeCommentValue(rawComment);
 
       if (!suggestionId || !commentText) {
         return;
@@ -3313,6 +3312,24 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     });
 
     return commentsBySuggestion;
+  }
+
+  private _normalizeCommentValue(value: unknown): string | undefined {
+    if (typeof value === 'string') {
+      const trimmed: string = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    if (value && typeof value === 'object') {
+      const richText: unknown = (value as { $content?: unknown }).$content;
+
+      if (typeof richText === 'string') {
+        const trimmed: string = richText.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+      }
+    }
+
+    return undefined;
   }
 
   private async _loadAvailableVotes(): Promise<void> {
