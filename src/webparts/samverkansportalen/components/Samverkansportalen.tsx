@@ -4443,7 +4443,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const suggestion: ISuggestionItem | undefined = this._findSuggestionById(suggestionId);
 
-    if (!suggestion || suggestion.areCommentsLoaded) {
+    if (!suggestion) {
+      return;
+    }
+
+    const hasLoadedComments: boolean = suggestion.areCommentsLoaded === true;
+
+    if (hasLoadedComments) {
       return;
     }
 

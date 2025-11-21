@@ -82,6 +82,15 @@ export interface IGraphCommentItemFields extends Record<string, unknown> {
   SuggestionId?: number | string;
   Comment?: string;
   Title?: string;
+  createdBy?:
+    | string
+    | {
+        userPrincipalName?: string;
+        email?: string;
+        mail?: string;
+        displayName?: string;
+      };
+  createdDateTime?: string;
 }
 
 export interface IGraphCommentItem {
@@ -1687,7 +1696,11 @@ export class GraphSuggestionsService {
   private _parseCommentItems(entries: IGraphListItemApiModel[]): IGraphCommentItem[] {
     return entries
       .map((entry) => {
-        const parsedEntry = this._extractListItemWithFields<IGraphCommentItemFields>(entry);
+        const normalizedEntry: IGraphListItemApiModel | undefined =
+          this._normalizeListItemEntry(entry);
+        const parsedEntry = normalizedEntry
+          ? this._extractListItemWithFields<IGraphCommentItemFields>(normalizedEntry)
+          : undefined;
 
         if (!parsedEntry) {
           return undefined;
@@ -1698,7 +1711,8 @@ export class GraphSuggestionsService {
         let createdByUserPrincipalName: string | undefined;
         let createdByUserDisplayName: string | undefined;
 
-        const createdByUser: unknown = entry.createdBy?.user;
+        const createdByUser: unknown =
+          normalizedEntry?.createdBy?.user ?? (fields as { createdBy?: unknown }).createdBy;
 
         if (createdByUser && typeof createdByUser === 'object') {
           const {
@@ -1724,9 +1738,12 @@ export class GraphSuggestionsService {
           } else if (typeof mail === 'string' && mail.trim().length > 0) {
             createdByUserPrincipalName = mail.trim();
           }
+        } else if (typeof createdByUser === 'string' && createdByUser.trim().length > 0) {
+          createdByUserPrincipalName = createdByUser.trim();
         }
 
-        const createdDateTime: unknown = entry.createdDateTime;
+        const createdDateTime: unknown =
+          normalizedEntry?.createdDateTime ?? (fields as { createdDateTime?: unknown }).createdDateTime;
 
         return {
           id,
@@ -1811,6 +1828,22 @@ export class GraphSuggestionsService {
         }
       }
     }
+  }
+
+  private _normalizeListItemEntry(
+    entry: IGraphListItemApiModel | undefined
+  ): IGraphListItemApiModel | undefined {
+    if (!entry || typeof entry !== 'object') {
+      return undefined;
+    }
+
+    const nestedEntry: unknown = (entry as { entry?: unknown }).entry;
+
+    if (nestedEntry && typeof nestedEntry === 'object') {
+      return nestedEntry as IGraphListItemApiModel;
+    }
+
+    return entry;
   }
 
   private _extractListItemWithFields<TFields extends Record<string, unknown>>(
