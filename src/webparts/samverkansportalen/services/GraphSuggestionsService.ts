@@ -815,16 +815,16 @@ export class GraphSuggestionsService {
     let request = client
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
-      .select('id,createdBy,createdDateTime')
-      .expand('fields($select=SuggestionId,Comment,Title)')
+      .select('id')
+      .expand('fields($select=SuggestionId,Comment,Title,createdBy,createdDateTime)')
       .expand('createdByUser($select=userPrincipalName,mail,email,displayName)');
 
     const suggestionIds: number[] = (options.suggestionIds ?? [])
       .map((id) => this._normalizeIntegerId(id))
       .filter((id): id is number => typeof id === 'number');
 
-    if (suggestionIds.length > 0) {
-      const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq ${id}`);
+      if (suggestionIds.length > 0) {
+      const suggestionFilters: string[] = suggestionIds.map((id) => `fields/SuggestionId eq '${id}'`);
       request = request.filter(`(${suggestionFilters.join(' or ')})`);
     }
 
