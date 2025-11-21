@@ -489,11 +489,6 @@ export class GraphSuggestionsService {
         .expand('fields($select=Id,Title,Details,Status,Category,Subcategory,Votes,CompletedDateTime)')
         .expand('createdByUser($select=userPrincipalName,mail,email)');
 
-    let request = createBaseRequest();
-
-    request = request.count(true);
-    request = request.header('ConsistencyLevel', 'eventual');
-
     const filterParts: string[] = [];
     const normalizedSuggestionIds: number[] = (options.suggestionIds ?? [])
       .map((id) => this._normalizeIntegerId(id))
@@ -576,16 +571,6 @@ export class GraphSuggestionsService {
       options.orderBy
     );
 
-    if (filterParts.length > 0) {
-      request = request.filter(filterParts.join(' and '));
-    }
-
-    if (options.orderBy) {
-      request = request.orderby(options.orderBy);
-    } else {
-      request = request.orderby('createdDateTime desc');
-    }
-
     const hasSearchFilters: boolean = searchFilters.length > 0 || hasSuggestionIdFilter;
 
     const shouldStopEarly = hasSuggestionIdFilter
@@ -641,20 +626,47 @@ export class GraphSuggestionsService {
     };
 
     if (!hasSearchFilters) {
-      if (options.top && Number.isFinite(options.top)) {
-        request = request.top(options.top);
-      }
+      const buildRequest = (includeCount: boolean): GraphRequest => {
+        let request = createBaseRequest();
 
-      if (options.skipToken && !hasSuggestionIdFilter) {
-        request = request.query({ $skiptoken: options.skipToken });
-      }
+        if (includeCount) {
+          request = request.count(true);
+          request = request.header('ConsistencyLevel', 'eventual');
+        }
 
-      if (requiresNonIndexedQuery) {
-        request = this._applyHonorNonIndexedHeader(request);
-      }
+        if (filterParts.length > 0) {
+          request = request.filter(filterParts.join(' and '));
+        }
 
-      try {
-        const response: { value?: IGraphListItemApiModel[]; '@odata.nextLink'?: unknown } = await request.get();
+        if (options.orderBy) {
+          request = request.orderby(options.orderBy);
+        } else {
+          request = request.orderby('createdDateTime desc');
+        }
+
+        if (options.top && Number.isFinite(options.top)) {
+          request = request.top(options.top);
+        }
+
+        if (options.skipToken && !hasSuggestionIdFilter) {
+          request = request.query({ $skiptoken: options.skipToken });
+        }
+
+        if (requiresNonIndexedQuery) {
+          request = this._applyHonorNonIndexedHeader(request);
+        }
+
+        return request;
+      };
+
+      const executeRequest = async (
+        includeCount: boolean
+      ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string; totalCount?: number }> => {
+        const response: {
+          value?: IGraphListItemApiModel[];
+          '@odata.nextLink'?: unknown;
+          '@odata.count'?: unknown;
+        } = await buildRequest(includeCount).get();
 
         const items: IGraphListItemApiModel[] = Array.isArray(response.value) ? response.value : [];
 
@@ -677,7 +689,27 @@ export class GraphSuggestionsService {
           : this._extractSkipToken(response['@odata.nextLink']);
 
         return { items: fullyFiltered, nextToken, totalCount };
+      };
+
+      try {
+        return await executeRequest(true);
       } catch (error) {
+        if (this._isCountNotSupportedError(error)) {
+          try {
+            return await executeRequest(false);
+          } catch (fallbackError) {
+            if (this._isItemNotFoundError(fallbackError)) {
+              return { items: [], nextToken: undefined, totalCount: 0 };
+            }
+
+            if (this._isContainsNotSupportedError(fallbackError)) {
+              return executeManualSearch();
+            }
+
+            throw fallbackError;
+          }
+        }
+
         if (this._isItemNotFoundError(error)) {
           return { items: [], nextToken: undefined, totalCount: 0 };
         }
@@ -1420,6 +1452,16 @@ export class GraphSuggestionsService {
 
     const normalized: string = message.toLowerCase();
     return normalized.includes("function 'contains'") && normalized.includes('not supported for lists');
+  }
+
+  private _isCountNotSupportedError(error: unknown): boolean {
+    const message: string | undefined = this._extractErrorMessage(error);
+
+    if (!message) {
+      return false;
+    }
+
+    return message.toLowerCase().includes('$count is not supported on this api');
   }
 
   private _mapSuggestionItems(entries: IGraphListItemApiModel[]): IGraphSuggestionItem[] {
