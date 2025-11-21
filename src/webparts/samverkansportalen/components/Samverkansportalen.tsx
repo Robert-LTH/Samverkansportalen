@@ -2084,6 +2084,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const allowVoting: boolean = options.allowVoting === true;
 
     return items.map((item) => {
+      const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
       const remainingVotesForCategory: number = this._getRemainingVotesForCategory(item.category);
       const interaction: ISuggestionInteractionState = this._getInteractionState(
         item,
@@ -2113,7 +2114,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           resolvedCount: resolvedCommentCount,
           comments: renderedComments,
           canAddComment: interaction.canAddComment,
-          canDeleteComments: this.props.isCurrentUserAdmin,
+          canDeleteComments: this.props.isCurrentUserAdmin && !isCompleted,
           regionId,
           toggleId,
           isComposerVisible,
@@ -4603,6 +4604,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     item: ISuggestionItem,
     comment: ISuggestionComment
   ): Promise<void> {
+    if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
+      this._handleError(strings.CommentDeleteCompletedSuggestionErrorMessage);
+      return;
+    }
+
     if (!this.props.isCurrentUserAdmin) {
       this._handleError(strings.CommentDeletePermissionErrorMessage);
       return;
@@ -4620,7 +4626,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const commentListId: string = this._getResolvedCommentsListId();
       await this.props.graphService.deleteCommentItem(commentListId, comment.id);
 
-      if (item.status === 'Done') {
+      if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
         await this._refreshCompletedSuggestions();
       } else {
         await this._refreshActiveSuggestions();
