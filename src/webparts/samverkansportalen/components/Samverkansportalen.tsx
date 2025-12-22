@@ -1263,6 +1263,7 @@ const ALL_STATUS_FILTER_KEY: string = '__all_statuses__';
 const SUGGESTIONS_PAGE_SIZE: number = 5;
 const ADMIN_TOP_SUGGESTIONS_COUNT: number = 10;
 const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
+const LIST_SEARCH_DEBOUNCE_MS: number = 300;
 const MIN_SIMILAR_SUGGESTION_QUERY_LENGTH: number = 3;
 const MAX_SIMILAR_SUGGESTIONS: number = 5;
 const EMPTY_SIMILAR_SUGGESTIONS_QUERY: ISimilarSuggestionsQuery = { title: '', description: '' };
@@ -1282,6 +1283,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   };
   private readonly _commentSectionPrefix: string;
   private readonly _debouncedSimilarSuggestionsSearch: ReturnType<typeof debounce>;
+  private readonly _debouncedActiveFilterSearch: ReturnType<typeof debounce>;
+  private readonly _debouncedCompletedFilterSearch: ReturnType<typeof debounce>;
   private _pendingSimilarSuggestionsQuery?: ISimilarSuggestionsQuery;
 
   public constructor(props: ISamverkansportalenProps) {
@@ -1302,6 +1305,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._searchSimilarSuggestions(query);
     }, SIMILAR_SUGGESTIONS_DEBOUNCE_MS);
+    this._debouncedActiveFilterSearch = debounce((filter: IFilterState) => {
+      this._applyActiveFilter(filter);
+    }, LIST_SEARCH_DEBOUNCE_MS);
+    this._debouncedCompletedFilterSearch = debounce((filter: IFilterState) => {
+      this._applyCompletedFilter(filter);
+    }, LIST_SEARCH_DEBOUNCE_MS);
 
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
@@ -1581,6 +1590,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   public componentWillUnmount(): void {
     this._isMounted = false;
     this._debouncedSimilarSuggestionsSearch.cancel();
+    this._debouncedActiveFilterSearch.cancel();
+    this._debouncedCompletedFilterSearch.cancel();
   }
 
   public componentDidUpdate(prevProps: ISamverkansportalenProps): void {
@@ -3851,7 +3862,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       searchQuery: newValue ?? '',
       suggestionId: undefined
     };
-    this._applyActiveFilter(nextFilter);
+    this._updateState({ activeFilter: nextFilter });
+    this._debouncedActiveFilterSearch(nextFilter);
   };
 
   private _onCategoryChange = (
@@ -3920,7 +3932,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ),
       suggestionId: undefined
     };
-
+    this._debouncedActiveFilterSearch.cancel();
     this._applyActiveFilter(nextFilter);
   };
 
@@ -3937,7 +3949,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       key === ALL_SUBCATEGORY_FILTER_KEY
         ? { ...this.state.activeFilter, subcategory: undefined, suggestionId: undefined }
         : { ...this.state.activeFilter, subcategory: key, suggestionId: undefined };
-
+    this._debouncedActiveFilterSearch.cancel();
     this._applyActiveFilter(nextFilter);
   };
 
@@ -3950,7 +3962,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       searchQuery: newValue ?? '',
       suggestionId: undefined
     };
-    this._applyCompletedFilter(nextFilter);
+    this._updateState({ completedFilter: nextFilter });
+    this._debouncedCompletedFilterSearch(nextFilter);
   };
 
   private _onCompletedFilterCategoryChange = (
@@ -3979,7 +3992,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ),
       suggestionId: undefined
     };
-
+    this._debouncedCompletedFilterSearch.cancel();
     this._applyCompletedFilter(nextFilter);
   };
 
@@ -3996,7 +4009,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       key === ALL_SUBCATEGORY_FILTER_KEY
         ? { ...this.state.completedFilter, subcategory: undefined, suggestionId: undefined }
         : { ...this.state.completedFilter, subcategory: key, suggestionId: undefined };
-
+    this._debouncedCompletedFilterSearch.cancel();
     this._applyCompletedFilter(nextFilter);
   };
 
@@ -4114,7 +4127,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     if (!this._hasSearchFilters(this.state.activeFilter)) {
       return;
     }
-
+    this._debouncedActiveFilterSearch.cancel();
     this._applyActiveFilter(this._getDefaultActiveFilter());
   };
 
@@ -4122,7 +4135,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     if (!this._hasSearchFilters(this.state.completedFilter)) {
       return;
     }
-
+    this._debouncedCompletedFilterSearch.cancel();
     this._applyCompletedFilter(this._getDefaultCompletedFilter());
   };
 
