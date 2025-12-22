@@ -2245,7 +2245,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   } {
     const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
     const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
-    const isVotingAllowed: boolean = allowVoting || (!readOnly && !isCompleted);
+    const isVotingAllowed: boolean = !isCompleted && (allowVoting || !readOnly);
     const disableVote: boolean =
       this.state.isLoading ||
       !isVotingAllowed ||

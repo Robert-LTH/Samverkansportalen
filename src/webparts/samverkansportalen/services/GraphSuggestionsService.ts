@@ -1558,6 +1558,33 @@ export class GraphSuggestionsService {
     return filterParts.some((filterPart) => filterPart.toLowerCase().includes('votes'));
   }
 
+  private _normalizePlainTextValue(value: unknown): string {
+    if (typeof value !== 'string') {
+      return '';
+    }
+
+    return value.replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+
+  private _normalizeRichTextValue(value: unknown): string {
+    if (typeof value !== 'string') {
+      return '';
+    }
+
+    const sanitized: string = value
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;|&#160;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'");
+
+    return this._normalizePlainTextValue(sanitized);
+  }
+
   private _matchesSuggestionIds(item: IGraphSuggestionItem, ids: number[]): boolean {
     if (ids.length === 0) {
       return true;
@@ -1592,11 +1619,16 @@ export class GraphSuggestionsService {
     return filters.some(({ field, term }) => {
       const rawValue: unknown = (item.fields ?? {})[field];
 
-      if (typeof rawValue !== 'string') {
+      const normalizedValue: string =
+        field === 'Details'
+          ? this._normalizeRichTextValue(rawValue)
+          : this._normalizePlainTextValue(rawValue);
+
+      if (!normalizedValue) {
         return false;
       }
 
-      return rawValue.toLowerCase().includes(term);
+      return normalizedValue.includes(term);
     });
   }
 
@@ -1706,10 +1738,8 @@ export class GraphSuggestionsService {
         return true;
       }
 
-      const normalizedTitle: string =
-        typeof fields.Title === 'string' ? fields.Title.trim().toLowerCase() : '';
-      const normalizedDetails: string =
-        typeof fields.Details === 'string' ? fields.Details.trim().toLowerCase() : '';
+      const normalizedTitle: string = this._normalizePlainTextValue(fields.Title);
+      const normalizedDetails: string = this._normalizeRichTextValue(fields.Details);
 
       return searchTerms.some(
         (term) => normalizedTitle.includes(term) || normalizedDetails.includes(term)
