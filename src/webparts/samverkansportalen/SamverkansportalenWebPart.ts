@@ -13,6 +13,7 @@ import {
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
+import { SPPermission } from '@microsoft/sp-page-context';
 
 import * as strings from 'SamverkansportalenWebPartStrings';
 import Samverkansportalen from './components/Samverkansportalen';
@@ -109,7 +110,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
         userDisplayName: this.context.pageContext.user.displayName,
         userLoginName: this.context.pageContext.user.loginName,
-        isCurrentUserAdmin: this._isCurrentUserSiteAdmin,
+        isCurrentUserAdmin: this._isCurrentUserAdmin,
         graphService: this._getGraphService(),
         listTitle: this._selectedListTitle,
         voteListTitle: this._selectedVoteListTitle,
@@ -137,6 +138,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     ReactDom.render(element, this.domElement);
   }
 
+  private get _isCurrentUserAdmin(): boolean {
+    return this._isCurrentUserSiteAdmin || this._currentUserHasEditPermission;
+  }
+
   private get _isCurrentUserSiteAdmin(): boolean {
     const legacyContext: unknown = this.context.pageContext.legacyPageContext;
 
@@ -146,6 +151,15 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     const isSiteAdmin: unknown = (legacyContext as { isSiteAdmin?: unknown }).isSiteAdmin;
     return isSiteAdmin === true;
+  }
+
+  private get _currentUserHasEditPermission(): boolean {
+    const webContext = this.context?.pageContext?.web;
+    if (!webContext || !webContext.permissions) {
+      return false;
+    }
+
+    return webContext.permissions.hasPermission(SPPermission.editListItems);
   }
 
   protected onInit(): Promise<void> {
