@@ -132,6 +132,7 @@ define([], function() {
     "VotesPerCategoryDefaultLabel": "Du har {0} röster per kategori",
     "CategoryLabel": "Kategori",
     "SubcategoryLabel": "Underkategori",
+    "ItemsPerPageLabel": "Antal poster per sida",
     "NoSubcategoriesAvailablePlaceholder": "Inga underkategorier tillgängliga",
     "SelectSubcategoryPlaceholder": "Välj en underkategori",
     "AddSuggestionTitleLabel": "Titel",

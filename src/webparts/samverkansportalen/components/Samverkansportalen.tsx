@@ -81,6 +81,8 @@ interface ISimilarSuggestionsQuery {
 interface ISamverkansportalenState {
   activeSuggestions: IPaginatedSuggestionsState;
   completedSuggestions: IPaginatedSuggestionsState;
+  activePageSize: number;
+  completedPageSize: number;
   activeSuggestionsTotal?: number;
   completedSuggestionsTotal?: number;
   isLoading: boolean;
@@ -972,6 +974,9 @@ interface ISuggestionSectionProps {
   subcategoryPlaceholder: string;
   onClearFilters: () => void;
   isClearFiltersDisabled: boolean;
+  pageSizeOptions: number[];
+  selectedPageSize: number;
+  onPageSizeChange: (event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption) => void;
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
   showMetadataInIdColumn: boolean;
@@ -1011,6 +1016,9 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   subcategoryPlaceholder,
   onClearFilters,
   isClearFiltersDisabled,
+  pageSizeOptions,
+  selectedPageSize,
+  onPageSizeChange,
   viewModels,
   useTableLayout,
   showMetadataInIdColumn,
@@ -1029,8 +1037,33 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   hasNext,
   onPrevious,
   onNext
-}) => (
-  <div className={styles.suggestionSection}>
+}) => {
+  const normalizedPageSizeOptions: number[] = React.useMemo(() => {
+    const seen: Set<number> = new Set();
+    const items: number[] = [];
+    const addSize = (size: number | undefined): void => {
+      if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+        return;
+      }
+
+      const normalized: number = Math.floor(size);
+
+      if (seen.has(normalized)) {
+        return;
+      }
+
+      seen.add(normalized);
+      items.push(normalized);
+    };
+
+    pageSizeOptions.forEach((size) => addSize(size));
+    addSize(selectedPageSize);
+
+    return items;
+  }, [pageSizeOptions, selectedPageSize]);
+
+  return (
+    <div className={styles.suggestionSection}>
     <div className={styles.sectionHeader}>
       <h3 id={titleId} className={styles.sectionTitle}>
         {title}
@@ -1042,38 +1075,51 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
       aria-labelledby={titleId}
       className={styles.sectionContent}
     >
-      <div className={styles.filterControls}>
-        <TextField
-          label={strings.SearchLabel}
-          value={searchValue}
-          onChange={onSearchChange}
-          disabled={isLoading}
-          placeholder={strings.SearchPlaceholder}
-          className={styles.filterSearch}
-        />
-        <Dropdown
-          label={strings.CategoryLabel}
-          options={categoryOptions}
-          selectedKey={selectedCategoryKey}
-          onChange={onCategoryChange}
-          disabled={isLoading || isSectionLoading || disableCategoryDropdown}
-          className={styles.filterDropdown}
-        />
-        <Dropdown
-          label={strings.SubcategoryLabel}
-          options={subcategoryOptions}
-          selectedKey={selectedSubcategoryKey}
-          onChange={onSubcategoryChange}
-          disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
-          className={styles.filterDropdown}
-          placeholder={subcategoryPlaceholder}
-        />
-        <DefaultButton
-          text={strings.ClearFiltersButtonText}
-          className={styles.filterButton}
-          onClick={onClearFilters}
-          disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
-        />
+      <div className={styles.filters}>
+        <div className={styles.filterControls}>
+          <TextField
+            label={strings.SearchLabel}
+            value={searchValue}
+            onChange={onSearchChange}
+            disabled={isLoading}
+            placeholder={strings.SearchPlaceholder}
+            className={styles.filterSearch}
+          />
+          <Dropdown
+            label={strings.CategoryLabel}
+            options={categoryOptions}
+            selectedKey={selectedCategoryKey}
+            onChange={onCategoryChange}
+            disabled={isLoading || isSectionLoading || disableCategoryDropdown}
+            className={styles.filterDropdown}
+          />
+          <Dropdown
+            label={strings.SubcategoryLabel}
+            options={subcategoryOptions}
+            selectedKey={selectedSubcategoryKey}
+            onChange={onSubcategoryChange}
+            disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
+            className={styles.filterDropdown}
+            placeholder={subcategoryPlaceholder}
+          />
+          <Dropdown
+            label={strings.ItemsPerPageLabel}
+            options={normalizedPageSizeOptions.map((size) => ({
+              key: size,
+              text: size.toString()
+            }))}
+            selectedKey={selectedPageSize}
+            onChange={onPageSizeChange}
+            disabled={isLoading || isSectionLoading}
+            className={styles.filterDropdown}
+          />
+          <DefaultButton
+            text={strings.ClearFiltersButtonText}
+            className={styles.filterButton}
+            onClick={onClearFilters}
+            disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
+          />
+        </div>
       </div>
       {isLoading || isSectionLoading ? (
         <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
@@ -1106,7 +1152,8 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
       )}
     </div>
   </div>
-);
+  );
+};
 
 interface ISimilarSuggestionsProps {
   viewModels: ISuggestionViewModel[];
@@ -1260,7 +1307,8 @@ const DEFAULT_SUGGESTION_CATEGORY: SuggestionCategory = FALLBACK_CATEGORIES[0];
 const ALL_CATEGORY_FILTER_KEY: string = '__all_categories__';
 const ALL_SUBCATEGORY_FILTER_KEY: string = '__all_subcategories__';
 const ALL_STATUS_FILTER_KEY: string = '__all_statuses__';
-const SUGGESTIONS_PAGE_SIZE: number = 5;
+const DEFAULT_SUGGESTIONS_PAGE_SIZE: number = 5;
+const SUGGESTION_PAGE_SIZE_OPTIONS: number[] = [5, 10, 20];
 const ADMIN_TOP_SUGGESTIONS_COUNT: number = 10;
 const SIMILAR_SUGGESTIONS_DEBOUNCE_MS: number = 500;
 const LIST_SEARCH_DEBOUNCE_MS: number = 300;
@@ -1315,6 +1363,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
       completedSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
+      activePageSize: DEFAULT_SUGGESTIONS_PAGE_SIZE,
+      completedPageSize: DEFAULT_SUGGESTIONS_PAGE_SIZE,
       activeSuggestionsTotal: undefined,
       completedSuggestionsTotal: undefined,
       isLoading: false,
@@ -1882,6 +1932,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 subcategoryPlaceholder={activeFilterSubcategoryPlaceholder}
                 onClearFilters={this._clearActiveFilters}
                 isClearFiltersDisabled={!hasActiveFilters}
+                pageSizeOptions={SUGGESTION_PAGE_SIZE_OPTIONS}
+                selectedPageSize={this.state.activePageSize}
+                onPageSizeChange={this._onActivePageSizeChange}
                 viewModels={activeSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
@@ -1926,6 +1979,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
                 onClearFilters={this._clearCompletedFilters}
                 isClearFiltersDisabled={!hasCompletedFilters}
+                pageSizeOptions={SUGGESTION_PAGE_SIZE_OPTIONS}
+                selectedPageSize={this.state.completedPageSize}
+                onPageSizeChange={this._onCompletedPageSizeChange}
                 viewModels={completedSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
@@ -3061,9 +3117,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ? [filter.status as string]
       : baseStatuses;
 
+    const pageSize: number =
+      statusGroup === 'completed' ? this.state.completedPageSize : this.state.activePageSize;
+
     const response = await this.props.graphService.getSuggestionItems(listId, {
       statuses,
-      top: SUGGESTIONS_PAGE_SIZE,
+      top: pageSize,
       skipToken,
       category: filter.category,
       subcategory: filter.subcategory,
@@ -3961,6 +4020,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._applyActiveFilter(nextFilter);
   };
 
+  private _onActivePageSizeChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    const nextSize: number | undefined = this._parsePageSizeOption(option);
+
+    if (typeof nextSize !== 'number' || nextSize === this.state.activePageSize) {
+      return;
+    }
+
+    const nextFilter: IFilterState = { ...this.state.activeFilter };
+
+    this._updateState({ activePageSize: nextSize }, () => {
+      this._applyActiveFilter(nextFilter);
+    });
+  };
+
   private _onCompletedSearchChange = (
     _event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue?: string
@@ -4002,6 +4078,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     };
     this._debouncedCompletedFilterSearch.cancel();
     this._applyCompletedFilter(nextFilter);
+  };
+
+  private _onCompletedPageSizeChange = (
+    _event: React.FormEvent<HTMLDivElement>,
+    option?: IDropdownOption
+  ): void => {
+    const nextSize: number | undefined = this._parsePageSizeOption(option);
+
+    if (typeof nextSize !== 'number' || nextSize === this.state.completedPageSize) {
+      return;
+    }
+
+    const nextFilter: IFilterState = { ...this.state.completedFilter };
+
+    this._updateState({ completedPageSize: nextSize }, () => {
+      this._applyCompletedFilter(nextFilter);
+    });
   };
 
   private _onCompletedFilterSubcategoryChange = (
@@ -4898,6 +4991,27 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return false;
+  }
+
+  private _parsePageSizeOption(option?: IDropdownOption): number | undefined {
+    if (!option) {
+      return undefined;
+    }
+
+    const { key } = option;
+
+    if (typeof key === 'number' && Number.isFinite(key) && key > 0) {
+      return Math.floor(key);
+    }
+
+    if (typeof key === 'string') {
+      const parsed: number = parseInt(key, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return undefined;
   }
 
   private _parseVotes(value: unknown): number {

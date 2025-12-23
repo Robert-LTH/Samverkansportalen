@@ -122,6 +122,7 @@ declare interface ISamverkansportalenWebPartStrings {
   VotesPerCategoryDefaultLabel: string;
   CategoryLabel: string;
   SubcategoryLabel: string;
+  ItemsPerPageLabel: string;
   NoSubcategoriesAvailablePlaceholder: string;
   SelectSubcategoryPlaceholder: string;
   AddSuggestionTitleLabel: string;

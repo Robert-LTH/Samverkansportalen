@@ -132,6 +132,7 @@ define([], function() {
     "VotesPerCategoryDefaultLabel": "You have {0} votes per category",
     "CategoryLabel": "Category",
     "SubcategoryLabel": "Subcategory",
+    "ItemsPerPageLabel": "Items per page",
     "NoSubcategoriesAvailablePlaceholder": "No subcategories available",
     "SelectSubcategoryPlaceholder": "Select a subcategory",
     "AddSuggestionTitleLabel": "Title",
