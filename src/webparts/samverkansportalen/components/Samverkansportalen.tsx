@@ -2675,7 +2675,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const listId: string = this._getResolvedStatusListId();
     const items = await this.props.graphService.getStatusItems(listId);
 
-    const definitions: Array<{ title: string; order?: number }> = [];
+    const definitions: Array<{ title: string; order?: number; isCompleted: boolean }> = [];
 
     items.forEach((item) => {
       const rawTitle: unknown = item.fields?.Title;
@@ -2702,7 +2702,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         }
       }
 
-      definitions.push({ title, order });
+      const isCompleted: boolean = this._parseBooleanValue(item.fields?.IsCompleted);
+
+      definitions.push({ title, order, isCompleted });
     });
 
     definitions.sort((a, b) => {
@@ -2728,7 +2730,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
-    this._applyStatusConfiguration(statuses, this.state.completedStatus, { reloadSuggestions: false });
+    const completedStatusFromList: string | undefined = definitions.find(
+      (definition) => definition.isCompleted
+    )?.title;
+    const completedStatus: string | undefined =
+      completedStatusFromList ?? this.state.completedStatus;
+
+    this._applyStatusConfiguration(statuses, completedStatus, { reloadSuggestions: false });
   }
 
   private _applyCategories(definitions: SuggestionCategory[]): void {
@@ -4873,6 +4881,23 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private get _statusListTitle(): string | undefined {
     return this._normalizeOptionalListTitle(this.props.statusListTitle);
+  }
+
+  private _parseBooleanValue(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+
+    if (typeof value === 'string') {
+      const normalized: string = value.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1' || normalized === 'yes';
+    }
+
+    return false;
   }
 
   private _parseVotes(value: unknown): number {

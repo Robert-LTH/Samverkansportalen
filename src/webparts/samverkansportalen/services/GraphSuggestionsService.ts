@@ -71,6 +71,7 @@ export interface IGraphCategoryItem {
 export interface IGraphStatusItemFields extends Record<string, unknown> {
   Title?: string;
   SortOrder?: number | string;
+  IsCompleted?: boolean | string | number;
 }
 
 export interface IGraphStatusItem {
@@ -269,6 +270,14 @@ const STATUS_COLUMN_DEFINITIONS: IListColumnDefinition[] = [
       number: {
         decimalPlaces: '0'
       }
+    })
+  },
+  {
+    name: 'IsCompleted',
+    createPayload: () => ({
+      name: 'IsCompleted',
+      displayName: 'IsCompleted',
+      boolean: {}
     })
   }
 ];
@@ -804,7 +813,7 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .select('id')
-      .expand('fields($select=Title,SortOrder)')
+      .expand('fields($select=Title,SortOrder,IsCompleted)')
       .top(999)
       .get();
 
@@ -823,6 +832,20 @@ export class GraphSuggestionsService {
       .api(`/sites/${siteId}/lists/${listId}/items`)
       .version('v1.0')
       .post({ fields });
+  }
+
+  public async updateStatusItem(
+    listId: string,
+    itemId: number,
+    fields: Partial<IGraphStatusItemFields>
+  ): Promise<void> {
+    const client: MSGraphClientV3 = await this._getClient();
+    const siteId: string = await this._getSiteId();
+
+    await client
+      .api(`/sites/${siteId}/lists/${listId}/items/${itemId}/fields`)
+      .version('v1.0')
+      .patch(fields);
   }
 
   public async deleteStatusItem(listId: string, itemId: number): Promise<void> {

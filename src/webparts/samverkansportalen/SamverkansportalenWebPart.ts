@@ -31,7 +31,8 @@ import GraphSuggestionsService, {
   DEFAULT_CATEGORY_LIST_TITLE,
   DEFAULT_COMMENT_LIST_TITLE,
   DEFAULT_STATUS_LIST_TITLE,
-  DEFAULT_SUBCATEGORY_LIST_TITLE
+  DEFAULT_SUBCATEGORY_LIST_TITLE,
+  type IGraphStatusItem
 } from './services/GraphSuggestionsService';
 
 type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories' | 'statuses';
@@ -39,7 +40,15 @@ type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' |
 interface IStatusDropdownOption extends IPropertyPaneDropdownOption {
   data?: {
     sortOrder?: number;
+    isCompleted?: boolean;
   };
+}
+
+interface IStatusDefinition {
+  id: number;
+  title: string;
+  order?: number;
+  isCompleted: boolean;
 }
 
 export interface ISamverkansportalenWebPartProps {
@@ -357,6 +366,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         statuses,
         completedStatus
       );
+      this.render();
+      this._saveCompletedStatusSelection(completedStatus).catch(() => {
+        // Errors are logged in _saveCompletedStatusSelection.
+      });
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'defaultStatus') {
       const statuses: string[] =
@@ -635,38 +648,9 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return;
       }
 
-      const items = await this._getGraphService().getStatusItems(listId);
-
-      const definitions: Array<{ id: number; title: string; order: number | undefined }> = [];
-
-      items.forEach((item) => {
-        const id: number = item.id;
-        const rawTitle: unknown = item.fields?.Title;
-
-        if (typeof rawTitle !== 'string') {
-          return;
-        }
-
-        const title: string = rawTitle.trim();
-
-        if (!title) {
-          return;
-        }
-
-        const rawOrder: unknown = item.fields?.SortOrder;
-        let order: number | undefined;
-
-        if (typeof rawOrder === 'number' && Number.isFinite(rawOrder)) {
-          order = rawOrder;
-        } else if (typeof rawOrder === 'string') {
-          const parsed: number = parseInt(rawOrder, 10);
-          if (Number.isFinite(parsed)) {
-            order = parsed;
-          }
-        }
-
-        definitions.push({ id, title, order });
-      });
+      const definitions: IStatusDefinition[] = this._mapStatusDefinitions(
+        await this._getGraphService().getStatusItems(listId)
+      );
 
       definitions.sort((a, b) => {
         if (typeof a.order === 'number' && typeof b.order === 'number' && a.order !== b.order) {
@@ -684,10 +668,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return a.title.localeCompare(b.title);
       });
 
-      this._statusOptions = definitions.map(({ id, title, order }) => ({
+      this._statusOptions = definitions.map(({ id, title, order, isCompleted }) => ({
         key: id.toString(),
         text: title,
-        data: { sortOrder: order }
+        data: { sortOrder: order, isCompleted }
       }));
 
       if (this._statusOptions.length > 0) {
@@ -709,10 +693,36 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
           ? option.text
           : option.key.toString()
       );
-      this.properties.completedStatus = this._normalizeCompletedStatus(
-        this.properties.completedStatus,
-        availableStatuses
+      const completedDefinition: IStatusDefinition | undefined = definitions.find(
+        (definition) => definition.isCompleted
       );
+      const previousCompleted: string = this.properties.completedStatus ?? '';
+
+      if (completedDefinition) {
+        this.properties.completedStatus = completedDefinition.title;
+        if (previousCompleted.trim() !== completedDefinition.title) {
+          this.render();
+        }
+      } else {
+        const normalizedCompleted: string = this._normalizeCompletedStatus(
+          this.properties.completedStatus,
+          availableStatuses
+        );
+        this.properties.completedStatus = normalizedCompleted;
+
+        if (previousCompleted.trim() !== normalizedCompleted) {
+          this.render();
+        }
+
+        await this._saveCompletedStatusSelection(normalizedCompleted, {
+          listId,
+          definitions: definitions.map(({ id, title, isCompleted }) => ({
+            id,
+            title,
+            isCompleted
+          }))
+        });
+      }
       this._statusStatusMessage = undefined;
     } catch (error) {
       console.error('Failed to load statuses for the property pane.', error);
@@ -720,6 +730,104 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     } finally {
       this._isLoadingStatuses = false;
       this.context.propertyPane.refresh();
+    }
+  }
+
+  private async _saveCompletedStatusSelection(
+    completedStatus: string,
+    options: {
+      listId?: string;
+      definitions?: Array<{ id: number; title: string; isCompleted: boolean }>;
+    } = {}
+  ): Promise<void> {
+    const normalizedTarget: string = (completedStatus ?? '').trim().toLowerCase();
+
+    if (!normalizedTarget) {
+      return;
+    }
+
+    const listId: string | undefined =
+      options.listId ?? (await this._getResolvedStatusListId());
+
+    if (!listId) {
+      return;
+    }
+
+    let definitions: Array<{ id: number; title: string; isCompleted: boolean }> | undefined =
+      options.definitions?.map((definition) => ({
+        id: definition.id,
+        title: definition.title,
+        isCompleted: definition.isCompleted
+      }));
+
+    if (!definitions) {
+      definitions = (await this._loadStatusDefinitions(listId)).map(
+        ({ id, title, isCompleted }) => ({
+          id,
+          title,
+          isCompleted
+        })
+      );
+    }
+
+    if (!definitions || definitions.length === 0) {
+      return;
+    }
+
+    const target = definitions.find(
+      ({ title }) => title.trim().toLowerCase() === normalizedTarget
+    );
+
+    if (!target) {
+      return;
+    }
+
+    const updates: Array<Promise<void>> = [];
+
+    if (!target.isCompleted) {
+      target.isCompleted = true;
+      updates.push(
+        this._getGraphService().updateStatusItem(listId, target.id, { IsCompleted: true })
+      );
+    }
+
+    definitions.forEach((definition) => {
+      if (definition.id === target.id) {
+        return;
+      }
+
+      if (definition.isCompleted) {
+        definition.isCompleted = false;
+        updates.push(
+          this._getGraphService().updateStatusItem(listId, definition.id, { IsCompleted: false })
+        );
+      }
+    });
+
+    if (updates.length === 0) {
+      return;
+    }
+
+    try {
+      await Promise.all(updates);
+      const completionLookup: Map<number, boolean> = new Map(
+        definitions.map((definition) => [definition.id, definition.isCompleted])
+      );
+      this._statusOptions = this._statusOptions.map((option) => {
+        const optionId: number = parseInt(option.key.toString(), 10);
+
+        if (!Number.isFinite(optionId)) {
+          return option;
+        }
+
+        const nextIsCompleted: boolean = completionLookup.get(optionId) === true;
+        return {
+          ...option,
+          data: { ...option.data, isCompleted: nextIsCompleted }
+        };
+      });
+    } catch (error) {
+      console.error('Failed to save the completed status selection.', error);
     }
   }
 
@@ -995,7 +1103,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
 
     await this._mutateStatusList(async (listId) => {
       const nextOrder: number | undefined = this._getNextStatusSortOrder();
-      const fields: { Title: string; SortOrder?: number } = { Title: title };
+      const fields: { Title: string; SortOrder?: number; IsCompleted?: boolean } = {
+        Title: title,
+        IsCompleted: false
+      };
 
       if (typeof nextOrder === 'number' && Number.isFinite(nextOrder)) {
         fields.SortOrder = nextOrder;
@@ -1406,6 +1517,69 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
 
     return results.length > 0 ? results : ['Active', 'Done'];
+  }
+
+  private _parseStatusSortOrder(value: unknown): number | undefined {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed: number = parseInt(value, 10);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return undefined;
+  }
+
+  private _parseBooleanField(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+
+    if (typeof value === 'string') {
+      const normalized: string = value.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1' || normalized === 'yes';
+    }
+
+    return false;
+  }
+
+  private _mapStatusDefinitions(items: IGraphStatusItem[]): IStatusDefinition[] {
+    const definitions: IStatusDefinition[] = [];
+
+    items.forEach((item) => {
+      const id: number = item.id;
+      const rawTitle: unknown = item.fields?.Title;
+
+      if (typeof rawTitle !== 'string') {
+        return;
+      }
+
+      const title: string = rawTitle.trim();
+
+      if (!title) {
+        return;
+      }
+
+      const order: number | undefined = this._parseStatusSortOrder(item.fields?.SortOrder);
+      const isCompleted: boolean = this._parseBooleanField(item.fields?.IsCompleted);
+
+      definitions.push({ id, title, order, isCompleted });
+    });
+
+    return definitions;
+  }
+
+  private async _loadStatusDefinitions(listId: string): Promise<IStatusDefinition[]> {
+    const items = await this._getGraphService().getStatusItems(listId);
+    return this._mapStatusDefinitions(items);
   }
 
   private _normalizeStatusDefinitions(value?: string): string {
