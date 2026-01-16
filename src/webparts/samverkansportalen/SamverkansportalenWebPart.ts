@@ -21,9 +21,6 @@ import {
   DEFAULT_SUGGESTIONS_HEADER_SUBTITLE,
   DEFAULT_SUGGESTIONS_HEADER_TITLE,
   DEFAULT_SUGGESTIONS_LIST_TITLE,
-  DEFAULT_VOTES_LIST_SUFFIX,
-  DEFAULT_COMMENTS_LIST_SUFFIX,
-  DEFAULT_STATUS_DEFINITIONS,
   DEFAULT_TOTAL_VOTES_PER_USER,
   ISamverkansportalenProps
 } from './components/ISamverkansportalenProps';
@@ -31,49 +28,31 @@ import GraphSuggestionsService, {
   DEFAULT_CATEGORY_LIST_TITLE,
   DEFAULT_COMMENT_LIST_TITLE,
   DEFAULT_STATUS_LIST_TITLE,
-  DEFAULT_SUBCATEGORY_LIST_TITLE,
-  type IGraphStatusItem
+  DEFAULT_SUBCATEGORY_LIST_TITLE
 } from './services/GraphSuggestionsService';
-
-type ListCreationType = 'suggestions' | 'votes' | 'comments' | 'subcategories' | 'categories' | 'statuses';
-
-interface IStatusDropdownOption extends IPropertyPaneDropdownOption {
-  data?: {
-    sortOrder?: number;
-    isCompleted?: boolean;
-  };
-}
-
-interface IStatusDefinition {
-  id: number;
-  title: string;
-  order?: number;
-  isCompleted: boolean;
-}
-
-export interface ISamverkansportalenWebPartProps {
-  description: string;
-  listTitle?: string;
-  useTableLayout?: boolean;
-  subcategoryListTitle?: string;
-  categoryListTitle?: string;
-  statusListTitle?: string;
-  voteListTitle?: string;
-  commentListTitle?: string;
-  selectedSubcategoryKey?: string;
-  newSubcategoryTitle?: string;
-  selectedCategoryKey?: string;
-  newCategoryTitle?: string;
-  selectedStatusKey?: string;
-  newStatusTitle?: string;
-  headerTitle: string;
-  headerSubtitle: string;
-  statusDefinitions?: string;
-  completedStatus?: string;
-  defaultStatus?: string;
-  totalVotesPerUser?: string;
-  showMetadataInIdColumn?: boolean;
-}
+import type {
+  IStatusDefinition,
+  IStatusDropdownOption,
+  ISamverkansportalenWebPartProps,
+  ListCreationType
+} from './SamverkansportalenWebPart.types';
+import {
+  getDefaultCommentListTitle,
+  getDefaultVoteListTitle,
+  getDropdownOptionText,
+  mapStatusDefinitions,
+  normalizeCommentListTitle,
+  normalizeCompletedStatus,
+  normalizeDefaultStatus,
+  normalizeHeaderText,
+  normalizeListTitle,
+  normalizeOptionalListTitle,
+  normalizeStatusDefinitions,
+  normalizeTotalVotesPerUser,
+  normalizeVoteListTitle,
+  parseStatusDefinitions,
+  validateTotalVotesPerUser
+} from './utils/WebPartNormalization';
 
 export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISamverkansportalenWebPartProps> {
 
@@ -129,18 +108,18 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         categoryListTitle: this._selectedCategoryListTitle,
         statusListTitle: this._selectedStatusListTitle,
         showMetadataInIdColumn: this.properties.showMetadataInIdColumn === true,
-        headerTitle: this._normalizeHeaderText(
+        headerTitle: normalizeHeaderText(
           this.properties.headerTitle,
           DEFAULT_SUGGESTIONS_HEADER_TITLE
         ),
-        headerSubtitle: this._normalizeHeaderText(
+        headerSubtitle: normalizeHeaderText(
           this.properties.headerSubtitle,
           DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
         ),
         statuses,
         completedStatus,
         defaultStatus,
-        totalVotesPerUser: this._getTotalVotesPerUserSetting()
+        totalVotesPerUser: normalizeTotalVotesPerUser(this.properties.totalVotesPerUser)
       }
     );
 
@@ -172,37 +151,37 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   }
 
   protected onInit(): Promise<void> {
-    this.properties.listTitle = this._normalizeListTitle(this.properties.listTitle);
-    this.properties.voteListTitle = this._normalizeVoteListTitle(
+    this.properties.listTitle = normalizeListTitle(this.properties.listTitle);
+    this.properties.voteListTitle = normalizeVoteListTitle(
       this.properties.voteListTitle,
       this.properties.listTitle
     );
-    this.properties.commentListTitle = this._normalizeCommentListTitle(
+    this.properties.commentListTitle = normalizeCommentListTitle(
       this.properties.commentListTitle,
       this.properties.listTitle
     );
-    this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
-    this.properties.categoryListTitle = this._normalizeOptionalListTitle(this.properties.categoryListTitle);
-    this.properties.statusListTitle = this._normalizeOptionalListTitle(this.properties.statusListTitle);
-    this.properties.headerTitle = this._normalizeHeaderText(
+    this.properties.subcategoryListTitle = normalizeOptionalListTitle(this.properties.subcategoryListTitle);
+    this.properties.categoryListTitle = normalizeOptionalListTitle(this.properties.categoryListTitle);
+    this.properties.statusListTitle = normalizeOptionalListTitle(this.properties.statusListTitle);
+    this.properties.headerTitle = normalizeHeaderText(
       this.properties.headerTitle,
       DEFAULT_SUGGESTIONS_HEADER_TITLE
     );
-    this.properties.headerSubtitle = this._normalizeHeaderText(
+    this.properties.headerSubtitle = normalizeHeaderText(
       this.properties.headerSubtitle,
       DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
     );
-    const normalizedStatusDefinitions: string = this._normalizeStatusDefinitions(
+    const normalizedStatusDefinitions: string = normalizeStatusDefinitions(
       this.properties.statusDefinitions
     );
     this.properties.statusDefinitions = normalizedStatusDefinitions;
-    const statusList: string[] = this._parseStatusDefinitions(normalizedStatusDefinitions);
-    const completedStatus: string = this._normalizeCompletedStatus(
+    const statusList: string[] = parseStatusDefinitions(normalizedStatusDefinitions);
+    const completedStatus: string = normalizeCompletedStatus(
       this.properties.completedStatus,
       statusList
     );
     this.properties.completedStatus = completedStatus;
-    this.properties.defaultStatus = this._normalizeDefaultStatus(
+    this.properties.defaultStatus = normalizeDefaultStatus(
       this.properties.defaultStatus,
       statusList,
       completedStatus
@@ -298,13 +277,13 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     super.onPropertyPaneFieldChanged(propertyPath, oldValue, newValue);
 
     if (propertyPath === 'commentListTitle') {
-      this.properties.commentListTitle = this._normalizeCommentListTitle(
+      this.properties.commentListTitle = normalizeCommentListTitle(
         typeof newValue === 'string' ? newValue : undefined,
         this.properties.listTitle
       );
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'subcategoryListTitle') {
-      this.properties.subcategoryListTitle = this._normalizeOptionalListTitle(
+      this.properties.subcategoryListTitle = normalizeOptionalListTitle(
         typeof newValue === 'string' ? newValue : undefined
       );
       this._resetSubcategoryState();
@@ -314,7 +293,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         // Errors are handled inside _ensureSubcategoryOptions.
       });
     } else if (propertyPath === 'categoryListTitle') {
-      this.properties.categoryListTitle = this._normalizeOptionalListTitle(
+      this.properties.categoryListTitle = normalizeOptionalListTitle(
         typeof newValue === 'string' ? newValue : undefined
       );
       this._resetCategoryState();
@@ -324,7 +303,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         // Errors are handled inside _ensureCategoryOptions.
       });
     } else if (propertyPath === 'statusListTitle') {
-      this.properties.statusListTitle = this._normalizeOptionalListTitle(
+      this.properties.statusListTitle = normalizeOptionalListTitle(
         typeof newValue === 'string' ? newValue : undefined
       );
       this._resetStatusState();
@@ -334,13 +313,13 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         // Errors are handled inside _ensureStatusOptions.
       });
     } else if (propertyPath === 'headerTitle') {
-      this.properties.headerTitle = this._normalizeHeaderText(
+      this.properties.headerTitle = normalizeHeaderText(
         typeof newValue === 'string' ? newValue : undefined,
         DEFAULT_SUGGESTIONS_HEADER_TITLE
       );
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'headerSubtitle') {
-      this.properties.headerSubtitle = this._normalizeHeaderText(
+      this.properties.headerSubtitle = normalizeHeaderText(
         typeof newValue === 'string' ? newValue : undefined,
         DEFAULT_SUGGESTIONS_HEADER_SUBTITLE
       );
@@ -356,12 +335,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
               )
               .filter((status) => status.length > 0)
           : this._getStatusDefinitions();
-      const completedStatus: string = this._normalizeCompletedStatus(
+      const completedStatus: string = normalizeCompletedStatus(
         typeof newValue === 'string' ? newValue : undefined,
         statuses
       );
       this.properties.completedStatus = completedStatus;
-      this.properties.defaultStatus = this._normalizeDefaultStatus(
+      this.properties.defaultStatus = normalizeDefaultStatus(
         this.properties.defaultStatus,
         statuses,
         completedStatus
@@ -382,12 +361,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
               )
               .filter((status) => status.length > 0)
           : this._getStatusDefinitions();
-      const completedStatus: string = this._normalizeCompletedStatus(
+      const completedStatus: string = normalizeCompletedStatus(
         this.properties.completedStatus,
         statuses
       );
       this.properties.completedStatus = completedStatus;
-      this.properties.defaultStatus = this._normalizeDefaultStatus(
+      this.properties.defaultStatus = normalizeDefaultStatus(
         typeof newValue === 'string' ? newValue : undefined,
         statuses,
         completedStatus
@@ -648,7 +627,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         return;
       }
 
-      const definitions: IStatusDefinition[] = this._mapStatusDefinitions(
+      const definitions: IStatusDefinition[] = mapStatusDefinitions(
         await this._getGraphService().getStatusItems(listId)
       );
 
@@ -704,7 +683,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
           this.render();
         }
       } else {
-        const normalizedCompleted: string = this._normalizeCompletedStatus(
+        const normalizedCompleted: string = normalizeCompletedStatus(
           this.properties.completedStatus,
           availableStatuses
         );
@@ -832,7 +811,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   }
 
   private async _getResolvedSubcategoryListId(listTitle?: string): Promise<string | undefined> {
-    const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
+    const normalizedTitle: string | undefined = normalizeOptionalListTitle(
       listTitle ?? this._selectedSubcategoryListTitle
     );
 
@@ -862,7 +841,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   }
 
   private async _getResolvedCategoryListId(listTitle?: string): Promise<string | undefined> {
-    const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
+    const normalizedTitle: string | undefined = normalizeOptionalListTitle(
       listTitle ?? this._selectedCategoryListTitle
     );
 
@@ -892,7 +871,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   }
 
   private async _getResolvedStatusListId(listTitle?: string): Promise<string | undefined> {
-    const normalizedTitle: string | undefined = this._normalizeOptionalListTitle(
+    const normalizedTitle: string | undefined = normalizeOptionalListTitle(
       listTitle ?? this._selectedStatusListTitle
     );
 
@@ -1272,10 +1251,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         this._addListOption(trimmed);
 
         if (result.created) {
-          const defaultVoteListTitle: string = this._getDefaultVoteListTitle(trimmed);
+          const defaultVoteListTitle: string = getDefaultVoteListTitle(trimmed);
           this.properties.voteListTitle = defaultVoteListTitle;
           this._addListOption(defaultVoteListTitle);
-          const defaultCommentListTitle: string = this._getDefaultCommentListTitle(trimmed);
+          const defaultCommentListTitle: string = getDefaultCommentListTitle(trimmed);
           this.properties.commentListTitle = defaultCommentListTitle;
           this._addListOption(defaultCommentListTitle);
         }
@@ -1430,291 +1409,45 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     }
   }
 
-  private _normalizeListTitle(value?: string): string {
-    const trimmed: string = (value ?? '').trim();
-    return trimmed.length > 0 ? trimmed : DEFAULT_SUGGESTIONS_LIST_TITLE;
-  }
-
   private get _selectedListTitle(): string {
-    return this._normalizeListTitle(this.properties.listTitle);
-  }
-
-  private _getDefaultVoteListTitle(listTitle: string): string {
-    const trimmed: string = listTitle.trim();
-    if (trimmed.length === 0) {
-      return strings.DefaultVotesListTitle;
-    }
-
-    return `${trimmed}${DEFAULT_VOTES_LIST_SUFFIX}`;
-  }
-
-  private _normalizeVoteListTitle(value?: string, listTitle?: string): string {
-    const trimmed: string = (value ?? '').trim();
-    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.properties.listTitle);
-    return trimmed.length > 0 ? trimmed : this._getDefaultVoteListTitle(normalizedListTitle);
+    return normalizeListTitle(this.properties.listTitle);
   }
 
   private get _selectedVoteListTitle(): string {
-    return this._normalizeVoteListTitle(this.properties.voteListTitle, this.properties.listTitle);
-  }
-
-  private _getDefaultCommentListTitle(listTitle: string): string {
-    const trimmed: string = listTitle.trim();
-    if (trimmed.length === 0) {
-      return strings.DefaultCommentsListTitle;
-    }
-
-    return `${trimmed}${DEFAULT_COMMENTS_LIST_SUFFIX}`;
-  }
-
-  private _normalizeCommentListTitle(value?: string, listTitle?: string): string {
-    const trimmed: string = (value ?? '').trim();
-    const normalizedListTitle: string = this._normalizeListTitle(listTitle ?? this.properties.listTitle);
-    return trimmed.length > 0 ? trimmed : this._getDefaultCommentListTitle(normalizedListTitle);
+    return normalizeVoteListTitle(this.properties.voteListTitle, this.properties.listTitle);
   }
 
   private get _selectedCommentListTitle(): string {
-    return this._normalizeCommentListTitle(this.properties.commentListTitle, this.properties.listTitle);
-  }
-
-  private _normalizeOptionalListTitle(value?: string): string | undefined {
-    const trimmed: string = (value ?? '').trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  private _normalizeHeaderText(value: string | undefined, fallback: string): string {
-    const trimmed: string = (value ?? '').trim();
-    return trimmed.length > 0 ? trimmed : fallback;
-  }
-
-  private _parseStatusDefinitions(value?: string): string[] {
-    const source: string = typeof value === 'string' && value.trim().length > 0
-      ? value
-      : DEFAULT_STATUS_DEFINITIONS;
-    const segments: string[] = source.split(/[\n,;]/);
-    const seen: Set<string> = new Set();
-    const results: string[] = [];
-
-    segments.forEach((segment) => {
-      const trimmed: string = segment.trim();
-
-      if (!trimmed) {
-        return;
-      }
-
-      const key: string = trimmed.toLowerCase();
-
-      if (seen.has(key)) {
-        return;
-      }
-
-      seen.add(key);
-      results.push(trimmed);
-    });
-
-    if (results.length === 0 && source !== DEFAULT_STATUS_DEFINITIONS) {
-      return this._parseStatusDefinitions(DEFAULT_STATUS_DEFINITIONS);
-    }
-
-    return results.length > 0 ? results : ['Active', 'Done'];
-  }
-
-  private _parseStatusSortOrder(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string') {
-      const parsed: number = parseInt(value, 10);
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-
-    return undefined;
-  }
-
-  private _parseBooleanField(value: unknown): boolean {
-    if (typeof value === 'boolean') {
-      return value;
-    }
-
-    if (typeof value === 'number') {
-      return value !== 0;
-    }
-
-    if (typeof value === 'string') {
-      const normalized: string = value.trim().toLowerCase();
-      return normalized === 'true' || normalized === '1' || normalized === 'yes';
-    }
-
-    return false;
-  }
-
-  private _mapStatusDefinitions(items: IGraphStatusItem[]): IStatusDefinition[] {
-    const definitions: IStatusDefinition[] = [];
-
-    items.forEach((item) => {
-      const id: number = item.id;
-      const rawTitle: unknown = item.fields?.Title;
-
-      if (typeof rawTitle !== 'string') {
-        return;
-      }
-
-      const title: string = rawTitle.trim();
-
-      if (!title) {
-        return;
-      }
-
-      const order: number | undefined = this._parseStatusSortOrder(item.fields?.SortOrder);
-      const isCompleted: boolean = this._parseBooleanField(item.fields?.IsCompleted);
-
-      definitions.push({ id, title, order, isCompleted });
-    });
-
-    return definitions;
+    return normalizeCommentListTitle(this.properties.commentListTitle, this.properties.listTitle);
   }
 
   private async _loadStatusDefinitions(listId: string): Promise<IStatusDefinition[]> {
     const items = await this._getGraphService().getStatusItems(listId);
-    return this._mapStatusDefinitions(items);
-  }
-
-  private _normalizeStatusDefinitions(value?: string): string {
-    const statuses: string[] = this._parseStatusDefinitions(value);
-    return statuses.join('\n');
-  }
-
-  private _normalizeCompletedStatus(value: string | undefined, statuses: string[]): string {
-    if (statuses.length === 0) {
-      return 'Done';
-    }
-
-    const trimmed: string = (value ?? '').trim();
-
-    if (trimmed.length > 0) {
-      const match: string | undefined = statuses.find(
-        (status) => status.toLowerCase() === trimmed.toLowerCase()
-      );
-
-      if (match) {
-        return match;
-      }
-    }
-
-    return statuses[statuses.length - 1];
-  }
-
-  private _normalizeDefaultStatus(
-    value: string | undefined,
-    statuses: string[],
-    completedStatus: string
-  ): string {
-    if (statuses.length === 0) {
-      return completedStatus;
-    }
-
-    const trimmed: string = (value ?? '').trim();
-
-    if (trimmed.length > 0) {
-      const match: string | undefined = statuses.find(
-        (status) => status.toLowerCase() === trimmed.toLowerCase()
-      );
-
-      if (match) {
-        return match;
-      }
-    }
-
-    const firstActive: string | undefined = statuses.find(
-      (status) => status.toLowerCase() !== completedStatus.toLowerCase()
-    );
-
-    return firstActive ?? completedStatus;
-  }
-
-  private _normalizeTotalVotesPerUser(value: string | undefined): number {
-    const trimmed: string = (value ?? '').trim();
-
-    if (!trimmed) {
-      return DEFAULT_TOTAL_VOTES_PER_USER;
-    }
-
-    const parsed: number = Number(trimmed);
-
-    if (!Number.isFinite(parsed)) {
-      return DEFAULT_TOTAL_VOTES_PER_USER;
-    }
-
-    const rounded: number = Math.floor(parsed);
-    return rounded > 0 ? rounded : DEFAULT_TOTAL_VOTES_PER_USER;
-  }
-
-  private _getTotalVotesPerUserSetting(): number {
-    return this._normalizeTotalVotesPerUser(this.properties.totalVotesPerUser);
-  }
-
-  private _validateTotalVotesPerUser = (value: string): string => {
-    const trimmed: string = (value ?? '').trim();
-
-    if (!trimmed) {
-      return '';
-    }
-
-    const parsed: number = Number(trimmed);
-
-    if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
-      return strings.TotalVotesPerUserFieldErrorMessage;
-    }
-
-    return '';
-  };
-
-  private _getDropdownOptionText(option: IPropertyPaneDropdownOption): string {
-    const text: string | undefined =
-      typeof option.text === 'string' ? option.text.trim() : undefined;
-
-    if (text && text.length > 0) {
-      return text;
-    }
-
-    const key: unknown = option.key;
-
-    if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
-      const normalizedKey: string = String(key).trim();
-
-      if (normalizedKey.length > 0) {
-        return normalizedKey;
-      }
-    }
-
-    return '';
+    return mapStatusDefinitions(items);
   }
 
   private _getStatusDefinitions(): string[] {
-    return this._parseStatusDefinitions(this.properties.statusDefinitions);
+    return parseStatusDefinitions(this.properties.statusDefinitions);
   }
 
   private _getCompletedStatus(statuses: string[]): string {
-    return this._normalizeCompletedStatus(this.properties.completedStatus, statuses);
+    return normalizeCompletedStatus(this.properties.completedStatus, statuses);
   }
 
   private _getDefaultStatus(statuses: string[], completedStatus: string): string {
-    return this._normalizeDefaultStatus(this.properties.defaultStatus, statuses, completedStatus);
+    return normalizeDefaultStatus(this.properties.defaultStatus, statuses, completedStatus);
   }
 
   private get _selectedSubcategoryListTitle(): string | undefined {
-    return this._normalizeOptionalListTitle(this.properties.subcategoryListTitle);
+    return normalizeOptionalListTitle(this.properties.subcategoryListTitle);
   }
 
   private get _selectedCategoryListTitle(): string | undefined {
-    return this._normalizeOptionalListTitle(this.properties.categoryListTitle);
+    return normalizeOptionalListTitle(this.properties.categoryListTitle);
   }
 
   private get _selectedStatusListTitle(): string | undefined {
-    return this._normalizeOptionalListTitle(this.properties.statusListTitle);
+    return normalizeOptionalListTitle(this.properties.statusListTitle);
   }
 
   private _getGraphService(): GraphSuggestionsService {
@@ -1786,12 +1519,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         ? option.text
         : option.key.toString()
     );
-    const completedStatus: string = this._normalizeCompletedStatus(
+    const completedStatus: string = normalizeCompletedStatus(
       this.properties.completedStatus,
       effectiveStatuses
     );
     this.properties.completedStatus = completedStatus;
-    const defaultStatus: string = this._normalizeDefaultStatus(
+    const defaultStatus: string = normalizeDefaultStatus(
       this.properties.defaultStatus,
       effectiveStatuses,
       completedStatus
@@ -1821,7 +1554,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     };
 
     effectiveStatusOptions.forEach((option) => {
-      addDefaultStatusOption(this._getDropdownOptionText(option));
+      addDefaultStatusOption(getDropdownOptionText(option));
     });
     addDefaultStatusOption(defaultStatus);
 
@@ -1868,7 +1601,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                   value: this.properties.totalVotesPerUser ?? '',
                   placeholder: DEFAULT_TOTAL_VOTES_PER_USER.toString(),
                   validateOnFocusOut: true,
-                  onGetErrorMessage: this._validateTotalVotesPerUser
+                  onGetErrorMessage: validateTotalVotesPerUser
                 }),
                 PropertyPaneDropdown('commentListTitle', {
                   label: strings.CommentListFieldLabel,
