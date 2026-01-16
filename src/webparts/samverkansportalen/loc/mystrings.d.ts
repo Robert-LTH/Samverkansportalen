@@ -109,6 +109,7 @@ declare interface ISamverkansportalenWebPartStrings {
   ShowMetadataInIdColumnOnText: string;
   ShowMetadataInIdColumnOffText: string;
   AddSuggestionSectionTitle: string;
+  AddSuggestionTabLabel: string;
   HideSectionLabel: string;
   ShowSectionLabel: string;
   PreviousButtonText: string;

@@ -111,7 +111,7 @@ interface ISamverkansportalenState {
   adminSuggestions: ISuggestionItem[];
   isAdminSuggestionsLoading: boolean;
   adminFilter: IFilterState;
-  selectedMainTab: 'active' | 'completed' | 'myVotes' | 'admin';
+  selectedMainTab: 'add' | 'active' | 'completed' | 'myVotes' | 'admin';
   error?: string;
   success?: string;
   expandedCommentIds: number[];
@@ -1791,6 +1791,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const voteSummaryOptions: IDropdownOption[] = this._getVoteSummaryOptions(categories);
     const formatTabLabel = (label: string, total?: number): string =>
       typeof total === 'number' ? `${label} (${total})` : label;
+    const addTabLabel: string = strings.AddSuggestionTabLabel;
     const activeTabLabel: string = formatTabLabel(
       strings.ActiveSuggestionsTabLabel,
       this.state.activeSuggestionsTotal ?? activeSuggestions.totalCount
@@ -1841,7 +1842,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         )}
 
         <Pivot selectedKey={selectedMainTab} onLinkClick={this._onSuggestionTabChange}>
-          <PivotItem headerText={activeTabLabel} itemKey="active">
+          <PivotItem headerText={addTabLabel} itemKey="add">
             <div className={styles.pivotContent}>
               <div className={styles.addSuggestion}>
                 <div className={styles.sectionHeader}>
@@ -1918,7 +1919,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                   </div>
                 </div>
               </div>
-
+            </div>
+          </PivotItem>
+          <PivotItem headerText={activeTabLabel} itemKey="active">
+            <div className={styles.pivotContent}>
               <SuggestionSection
                 title={strings.ActiveSuggestionsSectionTitle}
                 titleId={this._sectionIds.active.title}
@@ -5112,8 +5116,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     const key: string | undefined = item.props.itemKey;
-    const normalized: 'active' | 'completed' | 'myVotes' | 'admin' =
-      key === 'myVotes'
+    const normalized: 'add' | 'active' | 'completed' | 'myVotes' | 'admin' =
+      key === 'add'
+        ? 'add'
+        : key === 'myVotes'
         ? 'myVotes'
         : key === 'admin'
         ? 'admin'

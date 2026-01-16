@@ -184,6 +184,7 @@ define([], function() {
     "EntryAriaLabel": "Post {0}",
     "ActiveSuggestionsSectionTitle": "Aktiva förslag",
     "CompletedSuggestionsSectionTitle": "Slutförda förslag",
+    "AddSuggestionTabLabel": "Lägg till ett förslag",
     "ActiveSuggestionsTabLabel": "Aktiva förslag",
     "CompletedSuggestionsTabLabel": "Avslutade förslag",
     "AdminTopSuggestionsTabLabel": "Toppförslag",

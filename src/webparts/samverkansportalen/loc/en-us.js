@@ -184,6 +184,7 @@ define([], function() {
     "EntryAriaLabel": "Entry number {0}",
     "ActiveSuggestionsSectionTitle": "Active suggestions",
     "CompletedSuggestionsSectionTitle": "Completed suggestions",
+    "AddSuggestionTabLabel": "Add a suggestion",
     "ActiveSuggestionsTabLabel": "Active suggestions",
     "CompletedSuggestionsTabLabel": "Completed suggestions",
     "AdminTopSuggestionsTabLabel": "Top suggestions",
