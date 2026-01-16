@@ -115,6 +115,7 @@ declare interface ISamverkansportalenWebPartStrings {
   NextButtonText: string;
   PaginationPageLabel: string;
   CreatedLabel: string;
+  CreatedByLabel: string;
   LastModifiedLabel: string;
   CompletedLabel: string;
   VotesRemainingLabel: string;

@@ -591,21 +591,48 @@
   }
 }
 
+.authorRow {
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 0.725rem;
+  color: "[theme:neutralTertiary, default: #a19f9d]";
+  width: 100%;
+  flex-direction: row;
+}
+
 .timestampRow {
   margin: 0.5rem 0 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.75rem;
-  font-size: 0.625rem;
+  font-size: 0.725rem;
   color: "[theme:neutralTertiary, default: #a19f9d]";
   width: 100%;
+  flex-direction: row;
 }
 
 .timestampEntry {
   display: inline-flex;
-  align-items: baseline;
+  align-items: start;
   gap: 0.25rem;
+  justify-items: flex-end;
+  /*flex-direction: column;*/
+}
+
+.timestampEntryEnd {
+  /*flex-direction: column;*/
+  display: inline-flex;
+  align-items: end;
+  gap: 0.25rem;
+  justify-items: auto;
+}
+
+.metadataSegment {
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .timestampLabel,

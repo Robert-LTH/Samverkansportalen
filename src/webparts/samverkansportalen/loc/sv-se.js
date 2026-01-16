@@ -125,6 +125,7 @@ define([], function() {
     "NextButtonText": "Nästa",
     "PaginationPageLabel": "Sida {0}",
     "CreatedLabel": "Skapad",
+    "CreatedByLabel": "Skapad av",
     "LastModifiedLabel": "Senast ändrad",
     "CompletedLabel": "Slutförd",
     "VotesRemainingLabel": "Återstående röster",

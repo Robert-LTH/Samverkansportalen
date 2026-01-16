@@ -228,7 +228,7 @@ interface ISuggestionTimestampsProps {
 
 const SuggestionTimestamps: React.FC<ISuggestionTimestampsProps> = ({ item, formatDateTime }) => {
   const entries: { label: string; value: string }[] = [];
-  const { createdDateTime, lastModifiedDateTime, completedDateTime } = item;
+  const { createdDateTime, lastModifiedDateTime, completedDateTime, createdByLoginName } = item;
 
   if (createdDateTime) {
     entries.push({ label: strings.CreatedLabel, value: createdDateTime });
@@ -249,13 +249,19 @@ const SuggestionTimestamps: React.FC<ISuggestionTimestampsProps> = ({ item, form
   }
 
   return (
-    <div className={styles.timestampRow}>
-      {entries.map((entry) => (
-        <span key={entry.label} className={styles.timestampEntry}>
-          <span className={styles.timestampLabel}>{entry.label}:</span>
-          <span className={styles.timestampValue}>{formatDateTime(entry.value)}</span>
-        </span>
-      ))}
+    <div className={styles.metadataSegment}>
+      <span className={styles.authorRow}>
+        <span className={styles.timestampLabel}>{strings.CreatedByLabel}:</span>
+        <span className={styles.timestampValue}>{createdByLoginName}</span>
+      </span>
+      <span className={styles.timestampRow}>
+        {entries.map((entry) => (
+          <span key={entry.label} className={styles.timestampEntryEnd}>
+            <span className={styles.timestampLabel}>{entry.label}:</span>
+            <span className={styles.timestampValue}>{formatDateTime(entry.value)}</span>
+          </span>
+        ))}
+      </span>
     </div>
   );
 };
