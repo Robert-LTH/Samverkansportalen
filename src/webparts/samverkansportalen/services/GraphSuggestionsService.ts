@@ -28,6 +28,7 @@ export interface IGraphSuggestionItemFields extends Record<string, unknown> {
   Category?: SuggestionCategory;
   Subcategory?: string;
   CompletedDateTime?: string;
+  Created?: string;
 }
 
 export interface IGraphSuggestionItem {

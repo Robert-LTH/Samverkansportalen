@@ -182,6 +182,39 @@ const getPlainTextFromHtml = (value: string | undefined): string => {
 
 const isRichTextValueEmpty = (value: string): boolean => getPlainTextFromHtml(value).length === 0;
 
+const isSortDiagnosticsEnabled = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return new URLSearchParams(window.location.search).has('debugSort');
+  } catch {
+    return false;
+  }
+};
+
+const isClientSortForced = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return new URLSearchParams(window.location.search).has('forceSort');
+  } catch {
+    return false;
+  }
+};
+
+const getSortableDateValue = (value?: string): number => {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed: number = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 let richTextEditorIdCounter: number = 0;
 const getNextRichTextEditorId = (): string => {
   richTextEditorIdCounter += 1;
@@ -3208,6 +3241,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const pageSize: number =
       statusGroup === 'completed' ? this.state.completedPageSize : this.state.activePageSize;
 
+    const orderBy: string =
+      statusGroup === 'completed' ? 'fields/CompletedDateTime desc' : 'createdDateTime desc';
+
     const response = await this.props.graphService.getSuggestionItems(listId, {
       statuses,
       top: pageSize,
@@ -3217,10 +3253,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       searchQuery: filter.searchQuery,
       suggestionIds:
         typeof filter.suggestionId === 'number' ? [filter.suggestionId] : undefined,
-      orderBy:
-        statusGroup === 'completed'
-          ? 'fields/CompletedDateTime desc'
-          : 'createdDateTime desc'
+      orderBy
     });
 
     const suggestionIds: number[] = response.items
@@ -3257,7 +3290,53 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       votesBySuggestion,
       commentCounts
     );
-    return { items, nextToken: response.nextToken, totalCount: response.totalCount };
+
+    let mismatchIndex: number = -1;
+    if (statusGroup === 'active' && items.length > 1) {
+      mismatchIndex = items.findIndex((item, index) => {
+        if (index === 0) {
+          return false;
+        }
+
+        return (
+          getSortableDateValue(items[index - 1].createdDateTime) <
+          getSortableDateValue(item.createdDateTime)
+        );
+      });
+    }
+
+    const shouldForceSort: boolean = isClientSortForced();
+    const shouldSortClientSide: boolean = statusGroup === 'active' && (mismatchIndex !== -1 || shouldForceSort);
+    const sortedItems: ISuggestionItem[] = shouldSortClientSide
+      ? [...items].sort((a, b) => {
+          const timeDelta: number =
+            getSortableDateValue(b.createdDateTime) - getSortableDateValue(a.createdDateTime);
+          if (timeDelta !== 0) {
+            return timeDelta;
+          }
+
+          return b.id - a.id;
+        })
+      : items;
+
+    if (statusGroup === 'active' && isSortDiagnosticsEnabled()) {
+      if (mismatchIndex === -1 && !shouldForceSort) {
+        console.info('Active suggestions sorted by createdDateTime desc.', {
+          orderBy,
+          first: items[0]?.createdDateTime,
+          last: items[items.length - 1]?.createdDateTime
+        });
+      } else {
+        console.warn('Active suggestions not sorted by createdDateTime desc. Applying client sort.', {
+          orderBy,
+          mismatchIndex,
+          previous: items[mismatchIndex - 1]?.createdDateTime,
+          current: items[mismatchIndex]?.createdDateTime
+        });
+      }
+    }
+
+    return { items: sortedItems, nextToken: response.nextToken, totalCount: response.totalCount };
   }
 
   private async _getTopSuggestionsByVotes(filter: IFilterState): Promise<ISuggestionItem[]> {
@@ -3346,10 +3425,15 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         );
         const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
         const votes: number = isCompleted ? Math.max(liveVotes, storedVotes) : liveVotes;
-        const createdDateTime: string | undefined =
+        const createdDateTimeFromFields: string | undefined =
+          typeof fields.Created === 'string' && fields.Created.trim().length > 0
+            ? fields.Created.trim()
+            : undefined;
+        const createdDateTimeFromEntry: string | undefined =
           typeof entry.createdDateTime === 'string' && entry.createdDateTime.trim().length > 0
             ? entry.createdDateTime.trim()
             : undefined;
+        const createdDateTime: string | undefined = createdDateTimeFromFields ?? createdDateTimeFromEntry;
         const lastModifiedDateTime: string | undefined =
           typeof entry.lastModifiedDateTime === 'string' && entry.lastModifiedDateTime.trim().length > 0
             ? entry.lastModifiedDateTime.trim()
@@ -4473,7 +4557,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         });
       }
 
-      await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
+      await Promise.all([
+        this._syncSuggestionVotes(item.id),
+        this._refreshActiveSuggestions(),
+        this._loadAvailableVotes()
+      ]);
 
       if (this.state.selectedSimilarSuggestion?.id === item.id) {
         await this._loadSelectedSimilarSuggestion(item.id, item.status);
@@ -4484,6 +4572,30 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       this._handleError(strings.VoteUpdateErrorMessage, error);
     } finally {
       this._updateState({ isLoading: false });
+    }
+  }
+
+  private async _syncSuggestionVotes(suggestionId: number): Promise<void> {
+    if (!this._currentVotesListId) {
+      return;
+    }
+
+    try {
+      const voteListId: string = this._getResolvedVotesListId();
+      const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
+        suggestionIds: [suggestionId]
+      });
+      const totalVotes: number = voteItems.reduce(
+        (total, entry) => total + this._parseVotes(entry.fields?.Votes),
+        0
+      );
+      const listId: string = this._getResolvedListId();
+
+      await this.props.graphService.updateSuggestion(listId, suggestionId, {
+        Votes: totalVotes
+      });
+    } catch (error) {
+      console.warn('Failed to sync suggestion votes.', error);
     }
   }
 
