@@ -921,10 +921,14 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
   statuses
 }) => {
   if (viewModels.length === 0) {
-    return <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>;
+    return (
+      <div className={styles.suggestionListWrapper}>
+        <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>
+      </div>
+    );
   }
 
-  return useTableLayout ? (
+  const listContent: JSX.Element = useTableLayout ? (
     <SuggestionTable
       viewModels={viewModels}
       onToggleVote={onToggleVote}
@@ -956,6 +960,8 @@ const SuggestionList: React.FC<ISuggestionListProps> = ({
       statuses={statuses}
     />
   );
+
+  return <div className={styles.suggestionListWrapper}>{listContent}</div>;
 };
 
 interface ISuggestionSectionProps {
@@ -1070,94 +1076,96 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
 
   return (
     <div className={styles.suggestionSection}>
-    <div className={styles.sectionHeader}>
-      <h3 id={titleId} className={styles.sectionTitle}>
-        {title}
-      </h3>
-    </div>
-    <div
-      id={contentId}
-      role="region"
-      aria-labelledby={titleId}
-      className={styles.sectionContent}
-    >
-      <div className={styles.filters}>
-        <div className={styles.filterControls}>
-          <TextField
-            label={strings.SearchLabel}
-            value={searchValue}
-            onChange={onSearchChange}
-            disabled={isLoading}
-            placeholder={strings.SearchPlaceholder}
-            className={styles.filterSearch}
-          />
-          <Dropdown
-            label={strings.CategoryLabel}
-            options={categoryOptions}
-            selectedKey={selectedCategoryKey}
-            onChange={onCategoryChange}
-            disabled={isLoading || isSectionLoading || disableCategoryDropdown}
-            className={styles.filterDropdown}
-          />
-          <Dropdown
-            label={strings.SubcategoryLabel}
-            options={subcategoryOptions}
-            selectedKey={selectedSubcategoryKey}
-            onChange={onSubcategoryChange}
-            disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
-            className={styles.filterDropdown}
-            placeholder={subcategoryPlaceholder}
-          />
-          <Dropdown
-            label={strings.ItemsPerPageLabel}
-            options={normalizedPageSizeOptions.map((size) => ({
-              key: size,
-              text: size.toString()
-            }))}
-            selectedKey={selectedPageSize}
-            onChange={onPageSizeChange}
-            disabled={isLoading || isSectionLoading}
-            className={styles.filterDropdown}
-          />
-          <DefaultButton
-            text={strings.ClearFiltersButtonText}
-            className={styles.filterButton}
-            onClick={onClearFilters}
-            disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
-          />
-        </div>
+      <div className={styles.sectionHeader}>
+        <h3 id={titleId} className={styles.sectionTitle}>
+          {title}
+        </h3>
       </div>
-      {isLoading || isSectionLoading ? (
-        <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
-      ) : (
-        <>
-          <SuggestionList
-            viewModels={viewModels}
-            useTableLayout={useTableLayout}
-            showMetadataInIdColumn={showMetadataInIdColumn}
-            isLoading={isLoading}
-            onToggleVote={onToggleVote}
-            onChangeStatus={onChangeStatus}
-            onDeleteSuggestion={onDeleteSuggestion}
-            onSubmitComment={onSubmitComment}
-            onCommentDraftChange={onCommentDraftChange}
-            onDeleteComment={onDeleteComment}
-            onToggleComments={onToggleComments}
-            onToggleCommentComposer={onToggleCommentComposer}
-            formatDateTime={formatDateTime}
-            statuses={statuses}
-          />
-          <PaginationControls
-            page={page}
-            hasPrevious={hasPrevious}
-            hasNext={hasNext}
-            onPrevious={onPrevious}
-            onNext={onNext}
-          />
-        </>
-      )}
+      <div
+        id={contentId}
+        role="region"
+        aria-labelledby={titleId}
+        className={styles.sectionContent}
+      >
+        <div className={styles.filters}>
+          <div className={styles.filterControls}>
+            <TextField
+              label={strings.SearchLabel}
+              value={searchValue}
+              onChange={onSearchChange}
+              disabled={isLoading}
+              placeholder={strings.SearchPlaceholder}
+              className={styles.filterSearch}
+            />
+            <Dropdown
+              label={strings.CategoryLabel}
+              options={categoryOptions}
+              selectedKey={selectedCategoryKey}
+              onChange={onCategoryChange}
+              disabled={isLoading || isSectionLoading || disableCategoryDropdown}
+              className={styles.filterDropdown}
+            />
+            <Dropdown
+              label={strings.SubcategoryLabel}
+              options={subcategoryOptions}
+              selectedKey={selectedSubcategoryKey}
+              onChange={onSubcategoryChange}
+              disabled={isLoading || isSectionLoading || disableSubcategoryDropdown}
+              className={styles.filterDropdown}
+              placeholder={subcategoryPlaceholder}
+            />
+            <Dropdown
+              label={strings.ItemsPerPageLabel}
+              options={normalizedPageSizeOptions.map((size) => ({
+                key: size,
+                text: size.toString()
+              }))}
+              selectedKey={selectedPageSize}
+              onChange={onPageSizeChange}
+              disabled={isLoading || isSectionLoading}
+              className={styles.filterDropdown}
+            />
+            <DefaultButton
+              text={strings.ClearFiltersButtonText}
+              className={styles.filterButton}
+              onClick={onClearFilters}
+              disabled={isLoading || isSectionLoading || isClearFiltersDisabled}
+            />
+          </div>
+        </div>
+        {isLoading || isSectionLoading ? (
+          <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
+        ) : (
+          <div className={styles.suggestionResults}>
+            <div className={styles.suggestionListScroll}>
+              <SuggestionList
+                viewModels={viewModels}
+                useTableLayout={useTableLayout}
+                showMetadataInIdColumn={showMetadataInIdColumn}
+                isLoading={isLoading}
+                onToggleVote={onToggleVote}
+                onChangeStatus={onChangeStatus}
+                onDeleteSuggestion={onDeleteSuggestion}
+                onSubmitComment={onSubmitComment}
+                onCommentDraftChange={onCommentDraftChange}
+                onDeleteComment={onDeleteComment}
+                onToggleComments={onToggleComments}
+                onToggleCommentComposer={onToggleCommentComposer}
+                formatDateTime={formatDateTime}
+                statuses={statuses}
+              />
+            </div>
+            <PaginationControls
+              page={page}
+              hasPrevious={hasPrevious}
+              hasNext={hasNext}
+              onPrevious={onPrevious}
+              onNext={onNext}
+            />
+          </div>
+        )}
+      </div>
     </div>
-  </div>
   );
 };
 
