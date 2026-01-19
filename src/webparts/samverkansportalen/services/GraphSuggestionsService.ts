@@ -486,6 +486,7 @@ export class GraphSuggestionsService {
       descriptionSearchQuery?: string;
       suggestionIds?: number[];
       orderBy?: string;
+      createdByUserPrincipalName?: string;
     } = {}
   ): Promise<{ items: IGraphSuggestionItem[]; nextToken?: string; totalCount?: number }> {
     const client: MSGraphClientV3 = await this._getClient();
@@ -504,6 +505,9 @@ export class GraphSuggestionsService {
       .map((id) => this._normalizeIntegerId(id))
       .filter((id): id is number => typeof id === 'number');
     const hasSuggestionIdFilter: boolean = normalizedSuggestionIds.length > 0;
+    const hasCreatedByFilter: boolean =
+      typeof options.createdByUserPrincipalName === 'string' &&
+      options.createdByUserPrincipalName.trim().length > 0;
 
     const statuses: string[] = Array.isArray(options.statuses)
       ? options.statuses.filter((status) => typeof status === 'string' && status.trim().length > 0)
@@ -581,7 +585,8 @@ export class GraphSuggestionsService {
       options.orderBy
     );
 
-    const hasSearchFilters: boolean = searchFilters.length > 0 || hasSuggestionIdFilter;
+    const hasSearchFilters: boolean =
+      searchFilters.length > 0 || hasSuggestionIdFilter || hasCreatedByFilter;
 
     const shouldStopEarly = hasSuggestionIdFilter
       ? (items: IGraphSuggestionItem[]): boolean =>
@@ -1690,6 +1695,7 @@ export class GraphSuggestionsService {
       category?: SuggestionCategory;
       subcategory?: string;
       suggestionIds?: number[];
+      createdByUserPrincipalName?: string;
       searchQuery?: string;
       titleSearchQuery?: string;
       descriptionSearchQuery?: string;
@@ -1713,6 +1719,11 @@ export class GraphSuggestionsService {
     const normalizedSuggestionIds: number[] = (options.suggestionIds ?? [])
       .map((id) => this._normalizeIntegerId(id))
       .filter((id): id is number => typeof id === 'number');
+    const normalizedCreatedBy: string | undefined =
+      typeof options.createdByUserPrincipalName === 'string' &&
+      options.createdByUserPrincipalName.trim().length > 0
+        ? options.createdByUserPrincipalName.trim().toLowerCase()
+        : undefined;
 
     const searchTerms: string[] = [
       options.searchQuery,
@@ -1756,6 +1767,18 @@ export class GraphSuggestionsService {
 
       if (normalizedSuggestionIds.length > 0 && !this._matchesSuggestionIds(item, normalizedSuggestionIds)) {
         return false;
+      }
+
+      if (normalizedCreatedBy) {
+        const normalizedItemCreatedBy: string | undefined =
+          typeof item.createdByUserPrincipalName === 'string' &&
+          item.createdByUserPrincipalName.trim().length > 0
+            ? item.createdByUserPrincipalName.trim().toLowerCase()
+            : undefined;
+
+        if (!normalizedItemCreatedBy || normalizedItemCreatedBy !== normalizedCreatedBy) {
+          return false;
+        }
       }
 
       if (searchTerms.length === 0) {

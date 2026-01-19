@@ -2125,70 +2125,68 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             </div>
           </PivotItem>
 
-          {this.props.isCurrentUserAdmin && (
-            <PivotItem headerText={strings.AdminTopSuggestionsTabLabel} itemKey="admin">
-              <div className={styles.pivotContent}>
-                <div className={styles.filters}>
-                  <div className={styles.filterControls}>
-                    <Dropdown
-                      label={strings.CategoryLabel}
-                      options={filterCategoryOptions}
-                      selectedKey={adminFilter.category ?? ALL_CATEGORY_FILTER_KEY}
-                      onChange={this._onAdminFilterCategoryChange}
-                      disabled={isFilterCategoryLimited}
-                      className={styles.filterDropdown}
-                    />
-                    <Dropdown
-                      label={strings.SubcategoryLabel}
-                      options={adminFilterSubcategoryOptions}
-                      selectedKey={adminFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
-                      onChange={this._onAdminFilterSubcategoryChange}
-                      disabled={isAdminFilterSubcategoryLimited}
-                      placeholder={adminFilterSubcategoryPlaceholder}
-                      className={styles.filterDropdown}
-                    />
-                    <Dropdown
-                      label={strings.StatusLabel}
-                      options={adminFilterStatusOptions}
-                      selectedKey={adminFilter.status ?? ALL_STATUS_FILTER_KEY}
-                      onChange={this._onAdminFilterStatusChange}
-                      disabled={isAdminFilterStatusLimited}
-                      className={styles.filterDropdown}
-                    />
-                    <DefaultButton
-                      text={strings.ClearFiltersButtonText}
-                      className={styles.filterButton}
-                      onClick={this._clearAdminFilters}
-                      disabled={isLoading || isAdminSuggestionsLoading || !hasAdminFiltersApplied}
-                    />
-                  </div>
-                </div>
-
-                {isAdminSuggestionsLoading ? (
-                  <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
-                ) : adminSuggestions.length === 0 ? (
-                  <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>
-                ) : (
-                  <SuggestionList
-                    viewModels={adminSuggestionViewModels}
-                    useTableLayout={this.props.useTableLayout === true}
-                    showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
-                    isLoading={isLoading || isAdminSuggestionsLoading}
-                    onToggleVote={(item) => this._toggleVote(item)}
-                    onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
-                    onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
-                    onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
-                    onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
-                    onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
-                    onToggleComments={(id) => this._toggleCommentsSection(id)}
-                    onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
-                    formatDateTime={(value) => this._formatDateTime(value)}
-                    statuses={this.state.statuses}
+          <PivotItem headerText={strings.AdminTopSuggestionsTabLabel} itemKey="admin">
+            <div className={styles.pivotContent}>
+              <div className={styles.filters}>
+                <div className={styles.filterControls}>
+                  <Dropdown
+                    label={strings.CategoryLabel}
+                    options={filterCategoryOptions}
+                    selectedKey={adminFilter.category ?? ALL_CATEGORY_FILTER_KEY}
+                    onChange={this._onAdminFilterCategoryChange}
+                    disabled={isFilterCategoryLimited}
+                    className={styles.filterDropdown}
                   />
-                )}
+                  <Dropdown
+                    label={strings.SubcategoryLabel}
+                    options={adminFilterSubcategoryOptions}
+                    selectedKey={adminFilter.subcategory ?? ALL_SUBCATEGORY_FILTER_KEY}
+                    onChange={this._onAdminFilterSubcategoryChange}
+                    disabled={isAdminFilterSubcategoryLimited}
+                    placeholder={adminFilterSubcategoryPlaceholder}
+                    className={styles.filterDropdown}
+                  />
+                  <Dropdown
+                    label={strings.StatusLabel}
+                    options={adminFilterStatusOptions}
+                    selectedKey={adminFilter.status ?? ALL_STATUS_FILTER_KEY}
+                    onChange={this._onAdminFilterStatusChange}
+                    disabled={isAdminFilterStatusLimited}
+                    className={styles.filterDropdown}
+                  />
+                  <DefaultButton
+                    text={strings.ClearFiltersButtonText}
+                    className={styles.filterButton}
+                    onClick={this._clearAdminFilters}
+                    disabled={isLoading || isAdminSuggestionsLoading || !hasAdminFiltersApplied}
+                  />
+                </div>
               </div>
-            </PivotItem>
-          )}
+
+              {isAdminSuggestionsLoading ? (
+                <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
+              ) : adminSuggestions.length === 0 ? (
+                <p className={styles.emptyState}>{strings.NoSuggestionsLabel}</p>
+              ) : (
+                <SuggestionList
+                  viewModels={adminSuggestionViewModels}
+                  useTableLayout={this.props.useTableLayout === true}
+                  showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
+                  isLoading={isLoading || isAdminSuggestionsLoading}
+                  onToggleVote={(item) => this._toggleVote(item)}
+                  onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
+                  onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
+                  onSubmitComment={(item) => this._submitCommentForSuggestion(item)}
+                  onCommentDraftChange={(item, value) => this._handleCommentDraftChange(item, value)}
+                  onDeleteComment={(item, comment) => this._deleteCommentFromSuggestion(item, comment)}
+                  onToggleComments={(id) => this._toggleCommentsSection(id)}
+                  onToggleCommentComposer={(id) => this._toggleCommentComposer(id)}
+                  formatDateTime={(value) => this._formatDateTime(value)}
+                  statuses={this.state.statuses}
+                />
+              )}
+            </div>
+          </PivotItem>
 
           <PivotItem headerText={strings.MyVotesTabLabel} itemKey="myVotes">
             <div className={styles.pivotContent}>
@@ -2840,7 +2838,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         adminFilter: { ...this.state.adminFilter, subcategory: nextAdminFilterSubcategory }
       },
       () => {
-        if (this.props.isCurrentUserAdmin && this.state.selectedMainTab === 'admin') {
+        if (this.state.selectedMainTab === 'admin') {
           // eslint-disable-next-line @typescript-eslint/no-floating-promises
           this._loadAdminSuggestions();
         }
@@ -2981,7 +2979,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         }
       },
       () => {
-        if (this.props.isCurrentUserAdmin && this.state.selectedMainTab === 'admin') {
+        if (this.state.selectedMainTab === 'admin') {
           // eslint-disable-next-line @typescript-eslint/no-floating-promises
           this._loadAdminSuggestions();
         }
@@ -3595,6 +3593,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return;
     }
 
+    const listId: string = this._getResolvedListId();
     const voteListId: string = this._getResolvedVotesListId();
     this._updateState({ isMyVotesLoading: true });
 
@@ -3603,9 +3602,43 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         username: normalizedUser
       });
 
-      const suggestionIds: number[] = voteItems
+      const votedSuggestionIds: number[] = voteItems
         .map((entry) => this._parseNumericId(entry.fields?.SuggestionId))
         .filter((value): value is number => typeof value === 'number');
+
+      const emptySuggestionResponse: { items: IGraphSuggestionItem[] } = { items: [] };
+      const [votedSuggestionsResponse, createdSuggestionsResponse] = await Promise.all([
+        votedSuggestionIds.length > 0
+          ? this.props.graphService.getSuggestionItems(listId, {
+              suggestionIds: votedSuggestionIds,
+              top: votedSuggestionIds.length
+            })
+          : Promise.resolve(emptySuggestionResponse),
+        this.props.graphService.getSuggestionItems(listId, {
+          createdByUserPrincipalName: normalizedUser
+        })
+      ]);
+
+      const combinedGraphItems: IGraphSuggestionItem[] = [
+        ...votedSuggestionsResponse.items,
+        ...createdSuggestionsResponse.items
+      ];
+
+      const suggestionIdSet: Set<number> = new Set();
+      combinedGraphItems.forEach((entry) => {
+        const suggestionId: number | undefined = this._parseNumericId(
+          entry.listItemId ?? entry.fields.id ?? (entry.fields as { Id?: unknown }).Id
+        );
+
+        if (typeof suggestionId === 'number') {
+          suggestionIdSet.add(suggestionId);
+        }
+      });
+
+      const suggestionIds: number[] = [];
+      suggestionIdSet.forEach((value) => {
+        suggestionIds.push(value);
+      });
 
       if (suggestionIds.length === 0) {
         this._updateState({
@@ -3616,12 +3649,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      const listId: string = this._getResolvedListId();
-      const [suggestionResponse, allVoteItems, commentCounts] = await Promise.all([
-        this.props.graphService.getSuggestionItems(listId, {
-          suggestionIds,
-          top: suggestionIds.length
-        }),
+      const [allVoteItems, commentCounts] = await Promise.all([
         this.props.graphService.getVoteItems(voteListId, {
           suggestionIds
         }),
@@ -3633,15 +3661,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       ]);
 
       const votesBySuggestion: Map<number, IVoteEntry[]> = this._groupVotesBySuggestion(allVoteItems);
-      const suggestions: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
-        suggestionResponse.items,
+      const mappedSuggestions: ISuggestionItem[] = this._mapGraphItemsToSuggestions(
+        combinedGraphItems,
         votesBySuggestion,
         commentCounts
       );
 
-      const suggestionsById: Map<number, ISuggestionItem> = new Map(
-        suggestions.map((suggestion) => [suggestion.id, suggestion])
-      );
+      const suggestionsById: Map<number, ISuggestionItem> = new Map();
+      mappedSuggestions.forEach((suggestion) => {
+        suggestionsById.set(suggestion.id, suggestion);
+      });
+
+      const suggestions: ISuggestionItem[] = [];
+      suggestionsById.forEach((suggestion) => {
+        suggestions.push(suggestion);
+      });
 
       const usedVotesByCategory: Record<string, number> = {};
 
@@ -4557,7 +4591,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         });
       }
 
-      await Promise.all([
+      const [syncedVoteEntries] = await Promise.all([
         this._syncSuggestionVotes(item.id),
         this._refreshActiveSuggestions(),
         this._loadAvailableVotes()
@@ -4567,7 +4601,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         await this._loadSelectedSimilarSuggestion(item.id, item.status);
       }
 
-      this._updateState({ success: hasVoted ? 'Your vote has been removed.' : 'Thanks for voting!' });
+      if (syncedVoteEntries) {
+        this._updateSimilarSuggestionsVotes(item.id, syncedVoteEntries);
+      }
     } catch (error) {
       this._handleError(strings.VoteUpdateErrorMessage, error);
     } finally {
@@ -4575,9 +4611,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
   }
 
-  private async _syncSuggestionVotes(suggestionId: number): Promise<void> {
+  private async _syncSuggestionVotes(suggestionId: number): Promise<IVoteEntry[] | undefined> {
     if (!this._currentVotesListId) {
-      return;
+      return undefined;
     }
 
     try {
@@ -4585,18 +4621,61 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const voteItems: IGraphVoteItem[] = await this.props.graphService.getVoteItems(voteListId, {
         suggestionIds: [suggestionId]
       });
-      const totalVotes: number = voteItems.reduce(
-        (total, entry) => total + this._parseVotes(entry.fields?.Votes),
-        0
-      );
+      const votesBySuggestion: Map<number, IVoteEntry[]> = this._groupVotesBySuggestion(voteItems);
+      const voteEntries: IVoteEntry[] = votesBySuggestion.get(suggestionId) ?? [];
+      const totalVotes: number = voteEntries.reduce((total, entry) => total + entry.votes, 0);
       const listId: string = this._getResolvedListId();
 
       await this.props.graphService.updateSuggestion(listId, suggestionId, {
         Votes: totalVotes
       });
+      return voteEntries;
     } catch (error) {
       console.warn('Failed to sync suggestion votes.', error);
+      return undefined;
     }
+  }
+
+  private _updateSimilarSuggestionsVotes(suggestionId: number, voteEntries: IVoteEntry[]): void {
+    const voters: string[] = voteEntries.map((entry) => entry.username);
+    const liveVotes: number = voteEntries.reduce((total, entry) => total + entry.votes, 0);
+
+    this._updateState((prevState) => {
+      const updatedItems: ISuggestionItem[] = prevState.similarSuggestions.items.map((item) => {
+        if (item.id !== suggestionId) {
+          return item;
+        }
+
+        const isCompleted: boolean = this._isCompletedStatusValue(item.status, prevState.completedStatus);
+
+        return {
+          ...item,
+          voteEntries,
+          voters,
+          votes: isCompleted ? item.votes : liveVotes
+        };
+      });
+
+      const updatedSelected: ISuggestionItem | undefined =
+        prevState.selectedSimilarSuggestion && prevState.selectedSimilarSuggestion.id === suggestionId
+          ? {
+              ...prevState.selectedSimilarSuggestion,
+              voteEntries,
+              voters,
+              votes: this._isCompletedStatusValue(
+                prevState.selectedSimilarSuggestion.status,
+                prevState.completedStatus
+              )
+                ? prevState.selectedSimilarSuggestion.votes
+                : liveVotes
+            }
+          : prevState.selectedSimilarSuggestion;
+
+      return {
+        similarSuggestions: { ...prevState.similarSuggestions, items: updatedItems },
+        selectedSimilarSuggestion: updatedSelected
+      };
+    });
   }
 
   private _canCurrentUserDeleteSuggestion(item: ISuggestionItem): boolean {
@@ -5324,7 +5403,6 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ selectedMainTab: normalized }, () => {
       if (
         normalized === 'admin' &&
-        this.props.isCurrentUserAdmin &&
         this.state.adminSuggestions.length === 0 &&
         !this.state.isAdminSuggestionsLoading
       ) {
