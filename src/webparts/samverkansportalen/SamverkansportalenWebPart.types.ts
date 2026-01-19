@@ -41,6 +41,7 @@ export interface ISamverkansportalenWebPartProps {
   headerSubtitle: string;
   statusDefinitions?: string;
   completedStatus?: string;
+  deniedStatus?: string;
   defaultStatus?: string;
   totalVotesPerUser?: string;
   showMetadataInIdColumn?: boolean;

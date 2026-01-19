@@ -43,6 +43,7 @@ import {
   mapStatusDefinitions,
   normalizeCommentListTitle,
   normalizeCompletedStatus,
+  normalizeDeniedStatus,
   normalizeDefaultStatus,
   normalizeHeaderText,
   normalizeListTitle,
@@ -87,6 +88,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
   public render(): void {
     const statuses: string[] = this._getStatusDefinitions();
     const completedStatus: string = this._getCompletedStatus(statuses);
+    const deniedStatus: string | undefined = this._getDeniedStatus(statuses, completedStatus);
     const defaultStatus: string = this._getDefaultStatus(statuses, completedStatus);
 
     const element: React.ReactElement<ISamverkansportalenProps> = React.createElement(
@@ -118,6 +120,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         ),
         statuses,
         completedStatus,
+        deniedStatus,
         defaultStatus,
         totalVotesPerUser: normalizeTotalVotesPerUser(this.properties.totalVotesPerUser)
       }
@@ -181,6 +184,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       statusList
     );
     this.properties.completedStatus = completedStatus;
+    this.properties.deniedStatus = normalizeDeniedStatus(
+      this.properties.deniedStatus,
+      statusList,
+      completedStatus
+    );
     this.properties.defaultStatus = normalizeDefaultStatus(
       this.properties.defaultStatus,
       statusList,
@@ -340,6 +348,11 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         statuses
       );
       this.properties.completedStatus = completedStatus;
+      this.properties.deniedStatus = normalizeDeniedStatus(
+        this.properties.deniedStatus,
+        statuses,
+        completedStatus
+      );
       this.properties.defaultStatus = normalizeDefaultStatus(
         this.properties.defaultStatus,
         statuses,
@@ -349,6 +362,29 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       this._saveCompletedStatusSelection(completedStatus).catch(() => {
         // Errors are logged in _saveCompletedStatusSelection.
       });
+      this.context.propertyPane.refresh();
+    } else if (propertyPath === 'deniedStatus') {
+      const statuses: string[] =
+        this._statusOptions.length > 0
+          ? this._statusOptions
+              .map((option) =>
+                typeof option.text === 'string' && option.text.trim().length > 0
+                  ? option.text.trim()
+                  : option.key.toString()
+              )
+              .filter((status) => status.length > 0)
+          : this._getStatusDefinitions();
+      const completedStatus: string = normalizeCompletedStatus(
+        this.properties.completedStatus,
+        statuses
+      );
+      this.properties.completedStatus = completedStatus;
+      this.properties.deniedStatus = normalizeDeniedStatus(
+        typeof newValue === 'string' ? newValue : undefined,
+        statuses,
+        completedStatus
+      );
+      this.render();
       this.context.propertyPane.refresh();
     } else if (propertyPath === 'defaultStatus') {
       const statuses: string[] =
@@ -676,6 +712,7 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
         (definition) => definition.isCompleted
       );
       const previousCompleted: string = this.properties.completedStatus ?? '';
+      const previousDenied: string = this.properties.deniedStatus ?? '';
 
       if (completedDefinition) {
         this.properties.completedStatus = completedDefinition.title;
@@ -701,6 +738,17 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
             isCompleted
           }))
         });
+      }
+
+      const normalizedDenied: string | undefined = normalizeDeniedStatus(
+        this.properties.deniedStatus,
+        availableStatuses,
+        this.properties.completedStatus
+      );
+      this.properties.deniedStatus = normalizedDenied;
+
+      if (previousDenied.trim() !== (normalizedDenied ?? '').trim()) {
+        this.render();
       }
       this._statusStatusMessage = undefined;
     } catch (error) {
@@ -1434,6 +1482,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
     return normalizeCompletedStatus(this.properties.completedStatus, statuses);
   }
 
+  private _getDeniedStatus(statuses: string[], completedStatus: string): string | undefined {
+    return normalizeDeniedStatus(this.properties.deniedStatus, statuses, completedStatus);
+  }
+
   private _getDefaultStatus(statuses: string[], completedStatus: string): string {
     return normalizeDefaultStatus(this.properties.defaultStatus, statuses, completedStatus);
   }
@@ -1524,6 +1576,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       effectiveStatuses
     );
     this.properties.completedStatus = completedStatus;
+    const deniedStatus: string | undefined = normalizeDeniedStatus(
+      this.properties.deniedStatus,
+      effectiveStatuses,
+      completedStatus
+    );
+    this.properties.deniedStatus = deniedStatus;
     const defaultStatus: string = normalizeDefaultStatus(
       this.properties.defaultStatus,
       effectiveStatuses,
@@ -1534,6 +1592,10 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
       effectiveStatusOptions.length > 0
         ? effectiveStatusOptions
         : [{ key: completedStatus, text: completedStatus }];
+    const deniedStatusOptions: IPropertyPaneDropdownOption[] = [
+      { key: '', text: strings.DeniedStatusDefaultOptionLabel },
+      ...effectiveStatusOptions
+    ];
     const defaultStatusOptions: IPropertyPaneDropdownOption[] = [];
     const defaultStatusKeys: Set<string> = new Set();
     const addDefaultStatusOption = (status: string | undefined): void => {
@@ -1782,6 +1844,12 @@ export default class SamverkansportalenWebPart extends BaseClientSideWebPart<ISa
                       : [{ key: completedStatus, text: completedStatus }],
                   selectedKey: completedStatus,
                   disabled: completedStatusOptions.length === 0
+                }),
+                PropertyPaneDropdown('deniedStatus', {
+                  label: strings.DeniedStatusFieldLabel,
+                  options: deniedStatusOptions,
+                  selectedKey: deniedStatus ?? '',
+                  disabled: effectiveStatusOptions.length === 0
                 }),
                 PropertyPaneTextField('headerTitle', {
                   label: strings.HeaderTitleFieldLabel,

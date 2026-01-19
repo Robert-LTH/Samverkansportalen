@@ -101,6 +101,8 @@ declare interface ISamverkansportalenWebPartStrings {
   StatusListDefaultOptionLabel: string;
   CreateStatusListButtonLabel: string;
   CompletedStatusFieldLabel: string;
+  DeniedStatusFieldLabel: string;
+  DeniedStatusDefaultOptionLabel: string;
   DefaultStatusFieldLabel: string;
   UseTableLayoutToggleLabel: string;
   UseTableLayoutToggleOnText: string;
@@ -174,6 +176,7 @@ declare interface ISamverkansportalenWebPartStrings {
   AdminTopSuggestionsTabLabel: string;
   MyVotesTabLabel: string;
   ClearFiltersButtonText: string;
+  ShowDeniedSuggestionsLabel: string;
   SuggestionTableSuggestionColumnLabel: string;
   SuggestionTableActionsColumnLabel: string;
   SuggestionTableEntryColumnLabel: string;

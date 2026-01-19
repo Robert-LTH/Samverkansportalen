@@ -111,6 +111,8 @@ define([], function() {
     "CreateListPromptStatusLabel": "statuslistan",
     "StatusDefinitionsFieldLabel": "Förslagsstatusar (en per rad)",
     "CompletedStatusFieldLabel": "Status för slutfört",
+    "DeniedStatusFieldLabel": "Status för avslag",
+    "DeniedStatusDefaultOptionLabel": "Visa inte avslagna förslag",
     "DefaultStatusFieldLabel": "Standardstatus för nya förslag",
     "UseTableLayoutToggleLabel": "Förslagslayout",
     "UseTableLayoutToggleOnText": "Tabell",
@@ -195,6 +197,7 @@ define([], function() {
     "SearchLabel": "Sök",
     "SearchPlaceholder": "Sök efter titel eller detaljer",
     "ClearFiltersButtonText": "Rensa filter",
+    "ShowDeniedSuggestionsLabel": "Visa avslagna förslag",
     "AllCategoriesOptionLabel": "Alla kategorier",
     "AllSubcategoriesOptionLabel": "Alla underkategorier",
     "AllStatusesOptionLabel": "Alla statusar",
@@ -228,3 +231,4 @@ define([], function() {
     "SuggestionsListLoadErrorMessage": "Vi kunde inte läsa in förslagslistan. Uppdatera sidan eller kontakta administratören."
   }
 });
+

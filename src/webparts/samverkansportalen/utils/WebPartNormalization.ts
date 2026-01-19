@@ -173,6 +173,24 @@ export const normalizeCompletedStatus = (
   return statuses[statuses.length - 1];
 };
 
+export const normalizeDeniedStatus = (
+  value: string | undefined,
+  statuses: string[],
+  completedStatus: string
+): string | undefined => {
+  const trimmed: string = (value ?? '').trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const match: string | undefined = statuses.find(
+    (status) => status.toLowerCase() === trimmed.toLowerCase()
+  );
+
+  return match ?? trimmed;
+};
+
 export const normalizeDefaultStatus = (
   value: string | undefined,
   statuses: string[],

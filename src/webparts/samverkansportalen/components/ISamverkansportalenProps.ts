@@ -30,6 +30,7 @@ export interface ISamverkansportalenProps {
   headerSubtitle: string;
   statuses: string[];
   completedStatus: string;
+  deniedStatus?: string;
   defaultStatus: string;
   totalVotesPerUser: number;
 }

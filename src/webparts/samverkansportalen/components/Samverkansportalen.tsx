@@ -11,6 +11,7 @@ import {
   SpinnerSize,
   TextField,
   Dropdown,
+  Toggle,
   Pivot,
   PivotItem,
   type IDropdownOption
@@ -98,6 +99,7 @@ interface ISamverkansportalenState {
   isUnlimitedVotes: boolean;
   statuses: string[];
   completedStatus: string;
+  deniedStatus?: string;
   defaultStatus: string;
   activeFilter: IFilterState;
   completedFilter: IFilterState;
@@ -127,6 +129,7 @@ interface IFilterState {
   subcategory?: string;
   suggestionId?: number;
   status?: string;
+  includeDenied?: boolean;
 }
 
 interface IPaginatedSuggestionsState {
@@ -1087,6 +1090,9 @@ interface ISuggestionSectionProps {
   onSubcategoryChange: (event: React.FormEvent<HTMLDivElement>, option?: IDropdownOption) => void;
   disableSubcategoryDropdown: boolean;
   subcategoryPlaceholder: string;
+  showDeniedFilter?: boolean;
+  isDeniedFilterOn?: boolean;
+  onDeniedFilterChange?: (event: React.MouseEvent<HTMLElement>, checked?: boolean) => void;
   onClearFilters: () => void;
   isClearFiltersDisabled: boolean;
   pageSizeOptions: number[];
@@ -1129,6 +1135,9 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   onSubcategoryChange,
   disableSubcategoryDropdown,
   subcategoryPlaceholder,
+  showDeniedFilter,
+  isDeniedFilterOn,
+  onDeniedFilterChange,
   onClearFilters,
   isClearFiltersDisabled,
   pageSizeOptions,
@@ -1217,6 +1226,15 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
               className={styles.filterDropdown}
               placeholder={subcategoryPlaceholder}
             />
+            {showDeniedFilter && (
+              <Toggle
+                label={strings.ShowDeniedSuggestionsLabel}
+                checked={isDeniedFilterOn === true}
+                onChange={onDeniedFilterChange}
+                disabled={isLoading || isSectionLoading}
+                className={styles.filterToggle}
+              />
+            )}
             <Dropdown
               label={strings.ItemsPerPageLabel}
               options={normalizedPageSizeOptions.map((size) => ({
@@ -1456,7 +1474,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     super(props);
 
     const uniquePrefix: string = `samverkansportalen-${Math.random().toString(36).slice(2, 10)}`;
-    const { statuses, completedStatus, defaultStatus } = this._deriveStatusStateFromProps(props);
+    const { statuses, completedStatus, deniedStatus, defaultStatus } =
+      this._deriveStatusStateFromProps(props);
     this._sectionIds = {
       add: { title: `${uniquePrefix}-add-title`, content: `${uniquePrefix}-add-content` },
       active: { title: `${uniquePrefix}-active-title`, content: `${uniquePrefix}-active-content` },
@@ -1495,6 +1514,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       categories: [...FALLBACK_CATEGORIES],
       statuses,
       completedStatus,
+      deniedStatus,
       defaultStatus,
       availableVotesByCategory: {},
       isUnlimitedVotes: props.isCurrentUserAdmin,
@@ -1510,7 +1530,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         category: undefined,
         subcategory: undefined,
         suggestionId: undefined,
-        status: completedStatus
+        status: completedStatus,
+        includeDenied: false
       },
       adminFilter: {
         searchQuery: '',
@@ -1551,23 +1572,34 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private _deriveStatusStateFromProps(
     props: ISamverkansportalenProps
-  ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
-    return this._deriveStatusState(props.statuses, props.completedStatus, props.defaultStatus);
+  ): { statuses: string[]; completedStatus: string; deniedStatus?: string; defaultStatus: string } {
+    return this._deriveStatusState(
+      props.statuses,
+      props.completedStatus,
+      props.defaultStatus,
+      props.deniedStatus
+    );
   }
 
   private _deriveStatusState(
     statusesInput: string[] | undefined,
     completedStatusCandidate: string | undefined,
-    defaultStatusCandidate?: string
-  ): { statuses: string[]; completedStatus: string; defaultStatus: string } {
+    defaultStatusCandidate?: string,
+    deniedStatusCandidate?: string
+  ): { statuses: string[]; completedStatus: string; deniedStatus?: string; defaultStatus: string } {
     const statuses: string[] = this._sanitizeStatuses(statusesInput);
     const completedStatus: string = this._resolveCompletedStatus(completedStatusCandidate, statuses);
+    const deniedStatus: string | undefined = this._resolveDeniedStatus(
+      deniedStatusCandidate,
+      statuses,
+      completedStatus
+    );
     const defaultStatus: string = this._resolveDefaultStatus(
       defaultStatusCandidate,
       statuses,
       completedStatus
     );
-    return { statuses, completedStatus, defaultStatus };
+    return { statuses, completedStatus, deniedStatus, defaultStatus };
   }
 
   private _sanitizeStatuses(values: string[] | undefined): string[] {
@@ -1619,6 +1651,36 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return statuses[statuses.length - 1];
   }
 
+  private _resolveDeniedStatus(
+    candidate: string | undefined,
+    statuses: string[],
+    completedStatus: string
+  ): string | undefined {
+    if (statuses.length === 0) {
+      return undefined;
+    }
+
+    const normalizedCandidate: string = typeof candidate === 'string' ? candidate.trim() : '';
+
+    if (!normalizedCandidate) {
+      return undefined;
+    }
+
+    const match: string | undefined = statuses.find((status) =>
+      this._areStatusesEqual(status, normalizedCandidate)
+    );
+
+    if (!match) {
+      return normalizedCandidate;
+    }
+
+    if (this._areStatusesEqual(match, completedStatus)) {
+      return match;
+    }
+
+    return match;
+  }
+
   private _resolveDefaultStatus(
     candidate: string | undefined,
     statuses: string[],
@@ -1653,14 +1715,44 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return normalizedLeft === normalizedRight;
   }
 
-  private _isCompletedStatusValue(status: string | undefined, completedStatus: string): boolean {
-    return this._areStatusesEqual(status, completedStatus);
+  private _isCompletedStatusValue(
+    status: string | undefined,
+    completedStatus: string,
+    deniedStatus?: string
+  ): boolean {
+    if (this._areStatusesEqual(status, completedStatus)) {
+      return true;
+    }
+
+    return this._isDeniedStatusValue(status, deniedStatus);
+  }
+
+  private _isDeniedStatusValue(status: string | undefined, deniedStatus: string | undefined): boolean {
+    if (!deniedStatus) {
+      return false;
+    }
+
+    return this._areStatusesEqual(status, deniedStatus);
+  }
+
+  private _filterDeniedSuggestions(items: ISuggestionItem[]): ISuggestionItem[] {
+    if (
+      !this.state.deniedStatus ||
+      this._areStatusesEqual(this.state.deniedStatus, this.state.completedStatus)
+    ) {
+      return items;
+    }
+
+    return items.filter(
+      (item) => !this._isDeniedStatusValue(item.status, this.state.deniedStatus)
+    );
   }
 
   private _normalizeActiveStatusValue(
     status: string | undefined,
     statuses: string[],
-    completedStatus: string
+    completedStatus: string,
+    deniedStatus?: string
   ): string | undefined {
     if (!status) {
       return undefined;
@@ -1672,7 +1764,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       return undefined;
     }
 
-    if (this._areStatusesEqual(match, completedStatus)) {
+    if (this._isCompletedStatusValue(match, completedStatus, deniedStatus)) {
       return undefined;
     }
 
@@ -1695,13 +1787,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private _applyStatusConfiguration(
     statusesOverride?: string[],
     completedStatusOverride?: string,
-    options: { reloadSuggestions?: boolean; defaultStatusOverride?: string } = {}
+    options: { reloadSuggestions?: boolean; defaultStatusOverride?: string; deniedStatusOverride?: string } = {}
   ): void {
     const { reloadSuggestions = true, defaultStatusOverride } = options;
-    const { statuses, completedStatus, defaultStatus } = this._deriveStatusState(
+    const { statuses, completedStatus, deniedStatus, defaultStatus } = this._deriveStatusState(
       statusesOverride ?? this.props.statuses,
       completedStatusOverride ?? this.props.completedStatus,
-      defaultStatusOverride ?? this.props.defaultStatus
+      defaultStatusOverride ?? this.props.defaultStatus,
+      options.deniedStatusOverride ?? this.props.deniedStatus
     );
     const shouldReload: boolean = reloadSuggestions;
 
@@ -1710,20 +1803,31 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         const activeStatus: string | undefined = this._normalizeActiveStatusValue(
           prevState.activeFilter.status,
           statuses,
-          completedStatus
+          completedStatus,
+          deniedStatus
         );
         const adminStatus: string | undefined = this._normalizeActiveStatusValue(
           prevState.adminFilter.status,
           statuses,
-          completedStatus
+          completedStatus,
+          deniedStatus
         );
+        const includeDenied: boolean =
+          prevState.completedFilter.includeDenied === true &&
+          !!deniedStatus &&
+          !this._areStatusesEqual(deniedStatus, completedStatus);
 
         return {
           statuses,
           completedStatus,
+          deniedStatus,
           defaultStatus,
           activeFilter: { ...prevState.activeFilter, status: activeStatus },
-          completedFilter: { ...prevState.completedFilter, status: completedStatus },
+          completedFilter: {
+            ...prevState.completedFilter,
+            status: completedStatus,
+            includeDenied
+          },
           adminFilter: { ...prevState.adminFilter, status: adminStatus }
         } as Partial<ISamverkansportalenState>;
       },
@@ -1738,12 +1842,40 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   private _getActiveStatuses(): string[] {
     return this.state.statuses.filter(
-      (status) => !this._isCompletedStatusValue(status, this.state.completedStatus)
+      (status) =>
+        !this._isCompletedStatusValue(status, this.state.completedStatus, this.state.deniedStatus)
     );
   }
 
+  private _getCompletedStatuses(filter: IFilterState): string[] {
+    const statuses: string[] = [this.state.completedStatus];
+
+    if (
+      filter.includeDenied &&
+      this.state.deniedStatus &&
+      !this._areStatusesEqual(this.state.deniedStatus, this.state.completedStatus)
+    ) {
+      statuses.push(this.state.deniedStatus);
+    }
+
+    return statuses;
+  }
+
   private _normalizeAdminFilterStatus(status: string | undefined): string | undefined {
-    return this._normalizeActiveStatusValue(status, this.state.statuses, this.state.completedStatus);
+    return this._normalizeActiveStatusValue(
+      status,
+      this.state.statuses,
+      this.state.completedStatus,
+      this.state.deniedStatus
+    );
+  }
+
+  private _normalizeStatusValue(status: string | undefined, statuses: string[]): string | undefined {
+    if (!status) {
+      return undefined;
+    }
+
+    return statuses.find((entry) => this._areStatusesEqual(entry, status));
   }
 
   private _isStatusInCollection(status: string | undefined, collection: string[]): boolean {
@@ -1776,20 +1908,26 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const statusesChanged: boolean =
       !this._areStatusCollectionsEqual(prevProps.statuses, this.props.statuses) ||
       !this._areStatusesEqual(prevProps.completedStatus, this.props.completedStatus);
+    const deniedStatusChanged: boolean = !this._areStatusesEqual(
+      prevProps.deniedStatus,
+      this.props.deniedStatus
+    );
     const defaultStatusChanged: boolean = !this._areStatusesEqual(
       prevProps.defaultStatus,
       this.props.defaultStatus
     );
     const totalVotesChanged: boolean = prevProps.totalVotesPerUser !== this.props.totalVotesPerUser;
 
-    if (statusesChanged || defaultStatusChanged) {
+    if (statusesChanged || deniedStatusChanged || defaultStatusChanged) {
       if (this._statusListTitle) {
         this._applyStatusConfiguration(this.state.statuses, this.props.completedStatus, {
-          defaultStatusOverride: this.props.defaultStatus
+          defaultStatusOverride: this.props.defaultStatus,
+          deniedStatusOverride: this.props.deniedStatus
         });
       } else {
         this._applyStatusConfiguration(undefined, undefined, {
-          defaultStatusOverride: this.props.defaultStatus
+          defaultStatusOverride: this.props.defaultStatus,
+          deniedStatusOverride: this.props.deniedStatus
         });
       }
     }
@@ -1875,6 +2013,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const hasActiveFilters: boolean = this._hasSearchFilters(activeFilter);
     const hasCompletedFilters: boolean = this._hasSearchFilters(completedFilter);
     const hasAdminFiltersApplied: boolean = this._hasAdminFilters(adminFilter);
+    const showDeniedFilter: boolean =
+      !!this.state.deniedStatus &&
+      !this._areStatusesEqual(this.state.deniedStatus, this.state.completedStatus);
 
     const activeSuggestionViewModels: ISuggestionViewModel[] = this._createSuggestionViewModels(
       activeSuggestions.items,
@@ -2098,6 +2239,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onSubcategoryChange={this._onCompletedFilterSubcategoryChange}
                 disableSubcategoryDropdown={isCompletedFilterSubcategoryLimited}
                 subcategoryPlaceholder={completedFilterSubcategoryPlaceholder}
+                showDeniedFilter={showDeniedFilter}
+                isDeniedFilterOn={completedFilter.includeDenied === true}
+                onDeniedFilterChange={this._onCompletedDeniedFilterChange}
                 onClearFilters={this._clearCompletedFilters}
                 isClearFiltersDisabled={!hasCompletedFilters}
                 pageSizeOptions={SUGGESTION_PAGE_SIZE_OPTIONS}
@@ -2228,7 +2372,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const allowVoting: boolean = options.allowVoting === true;
 
     return items.map((item) => {
-      const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
+      const isCompleted: boolean = this._isCompletedStatusValue(
+        item.status,
+        this.state.completedStatus,
+        this.state.deniedStatus
+      );
       const remainingVotesForCategory: number = this._getRemainingVotesForCategory(item.category);
       const interaction: ISuggestionInteractionState = this._getInteractionState(
         item,
@@ -2430,7 +2578,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     isVotingAllowed: boolean;
   } {
     const hasVoted: boolean = !!normalizedUser && item.voters.indexOf(normalizedUser) !== -1;
-    const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
+    const isCompleted: boolean = this._isCompletedStatusValue(
+      item.status,
+      this.state.completedStatus,
+      this.state.deniedStatus
+    );
     const isVotingAllowed: boolean = !isCompleted && (allowVoting || !readOnly);
     const disableVote: boolean =
       this.state.isLoading ||
@@ -3116,8 +3268,9 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       effectiveSkipToken,
       filter
     );
+    const filteredItems: ISuggestionItem[] = this._filterDeniedSuggestions(items);
 
-    if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
+    if (!hasSpecificSuggestion && filteredItems.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
       const previousToken: string | undefined = tokens.pop();
 
@@ -3132,12 +3285,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this._updateState({
       activeSuggestions: {
-        items,
+        items: filteredItems,
         page: hasSpecificSuggestion ? 1 : options.page,
         currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
         nextToken: hasSpecificSuggestion ? undefined : nextToken,
         previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens,
-        totalCount: typeof totalCount === 'number' ? totalCount : items.length
+        totalCount: typeof totalCount === 'number' ? totalCount : filteredItems.length
       },
       activeFilter: filter,
       isActiveSuggestionsLoading: false
@@ -3162,8 +3315,10 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       effectiveSkipToken,
       filter
     );
+    const filteredItems: ISuggestionItem[] =
+      filter.includeDenied === true ? items : this._filterDeniedSuggestions(items);
 
-    if (!hasSpecificSuggestion && items.length === 0 && effectivePreviousTokens.length > 0) {
+    if (!hasSpecificSuggestion && filteredItems.length === 0 && effectivePreviousTokens.length > 0) {
       const tokens: (string | undefined)[] = [...effectivePreviousTokens];
       const previousToken: string | undefined = tokens.pop();
 
@@ -3178,12 +3333,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     this._updateState({
       completedSuggestions: {
-        items,
+        items: filteredItems,
         page: hasSpecificSuggestion ? 1 : options.page,
         currentToken: hasSpecificSuggestion ? undefined : effectiveSkipToken,
         nextToken: hasSpecificSuggestion ? undefined : nextToken,
         previousTokens: hasSpecificSuggestion ? [] : effectivePreviousTokens,
-        totalCount: typeof totalCount === 'number' ? totalCount : items.length
+        totalCount: typeof totalCount === 'number' ? totalCount : filteredItems.length
       },
       completedFilter: filter,
       isCompletedSuggestionsLoading: false
@@ -3231,10 +3386,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   ): Promise<{ items: ISuggestionItem[]; nextToken?: string; totalCount?: number }> {
     const listId: string = this._getResolvedListId();
     const baseStatuses: string[] =
-      statusGroup === 'completed' ? [this.state.completedStatus] : this._getActiveStatuses();
-    const statuses: string[] = this._isStatusInCollection(filter.status, baseStatuses)
-      ? [filter.status as string]
-      : baseStatuses;
+      statusGroup === 'completed' ? this._getCompletedStatuses(filter) : this._getActiveStatuses();
+    const normalizedStatus: string | undefined = this._normalizeStatusValue(
+      filter.status,
+      this.state.statuses
+    );
+    const hasSpecificSuggestion: boolean = typeof filter.suggestionId === 'number';
+    const allowStatusOverride: boolean = statusGroup !== 'completed' || filter.includeDenied !== true;
+    const statuses: string[] =
+      normalizedStatus &&
+      (hasSpecificSuggestion || (allowStatusOverride && this._isStatusInCollection(normalizedStatus, baseStatuses)))
+        ? [normalizedStatus]
+        : baseStatuses;
 
     const pageSize: number =
       statusGroup === 'completed' ? this.state.completedPageSize : this.state.activePageSize;
@@ -3264,7 +3427,14 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const shouldLoadVotes: boolean =
       suggestionIds.length > 0 &&
-      statuses.some((status) => !this._isCompletedStatusValue(status, this.state.completedStatus));
+      statuses.some(
+        (status) =>
+          !this._isCompletedStatusValue(
+            status,
+            this.state.completedStatus,
+            this.state.deniedStatus
+          )
+      );
 
     if (shouldLoadVotes) {
       const voteListId: string = this._getResolvedVotesListId();
@@ -3388,7 +3558,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     return suggestions.filter((item) => {
       const isCompleted: boolean = this._isCompletedStatusValue(
         item.status,
-        this.state.completedStatus
+        this.state.completedStatus,
+        this.state.deniedStatus
       );
 
       return item.votes > 0 && !isCompleted;
@@ -3419,7 +3590,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
             : this.state.defaultStatus;
         const isCompleted: boolean = this._isCompletedStatusValue(
           resolvedStatus,
-          this.state.completedStatus
+          this.state.completedStatus,
+          this.state.deniedStatus
         );
         const liveVotes: number = voteEntries.reduce((total, vote) => total + vote.votes, 0);
         const votes: number = isCompleted ? Math.max(liveVotes, storedVotes) : liveVotes;
@@ -3961,7 +4133,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         return;
       }
 
-      const limited: ISuggestionItem[] = enrichedItems.slice(0, MAX_SIMILAR_SUGGESTIONS);
+      const filteredItems: ISuggestionItem[] = this._filterDeniedSuggestions(enrichedItems);
+      const limited: ISuggestionItem[] = filteredItems.slice(0, MAX_SIMILAR_SUGGESTIONS);
 
       const currentSelectedId: number | undefined = this.state.selectedSimilarSuggestion?.id;
       const shouldKeepSelection: boolean =
@@ -4045,7 +4218,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ isSelectedSimilarSuggestionLoading: true });
 
     try {
-      const isCompleted: boolean = this._isCompletedStatusValue(status, this.state.completedStatus);
+      const isCompleted: boolean = this._isCompletedStatusValue(
+        status,
+        this.state.completedStatus,
+        this.state.deniedStatus
+      );
       const { items } = await this._getSuggestionsPage(isCompleted ? 'completed' : 'active', undefined, {
         searchQuery: '',
         category: undefined,
@@ -4320,6 +4497,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._applyCompletedFilter(nextFilter);
   };
 
+  private _onCompletedDeniedFilterChange = (
+    _event: React.MouseEvent<HTMLElement>,
+    checked?: boolean
+  ): void => {
+    const nextIncludeDenied: boolean = checked === true;
+
+    if (nextIncludeDenied === this.state.completedFilter.includeDenied) {
+      return;
+    }
+
+    const nextFilter: IFilterState = {
+      ...this.state.completedFilter,
+      includeDenied: nextIncludeDenied,
+      suggestionId: undefined
+    };
+
+    this._applyCompletedFilter(nextFilter);
+  };
+
   private _onAdminFilterCategoryChange = (
     _event: React.FormEvent<HTMLDivElement>,
     option?: IDropdownOption
@@ -4403,7 +4599,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       category: undefined,
       subcategory: undefined,
       suggestionId: undefined,
-      status: this.state.completedStatus
+      status: this.state.completedStatus,
+      includeDenied: false
     };
   }
 
@@ -4422,7 +4619,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       (filter.searchQuery ?? '').trim().length > 0 ||
       !!filter.category ||
       !!filter.subcategory ||
-      typeof filter.suggestionId === 'number'
+      typeof filter.suggestionId === 'number' ||
+      filter.includeDenied === true
     );
   }
 
@@ -4646,7 +4844,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           return item;
         }
 
-        const isCompleted: boolean = this._isCompletedStatusValue(item.status, prevState.completedStatus);
+        const isCompleted: boolean = this._isCompletedStatusValue(
+          item.status,
+          prevState.completedStatus,
+          prevState.deniedStatus
+        );
 
         return {
           ...item,
@@ -4664,7 +4866,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
               voters,
               votes: this._isCompletedStatusValue(
                 prevState.selectedSimilarSuggestion.status,
-                prevState.completedStatus
+                prevState.completedStatus,
+                prevState.deniedStatus
               )
                 ? prevState.selectedSimilarSuggestion.votes
                 : liveVotes
@@ -4679,7 +4882,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   }
 
   private _canCurrentUserDeleteSuggestion(item: ISuggestionItem): boolean {
-    const isCompleted: boolean = this._isCompletedStatusValue(item.status, this.state.completedStatus);
+    const isCompleted: boolean = this._isCompletedStatusValue(
+      item.status,
+      this.state.completedStatus,
+      this.state.deniedStatus
+    );
 
     if (this.props.isCurrentUserAdmin) {
       return true;
@@ -4997,7 +5204,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     item: ISuggestionItem,
     comment: ISuggestionComment
   ): Promise<void> {
-    if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
+    if (
+      this._isCompletedStatusValue(
+        item.status,
+        this.state.completedStatus,
+        this.state.deniedStatus
+      )
+    ) {
       this._handleError(strings.CommentDeleteCompletedSuggestionErrorMessage);
       return;
     }
@@ -5019,7 +5232,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       const commentListId: string = this._getResolvedCommentsListId();
       await this.props.graphService.deleteCommentItem(commentListId, comment.id);
 
-      if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
+      if (
+        this._isCompletedStatusValue(
+          item.status,
+          this.state.completedStatus,
+          this.state.deniedStatus
+        )
+      ) {
         await this._refreshCompletedSuggestions();
       } else {
         await this._refreshActiveSuggestions();
@@ -5072,11 +5291,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const isCurrentlyCompleted: boolean = this._isCompletedStatusValue(
       item.status,
-      this.state.completedStatus
+      this.state.completedStatus,
+      this.state.deniedStatus
     );
     const willBeCompleted: boolean = this._isCompletedStatusValue(
       targetStatus,
-      this.state.completedStatus
+      this.state.completedStatus,
+      this.state.deniedStatus
     );
 
     let commentText: string | undefined;
@@ -5166,7 +5387,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
         this.props.graphService.deleteCommentsForSuggestion(commentListId, item.id)
       ]);
 
-      if (this._isCompletedStatusValue(item.status, this.state.completedStatus)) {
+      if (
+        this._isCompletedStatusValue(
+          item.status,
+          this.state.completedStatus,
+          this.state.deniedStatus
+        )
+      ) {
         await this._refreshCompletedSuggestions();
       } else {
         await Promise.all([this._refreshActiveSuggestions(), this._loadAvailableVotes()]);
