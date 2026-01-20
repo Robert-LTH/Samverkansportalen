@@ -126,6 +126,7 @@ define([], function() {
     "PreviousButtonText": "Föregående",
     "NextButtonText": "Nästa",
     "PaginationPageLabel": "Sida {0}",
+    "PaginationPageCountLabel": "Sida {0} av {1}",
     "CreatedLabel": "Skapad",
     "CreatedByLabel": "Skapad av",
     "LastModifiedLabel": "Senast ändrad",

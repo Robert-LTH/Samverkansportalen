@@ -290,6 +290,7 @@ interface IPaginationControlsProps {
   page: number;
   hasPrevious: boolean;
   hasNext: boolean;
+  totalPages?: number;
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -298,6 +299,7 @@ const PaginationControls: React.FC<IPaginationControlsProps> = ({
   page,
   hasPrevious,
   hasNext,
+  totalPages,
   onPrevious,
   onNext
 }) => {
@@ -305,11 +307,21 @@ const PaginationControls: React.FC<IPaginationControlsProps> = ({
     return null;
   }
 
+  const normalizedTotalPages: number | undefined =
+    typeof totalPages === 'number' && Number.isFinite(totalPages)
+      ? Math.max(1, Math.floor(totalPages))
+      : undefined;
+  const label: string = normalizedTotalPages
+    ? strings.PaginationPageCountLabel
+        .replace('{0}', page.toString())
+        .replace('{1}', normalizedTotalPages.toString())
+    : strings.PaginationPageLabel.replace('{0}', page.toString());
+
   return (
     <div className={styles.paginationControls}>
       <DefaultButton text={strings.PreviousButtonText} onClick={onPrevious} disabled={!hasPrevious} />
       <span className={styles.paginationInfo} aria-live="polite">
-        {strings.PaginationPageLabel.replace('{0}', page.toString())}
+        {label}
       </span>
       <DefaultButton text={strings.NextButtonText} onClick={onNext} disabled={!hasNext} />
     </div>
@@ -1101,6 +1113,7 @@ interface ISuggestionSectionProps {
   viewModels: ISuggestionViewModel[];
   useTableLayout: boolean;
   showMetadataInIdColumn: boolean;
+  totalPages?: number;
   onToggleVote: SuggestionAction;
   onChangeStatus: (item: ISuggestionItem, status: string) => void;
   onDeleteSuggestion: SuggestionAction;
@@ -1146,6 +1159,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
   viewModels,
   useTableLayout,
   showMetadataInIdColumn,
+  totalPages,
   onToggleVote,
   onChangeStatus,
   onDeleteSuggestion,
@@ -1280,6 +1294,7 @@ const SuggestionSection: React.FC<ISuggestionSectionProps> = ({
               page={page}
               hasPrevious={hasPrevious}
               hasNext={hasNext}
+              totalPages={totalPages}
               onPrevious={onPrevious}
               onNext={onNext}
             />
@@ -2044,13 +2059,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const formatTabLabel = (label: string, total?: number): string =>
       typeof total === 'number' ? `${label} (${total})` : label;
     const addTabLabel: string = strings.AddSuggestionTabLabel;
+    const activeTotalCount: number | undefined =
+      this.state.activeSuggestionsTotal ?? activeSuggestions.totalCount;
+    const completedTotalCount: number | undefined =
+      this.state.completedSuggestionsTotal ?? completedSuggestions.totalCount;
     const activeTabLabel: string = formatTabLabel(
       strings.ActiveSuggestionsTabLabel,
-      this.state.activeSuggestionsTotal ?? activeSuggestions.totalCount
+      activeTotalCount
     );
     const completedTabLabel: string = formatTabLabel(
       strings.CompletedSuggestionsTabLabel,
-      this.state.completedSuggestionsTotal ?? completedSuggestions.totalCount
+      completedTotalCount
+    );
+    const activeTotalPages: number | undefined = this._getTotalPages(
+      activeTotalCount,
+      this.state.activePageSize
+    );
+    const completedTotalPages: number | undefined = this._getTotalPages(
+      completedTotalCount,
+      this.state.completedPageSize
     );
 
     return (
@@ -2200,6 +2227,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 viewModels={activeSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
+                totalPages={activeTotalPages}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
@@ -2250,6 +2278,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 viewModels={completedSuggestionViewModels}
                 useTableLayout={this.props.useTableLayout === true}
                 showMetadataInIdColumn={this.props.showMetadataInIdColumn === true}
+                totalPages={completedTotalPages}
                 onToggleVote={(item) => this._toggleVote(item)}
                 onChangeStatus={(item, status) => this._updateSuggestionStatus(item, status)}
                 onDeleteSuggestion={(item) => this._deleteSuggestion(item)}
@@ -3248,6 +3277,18 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     return Math.floor(value);
+  }
+
+  private _getTotalPages(totalCount: number | undefined, pageSize: number): number | undefined {
+    if (typeof totalCount !== 'number' || !Number.isFinite(totalCount)) {
+      return undefined;
+    }
+
+    if (pageSize <= 0 || !Number.isFinite(pageSize)) {
+      return undefined;
+    }
+
+    return Math.max(1, Math.ceil(totalCount / Math.floor(pageSize)));
   }
 
   private async _fetchActiveSuggestions(options: {

@@ -126,6 +126,7 @@ define([], function() {
     "PreviousButtonText": "Previous",
     "NextButtonText": "Next",
     "PaginationPageLabel": "Page {0}",
+    "PaginationPageCountLabel": "Page {0} of {1}",
     "CreatedLabel": "Created",
     "CreatedByLabel": "Created by",
     "LastModifiedLabel": "Last modified",
