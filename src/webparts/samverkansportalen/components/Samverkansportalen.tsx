@@ -3596,7 +3596,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
     const suggestions = this._mapGraphItemsToSuggestions(response.items, votesBySuggestion, commentCounts);
 
-    return suggestions.filter((item) => {
+    const filteredSuggestions: ISuggestionItem[] = suggestions.filter((item) => {
       const isCompleted: boolean = this._isCompletedStatusValue(
         item.status,
         this.state.completedStatus,
@@ -3604,6 +3604,21 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       );
 
       return item.votes > 0 && !isCompleted;
+    });
+
+    return [...filteredSuggestions].sort((left, right) => {
+      const voteDelta: number = right.votes - left.votes;
+      if (voteDelta !== 0) {
+        return voteDelta;
+      }
+
+      const dateDelta: number =
+        getSortableDateValue(right.createdDateTime) - getSortableDateValue(left.createdDateTime);
+      if (dateDelta !== 0) {
+        return dateDelta;
+      }
+
+      return right.id - left.id;
     });
   }
 
