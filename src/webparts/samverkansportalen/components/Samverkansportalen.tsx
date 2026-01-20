@@ -5669,13 +5669,25 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     }
 
     this._updateState({ selectedMainTab: normalized }, () => {
-      if (
-        normalized === 'admin' &&
-        this.state.adminSuggestions.length === 0 &&
-        !this.state.isAdminSuggestionsLoading
-      ) {
+      if (normalized === 'active') {
+        this._applyActiveFilter(this.state.activeFilter);
+        return;
+      }
+
+      if (normalized === 'completed') {
+        this._applyCompletedFilter(this.state.completedFilter);
+        return;
+      }
+
+      if (normalized === 'admin') {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         this._loadAdminSuggestions();
+        return;
+      }
+
+      if (normalized === 'myVotes') {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this._loadAvailableVotes();
       }
     });
   };
