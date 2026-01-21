@@ -160,6 +160,8 @@ define([], function() {
     "SubmitCommentButtonText": "Post comment",
     "CommentAddedMessage": "Your comment has been added.",
     "DeleteCommentButtonLabel": "Delete comment",
+    "UnknownCommentAuthorLabel": "Unknown author",
+    "UnknownCommentDateLabel": "Unknown date",
     "VoteSingularLabel": "vote",
     "VotesLabel": "Votes",
     "VotesAndActionsLabel": "Votes and actions",

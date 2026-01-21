@@ -160,6 +160,8 @@ define([], function() {
     "SubmitCommentButtonText": "Publicera kommentar",
     "CommentAddedMessage": "Din kommentar har lagts till.",
     "DeleteCommentButtonLabel": "Ta bort kommentar",
+    "UnknownCommentAuthorLabel": "Okand anvandare",
+    "UnknownCommentDateLabel": "Okant datum",
     "VoteSingularLabel": "röst",
     "VotesLabel": "Röster",
     "VotesAndActionsLabel": "Röster och åtgärder",

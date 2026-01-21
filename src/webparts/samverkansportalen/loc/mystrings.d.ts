@@ -151,6 +151,8 @@ declare interface ISamverkansportalenWebPartStrings {
   SubmitCommentButtonText: string;
   CommentAddedMessage: string;
   DeleteCommentButtonLabel: string;
+  UnknownCommentAuthorLabel: string;
+  UnknownCommentDateLabel: string;
   VoteSingularLabel: string;
   VotesLabel: string;
   VotesAndActionsLabel: string;
