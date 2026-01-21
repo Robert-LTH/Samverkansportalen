@@ -12,10 +12,9 @@ import {
   TextField,
   Dropdown,
   Toggle,
-  Pivot,
-  PivotItem,
   type IDropdownOption
 } from '@fluentui/react';
+import { TabList, Tab } from '@fluentui/react-components';
 import { debounce } from '@microsoft/sp-lodash-subset';
 import styles from './Samverkansportalen.module.scss';
 import {
@@ -113,7 +112,7 @@ interface ISamverkansportalenState {
   adminSuggestions: ISuggestionItem[];
   isAdminSuggestionsLoading: boolean;
   adminFilter: IFilterState;
-  selectedMainTab: 'add' | 'active' | 'completed' | 'myVotes' | 'admin';
+  selectedMainTab: MainTabKey;
   error?: string;
   success?: string;
   expandedCommentIds: number[];
@@ -285,6 +284,7 @@ const measureStatusDropdownWidth = (values: string[]): number | undefined => {
 
 type SuggestionAction = (item: ISuggestionItem) => void | Promise<void>;
 type CommentAction = (item: ISuggestionItem, comment: ISuggestionComment) => void | Promise<void>;
+type MainTabKey = 'add' | 'active' | 'completed' | 'myVotes' | 'admin';
 
 interface IPaginationControlsProps {
   page: number;
@@ -324,6 +324,64 @@ const PaginationControls: React.FC<IPaginationControlsProps> = ({
         {label}
       </span>
       <DefaultButton text={strings.NextButtonText} onClick={onNext} disabled={!hasNext} />
+    </div>
+  );
+};
+
+interface ITabHeaderItem {
+  key: MainTabKey;
+  label: string;
+}
+
+interface ITabHeaderProps {
+  items: ITabHeaderItem[];
+  selectedKey: MainTabKey;
+  onSelect: (key: MainTabKey) => void;
+}
+
+// Work around React 17 typings vs Fluent UI v9 tab component generics in SPFx.
+const FluentTabList: React.FC<any> = TabList as unknown as React.FC<any>;
+const FluentTab: React.FC<any> = Tab as unknown as React.FC<any>;
+
+const TabHeader: React.FC<ITabHeaderProps> = ({ items, selectedKey, onSelect }) => (
+  <FluentTabList
+    className={styles.pivotFloating}
+    selectedValue={selectedKey}
+    onTabSelect={(_event: React.SyntheticEvent, data: { value: unknown }) => {
+      if (data.value === selectedKey) {
+        return;
+      }
+
+      const nextValue: string = typeof data.value === 'string' ? data.value : String(data.value);
+      onSelect(nextValue as MainTabKey);
+    }}
+    data-samverkansportalen-tablist="true"
+  >
+    {items.map((item) => (
+      <FluentTab key={item.key} value={item.key}>
+        {item.label}
+      </FluentTab>
+    ))}
+  </FluentTabList>
+);
+
+interface ITabPanelProps {
+  tabKey: MainTabKey;
+  selectedKey: MainTabKey;
+  children: React.ReactNode;
+}
+
+const TabPanel: React.FC<ITabPanelProps> = ({ tabKey, selectedKey, children }) => {
+  const isSelected: boolean = tabKey === selectedKey;
+
+  return (
+    <div
+      role="tabpanel"
+      aria-hidden={!isSelected}
+      hidden={!isSelected}
+      className="samverkansportalen-tab-panel"
+    >
+      {isSelected ? children : null}
     </div>
   );
 };
@@ -1465,6 +1523,7 @@ const LIST_SEARCH_DEBOUNCE_MS: number = 300;
 const MIN_SIMILAR_SUGGESTION_QUERY_LENGTH: number = 3;
 const MAX_SIMILAR_SUGGESTIONS: number = 5;
 const EMPTY_SIMILAR_SUGGESTIONS_QUERY: ISimilarSuggestionsQuery = { title: '', description: '' };
+const SCROLL_CONTAINER_CLASS: string = 'c_WA0gy_hHQBj';
 
 export default class Samverkansportalen extends React.Component<ISamverkansportalenProps, ISamverkansportalenState> {
   private _isMounted: boolean = false;
@@ -1484,6 +1543,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
   private readonly _debouncedActiveFilterSearch: ReturnType<typeof debounce>;
   private readonly _debouncedCompletedFilterSearch: ReturnType<typeof debounce>;
   private _pendingSimilarSuggestionsQuery?: ISimilarSuggestionsQuery;
+  private readonly _rootRef: React.RefObject<HTMLElement>;
+  private readonly _headerRef: React.RefObject<HTMLElement>;
+  private _stickyUpdateFrame?: number;
+  private _pivotLinksElement?: HTMLElement;
+  private _isStickyActive: boolean = false;
+  private _scrollContainer?: HTMLElement | Window;
 
   public constructor(props: ISamverkansportalenProps) {
     super(props);
@@ -1510,6 +1575,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._debouncedCompletedFilterSearch = debounce((filter: IFilterState) => {
       this._applyCompletedFilter(filter);
     }, LIST_SEARCH_DEBOUNCE_MS);
+    this._rootRef = React.createRef<HTMLElement>();
+    this._headerRef = React.createRef<HTMLElement>();
 
     this.state = {
       activeSuggestions: { items: [], page: 1, currentToken: undefined, nextToken: undefined, previousTokens: [] },
@@ -1583,6 +1650,286 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._isMounted = true;
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     this._initialize();
+    this._initializeStickyOffsets();
+  }
+
+  private _initializeStickyOffsets(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this._scheduleStickyOffsetUpdate();
+    window.addEventListener('resize', this._scheduleStickyOffsetUpdate);
+
+    this._scrollContainer = this._getScrollContainer(this._rootRef.current);
+    if (this._scrollContainer && this._scrollContainer !== window) {
+      this._scrollContainer.addEventListener('scroll', this._scheduleStickyOffsetUpdate);
+    } else {
+      window.addEventListener('scroll', this._scheduleStickyOffsetUpdate);
+    }
+  }
+
+  private _teardownStickyOffsets(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this._scheduleStickyOffsetUpdate);
+      if (this._scrollContainer && this._scrollContainer !== window) {
+        this._scrollContainer.removeEventListener('scroll', this._scheduleStickyOffsetUpdate);
+      } else {
+        window.removeEventListener('scroll', this._scheduleStickyOffsetUpdate);
+      }
+
+      if (this._stickyUpdateFrame !== undefined) {
+        window.cancelAnimationFrame(this._stickyUpdateFrame);
+        this._stickyUpdateFrame = undefined;
+      }
+    }
+
+    this._scrollContainer = undefined;
+  }
+
+  private _scheduleStickyOffsetUpdate = (): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this._stickyUpdateFrame !== undefined) {
+      window.cancelAnimationFrame(this._stickyUpdateFrame);
+    }
+
+    this._stickyUpdateFrame = window.requestAnimationFrame(() => {
+      this._stickyUpdateFrame = undefined;
+      this._updateStickyOffsets();
+    });
+  };
+
+  private _updateStickyOffsets(): void {
+    const root: HTMLElement | null = this._rootRef.current;
+    const header: HTMLElement | null = this._headerRef.current;
+
+    if (!root || !header || typeof window === 'undefined') {
+      return;
+    }
+
+    const headerHeight: number = Math.ceil(header.getBoundingClientRect().height);
+    root.style.setProperty('--samverkansportalen-header-height', `${headerHeight}px`);
+
+    const pivotLinks: HTMLElement | null = this._getPivotLinksElement(root);
+    const pivotLinksHeight: number = pivotLinks
+      ? Math.ceil(pivotLinks.getBoundingClientRect().height)
+      : 0;
+
+    const rootStyles: CSSStyleDeclaration = window.getComputedStyle(root);
+    const stickyOffsetBase: number = this._getNumericCssValue(
+      rootStyles.getPropertyValue('--samverkansportalen-sticky-offset')
+    );
+    const stickyOffset: number = stickyOffsetBase + this._getScrollContainerOffset();
+    const paddingLeft: number = this._getNumericCssValue(rootStyles.paddingLeft);
+    const paddingRight: number = this._getNumericCssValue(rootStyles.paddingRight);
+    const paddingTop: number = this._getNumericCssValue(rootStyles.paddingTop);
+    const paddingBottom: number = this._getNumericCssValue(rootStyles.paddingBottom);
+    const scrollContainerHeight: number =
+      this._scrollContainer instanceof HTMLElement ? this._scrollContainer.clientHeight : window.innerHeight;
+    const availableScrollHeight: number = Math.max(
+      0,
+      Math.floor(scrollContainerHeight - paddingTop - paddingBottom - headerHeight - pivotLinksHeight)
+    );
+    if (availableScrollHeight > 0) {
+      root.style.setProperty(
+        '--samverkansportalen-tab-scroll-height',
+        `${availableScrollHeight}px`
+      );
+    } else {
+      root.style.removeProperty('--samverkansportalen-tab-scroll-height');
+    }
+    const totalStickyHeight: number = headerHeight + pivotLinksHeight;
+    const rootRect: DOMRect = root.getBoundingClientRect();
+    const shouldStick: boolean =
+      totalStickyHeight > 0 &&
+      rootRect.top <= stickyOffset &&
+      rootRect.bottom >= stickyOffset + totalStickyHeight;
+
+    if (!shouldStick) {
+      this._resetStickyStyles(root, header, pivotLinks);
+      return;
+    }
+
+    const fixedLeft: number = Math.round(rootRect.left + paddingLeft);
+    const fixedWidth: number = Math.round(
+      Math.max(0, rootRect.width - paddingLeft - paddingRight)
+    );
+
+    this._applyStickyStyles(root, header, pivotLinks, {
+      stickyOffset,
+      headerHeight,
+      pivotLinksHeight,
+      fixedLeft,
+      fixedWidth
+    });
+  }
+
+  private _getPivotLinksElement(root: HTMLElement): HTMLElement | null {
+    if (this._pivotLinksElement && root.contains(this._pivotLinksElement)) {
+      return this._pivotLinksElement;
+    }
+
+    const tabListSelector: string = '[data-samverkansportalen-tablist="true"]';
+    const explicitTabList: HTMLElement | null = root.querySelector(tabListSelector) as HTMLElement | null;
+    if (explicitTabList) {
+      this._pivotLinksElement = explicitTabList;
+      return explicitTabList;
+    }
+
+    const pivotRoot: Element | null = root.querySelector('.ms-Pivot');
+    const searchRoot: Element | HTMLElement = pivotRoot ?? root;
+    let pivotLinks: HTMLElement | null =
+      (searchRoot.querySelector('[data-samverkansportalen-tablist="true"]') as HTMLElement | null) ??
+      (searchRoot.querySelector('.fui-TabList') as HTMLElement | null) ??
+      (searchRoot.querySelector('[role="tablist"]') as HTMLElement | null);
+
+    if (!pivotLinks) {
+      const tabLists: NodeListOf<HTMLElement> = document.querySelectorAll(
+        '[data-samverkansportalen-tablist="true"], .fui-TabList, [role="tablist"]'
+      );
+      const rootClassSelector: string = `.${styles.samverkansportalen}`;
+      tabLists.forEach((element) => {
+        if (!pivotLinks && element.closest(rootClassSelector) === root) {
+          pivotLinks = element;
+        }
+      });
+    }
+
+    if (!pivotLinks) {
+      pivotLinks = searchRoot.querySelector('[role="tablist"]') as HTMLElement | null;
+    }
+
+    this._pivotLinksElement = pivotLinks ?? undefined;
+    return pivotLinks;
+  }
+
+  private _getNumericCssValue(value: string): number {
+    const parsed: number = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private _getScrollContainer(element: HTMLElement | null): HTMLElement | Window {
+    if (!element || typeof window === 'undefined' || typeof document === 'undefined') {
+      return window;
+    }
+
+    const explicitScrollContainer: Element | null = document.querySelector(
+      `.${SCROLL_CONTAINER_CLASS}`
+    );
+    if (
+      explicitScrollContainer instanceof HTMLElement &&
+      explicitScrollContainer.contains(element)
+    ) {
+      return explicitScrollContainer;
+    }
+
+    let current: HTMLElement | null = element.parentElement;
+    while (current && current !== document.body) {
+      const styles: CSSStyleDeclaration = window.getComputedStyle(current);
+      if (
+        this._isScrollableValue(styles.overflowY) ||
+        this._isScrollableValue(styles.overflowX) ||
+        this._isScrollableValue(styles.overflow)
+      ) {
+        return current;
+      }
+
+      current = current.parentElement;
+    }
+
+    return window;
+  }
+
+  private _isScrollableValue(value: string): boolean {
+    return value === 'auto' || value === 'scroll' || value === 'overlay';
+  }
+
+  private _getScrollContainerOffset(): number {
+    if (
+      !this._scrollContainer ||
+      this._scrollContainer === window ||
+      !(this._scrollContainer instanceof HTMLElement)
+    ) {
+      return 0;
+    }
+
+    const rect: DOMRect = this._scrollContainer.getBoundingClientRect();
+    return rect.top > 0 ? rect.top : 0;
+  }
+
+  private _applyStickyStyles(
+    root: HTMLElement,
+    header: HTMLElement,
+    pivotLinks: HTMLElement | null,
+    options: {
+      stickyOffset: number;
+      headerHeight: number;
+      pivotLinksHeight: number;
+      fixedLeft: number;
+      fixedWidth: number;
+    }
+  ): void {
+    this._isStickyActive = true;
+    root.style.setProperty('--samverkansportalen-sticky-header-padding', `${options.headerHeight}px`);
+    root.style.setProperty('--samverkansportalen-sticky-tabs-padding', `${options.pivotLinksHeight}px`);
+
+    this._applyFixedStyle(header, options.stickyOffset, options.fixedLeft, options.fixedWidth, 7);
+
+    if (pivotLinks) {
+      this._applyFixedStyle(
+        pivotLinks,
+        options.stickyOffset + options.headerHeight,
+        options.fixedLeft,
+        options.fixedWidth,
+        6
+      );
+    }
+  }
+
+  private _resetStickyStyles(
+    root: HTMLElement,
+    header: HTMLElement,
+    pivotLinks: HTMLElement | null
+  ): void {
+    if (!this._isStickyActive) {
+      return;
+    }
+
+    this._isStickyActive = false;
+    root.style.setProperty('--samverkansportalen-sticky-header-padding', '0px');
+    root.style.setProperty('--samverkansportalen-sticky-tabs-padding', '0px');
+    this._clearFixedStyle(header);
+
+    if (pivotLinks) {
+      this._clearFixedStyle(pivotLinks);
+    }
+  }
+
+  private _applyFixedStyle(
+    element: HTMLElement,
+    top: number,
+    left: number,
+    width: number,
+    zIndex: number
+  ): void {
+    element.style.position = 'sticky';
+    element.style.zIndex = zIndex.toString();
+    element.style.top = '';
+    element.style.left = '';
+    element.style.width = '';
+    element.style.boxSizing = '';
+  }
+
+  private _clearFixedStyle(element: HTMLElement): void {
+    element.style.position = '';
+    element.style.top = '';
+    element.style.left = '';
+    element.style.width = '';
+    element.style.zIndex = '';
+    element.style.boxSizing = '';
   }
 
   private _deriveStatusStateFromProps(
@@ -1903,6 +2250,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
 
   public componentWillUnmount(): void {
     this._isMounted = false;
+    this._teardownStickyOffsets();
     this._debouncedSimilarSuggestionsSearch.cancel();
     this._debouncedActiveFilterSearch.cancel();
     this._debouncedCompletedFilterSearch.cancel();
@@ -1963,6 +2311,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       this._loadAvailableVotes();
     }
+
+    this._scheduleStickyOffsetUpdate();
   }
 
   public render(): React.ReactElement<ISamverkansportalenProps> {
@@ -2059,7 +2409,7 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     const formatTabLabel = (label: string, total?: number): string =>
       typeof total === 'number' ? `${label} (${total})` : label;
     const addTabLabel: string = strings.AddSuggestionTabLabel;
-    const activeTotalCount: number | undefined =
+    const activeTotalCount: number | undefined = 
       this.state.activeSuggestionsTotal ?? activeSuggestions.totalCount;
     const completedTotalCount: number | undefined =
       this.state.completedSuggestionsTotal ?? completedSuggestions.totalCount;
@@ -2079,10 +2429,20 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
       completedTotalCount,
       this.state.completedPageSize
     );
+    const tabItems: ITabHeaderItem[] = [
+      { key: 'add', label: addTabLabel },
+      { key: 'active', label: activeTabLabel },
+      { key: 'completed', label: completedTabLabel },
+      { key: 'admin', label: strings.AdminTopSuggestionsTabLabel },
+      { key: 'myVotes', label: strings.MyVotesTabLabel }
+    ];
 
     return (
-      <section className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}>
-        <header className={styles.header}>
+      <section
+        ref={this._rootRef}
+        className={`${styles.samverkansportalen} ${this.props.hasTeamsContext ? styles.teams : ''}`}
+      >
+        <header ref={this._headerRef} className={styles.header}>
           <div>
             <h2 className={styles.title}>{this.props.headerTitle}</h2>
             <p className={styles.subtitle}>{this.props.headerSubtitle}</p>
@@ -2120,8 +2480,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
           </MessageBar>
         )}
 
-        <Pivot selectedKey={selectedMainTab} onLinkClick={this._onSuggestionTabChange}>
-          <PivotItem headerText={addTabLabel} itemKey="add">
+
+        <TabHeader items={tabItems} selectedKey={selectedMainTab} onSelect={this._onTabSelect} />
+
+        <TabPanel tabKey="add" selectedKey={selectedMainTab}>
+          <div className="samverkansportalen-tab-scroll">
             <div className={styles.pivotContent}>
               <div className={styles.addSuggestion}>
                 <div className={styles.sectionHeader}>
@@ -2199,8 +2562,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 </div>
               </div>
             </div>
-          </PivotItem>
-          <PivotItem headerText={activeTabLabel} itemKey="active">
+          </div>
+        </TabPanel>
+
+        <TabPanel tabKey="active" selectedKey={selectedMainTab}>
+          <div className="samverkansportalen-tab-scroll">
             <div className={styles.pivotContent}>
               <SuggestionSection
                 title={strings.ActiveSuggestionsSectionTitle}
@@ -2244,11 +2610,12 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onPrevious={this._goToPreviousActivePage}
                 onNext={this._goToNextActivePage}
               />
-
             </div>
-          </PivotItem>
+          </div>
+        </TabPanel>
 
-          <PivotItem headerText={completedTabLabel} itemKey="completed">
+        <TabPanel tabKey="completed" selectedKey={selectedMainTab}>
+          <div className="samverkansportalen-tab-scroll">
             <div className={styles.pivotContent}>
               <SuggestionSection
                 title={strings.CompletedSuggestionsSectionTitle}
@@ -2296,9 +2663,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 onNext={this._goToNextCompletedPage}
               />
             </div>
-          </PivotItem>
+          </div>
+        </TabPanel>
 
-          <PivotItem headerText={strings.AdminTopSuggestionsTabLabel} itemKey="admin">
+        <TabPanel tabKey="admin" selectedKey={selectedMainTab}>
+          <div className="samverkansportalen-tab-scroll">
             <div className={styles.pivotContent}>
               <div className={styles.filters}>
                 <div className={styles.filterControls}>
@@ -2359,9 +2728,11 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 />
               )}
             </div>
-          </PivotItem>
+          </div>
+        </TabPanel>
 
-          <PivotItem headerText={strings.MyVotesTabLabel} itemKey="myVotes">
+        <TabPanel tabKey="myVotes" selectedKey={selectedMainTab}>
+          <div className="samverkansportalen-tab-scroll">
             <div className={styles.pivotContent}>
               {isMyVotesLoading ? (
                 <Spinner label={strings.LoadingSuggestionsLabel} size={SpinnerSize.large} />
@@ -2386,8 +2757,8 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
                 />
               )}
             </div>
-          </PivotItem>
-        </Pivot>
+          </div>
+        </TabPanel>
       </section>
     );
   }
@@ -5662,28 +6033,13 @@ export default class Samverkansportalen extends React.Component<ISamverkansporta
     this._updateState({ error: message, success: undefined });
   }
 
-  private _onSuggestionTabChange = (item?: PivotItem): void => {
-    if (!item) {
+  private _onTabSelect = (nextTab: MainTabKey): void => {
+    if (nextTab === this.state.selectedMainTab) {
       return;
     }
 
-    const key: string | undefined = item.props.itemKey;
-    const normalized: 'add' | 'active' | 'completed' | 'myVotes' | 'admin' =
-      key === 'add'
-        ? 'add'
-        : key === 'myVotes'
-        ? 'myVotes'
-        : key === 'admin'
-        ? 'admin'
-        : key === 'completed'
-        ? 'completed'
-        : 'active';
-
-    if (normalized === this.state.selectedMainTab) {
-      return;
-    }
-
-    this._updateState({ selectedMainTab: normalized }, () => {
+    this._updateState({ selectedMainTab: nextTab }, () => {
+      const normalized: MainTabKey = nextTab;
       if (normalized === 'active') {
         this._applyActiveFilter(this.state.activeFilter);
         return;

@@ -5,6 +5,11 @@
   --accentColorTint: "[theme:themeLighter, default: #d0e7f5]";
   --accentColorLightest: "[theme:themeLighterAlt, default: #eff6fc]";
   --accentColorDark: "[theme:themeDarkAlt, default: #106ebe]";
+  --samverkansportalen-sticky-offset: 0px;
+  --samverkansportalen-header-height: 0px;
+  --samverkansportalen-sticky-header-padding: 0px;
+  --samverkansportalen-sticky-tabs-padding: 0px;
+  --samverkansportalen-tab-scroll-height: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -12,6 +17,7 @@
   max-height: 100%;
   box-sizing: border-box;
   padding: 1.5rem;
+  padding-top: calc(1.5rem + var(--samverkansportalen-sticky-header-padding, 0px));
   background: "[theme:white, default: #ffffff]";
   background: var(--bodyBackground, #ffffff);
   color: "[theme:bodyText, default: #323130]";
@@ -28,6 +34,10 @@
   justify-content: space-between;
   gap: 1.5rem;
   flex-wrap: wrap;
+  position: sticky;
+  top: var(--samverkansportalen-sticky-offset);
+  z-index: 6;
+  background: var(--bodyBackground, #ffffff);
 }
 
 .title {
@@ -144,43 +154,39 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.pivotFloating :global(.ms-Pivot-links) {
+.pivotFloating {
   position: sticky;
-  top: 0;
+  top: calc(var(--samverkansportalen-sticky-offset, 0px) + var(--samverkansportalen-header-height, 0px));
   z-index: 5;
   background: var(--bodyBackground, #ffffff);
   padding: 0.5rem 0;
   border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
 }
 
-.samverkansportalen :global(.ms-Pivot) {
+.pivotFloating :global(.fui-Tab) {
+  font-weight: 600;
+}
+
+.samverkansportalen :global(.samverkansportalen-tab-panel) {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.samverkansportalen :global(.ms-Pivot-links) {
-  flex: 0 0 auto;
-}
-
-.samverkansportalen :global(.ms-Pivot-itemContainer) {
+.samverkansportalen :global(.samverkansportalen-tab-scroll) {
   flex: 1 1 auto;
   min-height: 0;
+  height: var(--samverkansportalen-tab-scroll-height, auto);
+  max-height: var(--samverkansportalen-tab-scroll-height, none);
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-.samverkansportalen :global(.ms-Pivot-content) {
-  height: 100%;
-}
-
-.samverkansportalen :global(.ms-Pivot-item) {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .pivotContent {
