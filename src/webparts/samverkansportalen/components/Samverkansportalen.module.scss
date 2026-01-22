@@ -323,7 +323,7 @@
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  align-items: end;
+  align-items: flex-end;
 }
 
 .filterDropdown {
@@ -335,7 +335,7 @@
 }
 
 .filterButton {
-  align-self: end;
+  align-self: flex-end;
   min-width: 10rem;
 }
 
@@ -700,7 +700,7 @@
 
 .timestampEntry {
   display: inline-flex;
-  align-items: start;
+  align-items: flex-start;
   gap: 0.25rem;
   justify-items: flex-end;
   /*flex-direction: column;*/
@@ -709,7 +709,7 @@
 .timestampEntryEnd {
   /*flex-direction: column;*/
   display: inline-flex;
-  align-items: end;
+  align-items: flex-end;
   gap: 0.25rem;
   justify-items: auto;
 }

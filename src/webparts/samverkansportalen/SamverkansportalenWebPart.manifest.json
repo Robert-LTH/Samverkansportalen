@@ -21,7 +21,7 @@
     "title": { "default": "Samverkansportalen" },
     "description": { "default": "Samverkansportalen description" },
     "officeFabricIconFontName": "Page",
-    "iconImageUrl": "icon.png",
+    "iconImageUrl": "./icon.png",
       "properties": {
         "description": "Samverkansportalen",
         "listTitle": "SamverkansportalenSuggestions"

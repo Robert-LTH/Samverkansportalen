@@ -15,8 +15,9 @@ interface ITabHeaderProps {
 }
 
 // Work around React 17 typings vs Fluent UI v9 tab component generics in SPFx.
-const FluentTabList: React.FC<any> = TabList as unknown as React.FC<any>;
-const FluentTab: React.FC<any> = Tab as unknown as React.FC<any>;
+type FluentComponent = React.ComponentType<Record<string, unknown>>;
+const FluentTabList = TabList as unknown as FluentComponent;
+const FluentTab = Tab as unknown as FluentComponent;
 
 const TabHeader: React.FC<ITabHeaderProps> = ({ items, selectedKey, onSelect }) => (
   <FluentTabList

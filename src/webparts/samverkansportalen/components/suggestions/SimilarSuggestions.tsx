@@ -70,7 +70,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
       content: (
         <>
           {strings.SimilarSuggestionsQueryTitleLabel}{' '}
-          <span className={styles.similarSuggestionsQueryValue}>"{query.title}"</span>
+          <span className={styles.similarSuggestionsQueryValue}>&quot;{query.title}&quot;</span>
         </>
       )
     });
@@ -82,7 +82,7 @@ const SimilarSuggestions: React.FC<ISimilarSuggestionsProps> = ({
       content: (
         <>
           {strings.SimilarSuggestionsQueryDescriptionLabel}{' '}
-          <span className={styles.similarSuggestionsQueryValue}>"{query.description}"</span>
+          <span className={styles.similarSuggestionsQueryValue}>&quot;{query.description}&quot;</span>
         </>
       )
     });
